@@ -28,9 +28,20 @@ export interface AnchorRef {
   readonly gasUsed: bigint | null;
 }
 
+export interface AnchorOwnerView {
+  readonly principalId: Bytes32;
+  readonly ns: number;
+  readonly epoch: bigint;
+  readonly termsHash: Bytes32;
+  readonly batchIndex: number;
+  readonly blockNumber: bigint;
+}
+
 export interface AnchorWriter {
   readonly layout: AnchorLayout;
   anchor(request: AnchorRequest): Promise<AnchorRef>;
   isAnchored(batchRoot: Bytes32): Promise<boolean>;
   anchorBlock(batchRoot: Bytes32): Promise<bigint | null>;
+  /** Who anchored a root (PassportAnchors.anchorOf); null when unknown. */
+  anchorOf(batchRoot: Bytes32): Promise<AnchorOwnerView | null>;
 }

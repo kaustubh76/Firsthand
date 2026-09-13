@@ -1,5 +1,10 @@
 import { type Bytes32, bytesToHex, ChainError, keccak256, utf8 } from "@firsthand/core";
-import type { AnchorRef, AnchorRequest, AnchorWriter } from "../ports/AnchorWriter.js";
+import type {
+  AnchorOwnerView,
+  AnchorRef,
+  AnchorRequest,
+  AnchorWriter,
+} from "../ports/AnchorWriter.js";
 import { Recorder } from "./Recorder.js";
 
 /** Append-only in-memory anchor set with the same duplicate-root rule as the contract. */
@@ -38,6 +43,20 @@ export class MemoryAnchorWriter extends Recorder implements AnchorWriter {
   async anchorBlock(batchRoot: Bytes32): Promise<bigint | null> {
     this.record("anchorBlock", batchRoot);
     return this.#anchors.get(batchRoot)?.blockNumber ?? null;
+  }
+
+  async anchorOf(batchRoot: Bytes32): Promise<AnchorOwnerView | null> {
+    this.record("anchorOf", batchRoot);
+    const a = this.#anchors.get(batchRoot);
+    if (!a) return null;
+    return {
+      principalId: a.request.principalId,
+      ns: a.request.ns,
+      epoch: a.request.epoch,
+      termsHash: a.request.termsHash,
+      batchIndex: a.batchIndex,
+      blockNumber: a.blockNumber,
+    };
   }
 
   /** Test helper: what was anchored, in order. */

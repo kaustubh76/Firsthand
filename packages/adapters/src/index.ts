@@ -12,7 +12,13 @@ export { OnchainGrantReader } from "./grants/OnchainGrantReader.js";
 export type { EnvioConsentLedgerOptions } from "./ledger/EnvioConsentLedger.js";
 export { EnvioConsentLedger } from "./ledger/EnvioConsentLedger.js";
 export * from "./memory/index.js";
-export type { AnchorLayout, AnchorRef, AnchorRequest, AnchorWriter } from "./ports/AnchorWriter.js";
+export type {
+  AnchorLayout,
+  AnchorOwnerView,
+  AnchorRef,
+  AnchorRequest,
+  AnchorWriter,
+} from "./ports/AnchorWriter.js";
 export type { BlobRef, BlobStore } from "./ports/BlobStore.js";
 export type {
   AnchorView,

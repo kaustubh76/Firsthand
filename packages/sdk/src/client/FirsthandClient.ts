@@ -1,5 +1,5 @@
 import type { AnchorWriter, BlobStore, TxTransport, X402Facilitator } from "@firsthand/adapters";
-import type { Eip712Domain, EpochParams } from "@firsthand/core";
+import type { Bytes32, Eip712Domain, EpochParams, Terms } from "@firsthand/core";
 import type { PrfSource } from "@firsthand/crypto";
 import { type Logger, noopLogger } from "@firsthand/runtime";
 import { Batcher } from "../batch/Batcher.js";
@@ -7,10 +7,14 @@ import { Locker, type NamespaceInfo } from "../locker/Locker.js";
 import { type AttestPlan, planAttest, sendAttest } from "../verbs/attest.js";
 import { acceptSigned, type DepositInput, type DepositResult, deposit } from "../verbs/deposit.js";
 import { type EnrollPlan, planEnroll, type SentTx, sendEnroll } from "../verbs/enroll.js";
+import { type GrantInput, type GrantPlan, planGrant, sendGrant } from "../verbs/grant.js";
+import { type PublishTarget, publishDeposit, publishWrap } from "../verbs/publish.js";
 import { type QueryDeps, type QueryRequest, query } from "../verbs/query.js";
 import {
   planCommit,
   planDirectRescind,
+  planRevealRescind,
+  type RescindPath,
   type RescindPlan,
   sendRescind,
   type VerbAddresses,
@@ -56,9 +60,9 @@ export class FirsthandClient {
     return new LockerSession(this, locker);
   }
 
-  /** Buyer-side query — no locker needed. */
-  query(request: QueryRequest, deps: Partial<QueryDeps> = {}) {
-    return query(request, { facilitator: this.options.facilitator, ...deps });
+  /** Buyer-side query — no locker needed; see BuyerSession for the full buyer flow. */
+  query(request: QueryRequest, deps: QueryDeps) {
+    return query(request, deps);
   }
 }
 
@@ -106,15 +110,40 @@ export class LockerSession {
     return this.batcher.flush();
   }
 
-  planRescind(
-    input: Parameters<typeof planDirectRescind>[2],
-    path: "btx" | "public" = "btx",
-  ): RescindPlan {
-    return planDirectRescind(path, this.#client.options.addresses, input);
+  /** Publishes ciphertext + verified sidecar for a deposit to a gateway. */
+  publish(target: PublishTarget, result: DepositResult, terms: Terms) {
+    return publishDeposit(target, this.locker, this.batcher, result, terms);
   }
 
-  planCommit(grantId: Parameters<typeof planCommit>[1]): RescindPlan {
+  planGrant(input: GrantInput): GrantPlan {
+    return planGrant(this.locker, this.#client.options.addresses.grantManager, input);
+  }
+
+  /** Grant on-chain and publish the wrap bytes to the gateway that serves the buyer. */
+  async grant(
+    input: GrantInput,
+    target?: PublishTarget,
+  ): Promise<{ plan: GrantPlan; sent: SentTx }> {
+    const plan = this.planGrant(input);
+    const sent = await sendGrant(this.locker, this.#client.options.transport, plan);
+    if (target) await publishWrap(target, plan.grantId, plan.wrap);
+    return { plan, sent };
+  }
+
+  planRescind(
+    grantId: Bytes32,
+    path: Exclude<RescindPath, "commit-reveal"> = "btx",
+    epoch?: bigint,
+  ): RescindPlan {
+    return planDirectRescind(this.locker, path, this.#client.options.addresses, grantId, epoch);
+  }
+
+  planCommit(grantId: Bytes32): RescindPlan {
     return planCommit(this.#client.options.addresses, grantId);
+  }
+
+  planReveal(grantId: Bytes32, salt: Bytes32): RescindPlan {
+    return planRevealRescind(this.locker, this.#client.options.addresses, grantId, salt);
   }
 
   sendRescind(plan: RescindPlan) {

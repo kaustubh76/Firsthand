@@ -1,7 +1,15 @@
 import type { TxTransport } from "@firsthand/adapters";
 import { GrantManagerAbi, RescissionsAbi } from "@firsthand/contracts/abi";
-import { type Address, type Bytes32, type Hex, rescissionCommitment } from "@firsthand/core";
-import { randomBytes32 } from "@firsthand/crypto";
+import {
+  type Address,
+  authorityDigest,
+  type Bytes32,
+  type Hex,
+  rescindCommitStructHash,
+  rescindStructHash,
+  rescissionCommitment,
+} from "@firsthand/core";
+import { randomBytes32, randomNonce, signAuthorityDigest } from "@firsthand/crypto";
 import { encodeFunctionData } from "viem";
 import type { Locker } from "../locker/Locker.js";
 
@@ -10,11 +18,10 @@ import type { Locker } from "../locker/Locker.js";
  *
  * Path selection is explicit, never silent:
  * - `btx`           direct `GrantManager.rescind` over the encrypted mempool (un-front-runnable)
- * - `commit-reveal` `Rescissions.commit(keccak(grantId ‖ salt))` now, reveal later (fallback)
+ * - `commit-reveal` `Rescissions.commit(keccak(grantId ‖ salt))` now, `revealRescind` later (fallback)
  * - `public`        direct rescind over the public mempool (the B2 baseline arm — measurable, not recommended)
  *
- * Phase 4 adds the P-256 authority signature over `AuthorityDigests.rescind`; the calldata builders
- * below are final so the race harness can be wired now.
+ * The P-256 authority signature is produced here (Phase 3); Phase 4 adds the BTX transport and race harness.
  */
 export type RescindPath = "btx" | "commit-reveal" | "public";
 
@@ -32,35 +39,40 @@ export interface RescindPlan {
   readonly path: RescindPath;
   readonly to: Address;
   readonly data: Hex;
+  readonly grantId: Bytes32;
   /** Present for commit-reveal: keep it to reveal later. */
   readonly salt?: Bytes32;
   readonly commitment?: Bytes32;
 }
 
-export interface RescindInput {
-  readonly grantId: Bytes32;
-  readonly epoch: bigint;
-  readonly nonce: Bytes32;
-  /** 64-byte P-256 authority signature over `authorityDigest(rescindStructHash(...))`. */
-  readonly authoritySig: Hex;
-}
-
+/** Direct rescission signed by the locker's authority key under GrantManager's domain. */
 export function planDirectRescind(
+  locker: Locker,
   path: "btx" | "public",
   addresses: RescindAddresses,
-  input: RescindInput,
+  grantId: Bytes32,
+  epoch: bigint = locker.currentEpoch(),
+  nonce: Bytes32 = randomNonce(),
 ): RescindPlan {
+  const authority = locker.authorityKey();
+  const digest = authorityDigest(
+    rescindStructHash(grantId, epoch, nonce),
+    locker.authorityDomain(addresses.grantManager),
+  );
+  const authoritySig = signAuthorityDigest(authority.scalar, digest);
   return {
     path,
+    grantId,
     to: addresses.grantManager,
     data: encodeFunctionData({
       abi: GrantManagerAbi,
       functionName: "rescind",
-      args: [input.grantId, input.epoch, input.nonce, input.authoritySig],
+      args: [grantId, epoch, nonce, authoritySig],
     }),
   };
 }
 
+/** Step 1 of the fallback: post a blind commitment (anyone may relay it). */
 export function planCommit(
   addresses: RescindAddresses,
   grantId: Bytes32,
@@ -69,8 +81,38 @@ export function planCommit(
   const commitment = rescissionCommitment(grantId, salt);
   return {
     path: "commit-reveal",
+    grantId,
     to: addresses.rescissions,
     data: encodeFunctionData({ abi: RescissionsAbi, functionName: "commit", args: [commitment] }),
+    salt,
+    commitment,
+  };
+}
+
+/** Step 2 of the fallback: reveal with the authority signature over RescindCommit; effective end = commit block. */
+export function planRevealRescind(
+  locker: Locker,
+  addresses: RescindAddresses,
+  grantId: Bytes32,
+  salt: Bytes32,
+  nonce: Bytes32 = randomNonce(),
+): RescindPlan {
+  const commitment = rescissionCommitment(grantId, salt);
+  const authority = locker.authorityKey();
+  const digest = authorityDigest(
+    rescindCommitStructHash(commitment, nonce),
+    locker.authorityDomain(addresses.grantManager),
+  );
+  const authoritySig = signAuthorityDigest(authority.scalar, digest);
+  return {
+    path: "commit-reveal",
+    grantId,
+    to: addresses.grantManager,
+    data: encodeFunctionData({
+      abi: GrantManagerAbi,
+      functionName: "revealRescind",
+      args: [grantId, salt, nonce, authoritySig],
+    }),
     salt,
     commitment,
   };

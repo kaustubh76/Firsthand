@@ -9,6 +9,7 @@
 
 export type ErrorCode =
   | "FH_VALIDATION"
+  | "FH_NOT_FOUND"
   | "FH_CONFIG"
   | "FH_NOT_IMPLEMENTED"
   | "FH_REFUSED_ORIGIN"
@@ -71,6 +72,13 @@ export class FirsthandError extends Error {
 export class ValidationError extends FirsthandError {
   constructor(message: string, options: FirsthandErrorOptions = {}) {
     super("FH_VALIDATION", message, options);
+  }
+}
+
+/** A referenced passport, grant or blob does not exist on this gateway. */
+export class NotFoundError extends FirsthandError {
+  constructor(message: string, options: FirsthandErrorOptions = {}) {
+    super("FH_NOT_FOUND", message, options);
   }
 }
 
@@ -181,6 +189,7 @@ export interface ProblemDetails {
 
 const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FH_VALIDATION: 400,
+  FH_NOT_FOUND: 404,
   FH_CONFIG: 500,
   FH_NOT_IMPLEMENTED: 501,
   FH_REFUSED_ORIGIN: 422,

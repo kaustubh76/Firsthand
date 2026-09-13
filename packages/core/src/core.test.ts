@@ -28,6 +28,7 @@ import {
   CryptoError,
   type FirsthandError,
   isFirsthandError,
+  NotFoundError,
   NotImplementedError,
   PaymentError,
   ProofError,
@@ -126,6 +127,7 @@ describe("errors", () => {
     const samples: [FirsthandError, number][] = [
       [new ValidationError("v"), 400],
       [new ConfigError("c"), 500],
+      [new NotFoundError("n"), 404],
       [new NotImplementedError("x"), 501],
       [new RefusalError("FH_REFUSED_ORIGIN", "r"), 422],
       [new RefusalError("FH_REFUSED_DUPLICATE", "r"), 409],

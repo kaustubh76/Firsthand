@@ -8,6 +8,7 @@ import {
   anchorStructHash,
   attestStructHash,
   authorityDigest,
+  cardIdOf,
   depositKeysRoot,
   ENROLL_TYPEHASH,
   enrollStructHash,
@@ -82,6 +83,8 @@ describe("authority digests", () => {
     // keccak256(abi.encode(grantId, salt)) with 32-byte words == keccak of the concatenation.
     expect(rescissionCommitment(b(1), b(2))).toMatch(/^0x[0-9a-f]{64}$/);
     expect(grantIdOf(b(1), b(2), 3, 4n)).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(cardIdOf(`0x${"ab".repeat(20)}`, b(2))).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(cardIdOf(`0x${"ab".repeat(20)}`, b(2))).not.toBe(cardIdOf(`0x${"ab".repeat(20)}`, b(3)));
     const keys = new Array<Address>(16).fill(`0x${"ab".repeat(20)}`);
     expect(depositKeysRoot(keys)).toMatch(/^0x[0-9a-f]{64}$/);
     expect(() => depositKeysRoot(keys.slice(1))).toThrow(TypeError);

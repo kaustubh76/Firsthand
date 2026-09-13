@@ -13,6 +13,7 @@ import {FirsthandLens} from "../src/FirsthandLens.sol";
 import {IERC3009} from "../src/interfaces/IERC3009.sol";
 import {IPassportAnchors} from "../src/interfaces/IPassportAnchors.sol";
 import {EpochLib} from "../src/libraries/EpochLib.sol";
+import {MockUSDC} from "../test/doubles/MockUSDC.sol";
 
 /// @title Deploy
 /// @notice Immutable deployment (README §12): no proxies, no admin keys. Writes deployments/<chainId>.json.
@@ -30,6 +31,8 @@ contract Deploy is Script {
         address receiptLedger;
         address royaltyRouter;
         address firsthandLens;
+        address usdc;
+        uint64 revealWindowBlocks;
         uint64 genesis;
         uint64 epochLength;
         string anchorsLayout;
@@ -59,20 +62,21 @@ contract Deploy is Script {
         d.passportAnchorsPaged = address(new PassportAnchorsPaged(registry));
         d.passportAnchors =
             keccak256(bytes(d.anchorsLayout)) == keccak256("paged") ? d.passportAnchorsPaged : d.passportAnchorsBaseline;
-        d.grantManager = address(
-            new GrantManager(
-                registry, Rescissions(d.rescissions), 0, 0, uint64(vm.envOr("REVEAL_WINDOW_BLOCKS", uint256(1000)))
-            )
-        );
+        d.revealWindowBlocks = uint64(vm.envOr("REVEAL_WINDOW_BLOCKS", uint256(1000)));
+        d.grantManager = address(new GrantManager(registry, Rescissions(d.rescissions), 0, 0, d.revealWindowBlocks));
     }
 
     function deploySettlement(Deployed memory d, address deployer) internal {
+        // On a local chain (or when asked) deploy the EIP-3009 MockUSDC so settlement can be exercised end to end.
+        d.usdc = vm.envOr("DEPLOY_MOCK_USDC", block.chainid == 31_337)
+            ? address(new MockUSDC())
+            : vm.envAddress("USDC_ADDRESS");
         // ReceiptLedger needs the router address; the router is the *next* CREATE from the deployer.
         address predictedRouter = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 1);
         d.receiptLedger = address(new ReceiptLedger(predictedRouter));
         d.royaltyRouter = address(
             new RoyaltyRouter(
-                IERC3009(vm.envAddress("USDC_ADDRESS")),
+                IERC3009(d.usdc),
                 GrantManager(d.grantManager),
                 ReceiptLedger(d.receiptLedger),
                 vm.envOr("DUST_POOL", deployer)
@@ -112,6 +116,8 @@ contract Deploy is Script {
         vm.serializeUint(root, "genesis", d.genesis);
         vm.serializeUint(root, "epochLength", d.epochLength);
         vm.serializeUint(root, "chainId", block.chainid);
+        vm.serializeAddress(root, "USDC", d.usdc);
+        vm.serializeUint(root, "revealWindowBlocks", d.revealWindowBlocks);
         string memory out = vm.serializeString(root, "anchorsLayout", d.anchorsLayout);
         string memory path = string.concat("../deployments/", vm.toString(block.chainid), ".json");
         vm.writeJson(out, path);

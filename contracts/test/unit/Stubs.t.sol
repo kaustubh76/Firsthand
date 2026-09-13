@@ -92,14 +92,11 @@ contract StubsTest is Test {
         assertEq(address(router.ledger()), address(ledger));
     }
 
-    function test_lensViewsAndDomain() public {
+    function test_lensViewsAndDomain() public view {
         assertEq(lens.currentEpoch(), 3);
         assertFalse(lens.principalIsLive(bytes32(0)));
         assertEq(uint8(lens.grantStatus(bytes32(0))), uint8(GrantStatus.NONE));
         assertEq(lens.domainSeparator(), PassportLib.domainSeparator(block.chainid, address(anchors)));
-        PassportLib.Passport memory p;
-        BatchProof memory proof;
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "FirsthandLens.verify"));
-        lens.verify(p, "", bytes32(0), proof, bytes32(0));
+        // Lens.verify is implemented (Phase 3) — see FirsthandLens.t.sol.
     }
 }

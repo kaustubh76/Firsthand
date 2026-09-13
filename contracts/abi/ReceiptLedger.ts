@@ -13,6 +13,25 @@ export const ReceiptLedgerAbi = [
   },
   {
     "type": "function",
+    "name": "exists",
+    "inputs": [
+      {
+        "name": "receiptId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "queriesThisEpoch",
     "inputs": [
       {
@@ -115,44 +134,49 @@ export const ReceiptLedgerAbi = [
     "name": "record",
     "inputs": [
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "queryNonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "payer",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "ns",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "",
+        "name": "termsHash",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "rateLimit",
         "type": "uint32",
         "internalType": "uint32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "receiptId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -218,17 +242,6 @@ export const ReceiptLedgerAbi = [
         "name": "receiptId",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "NotImplemented",
-    "inputs": [
-      {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
       }
     ]
   },

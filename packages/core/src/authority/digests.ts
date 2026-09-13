@@ -154,3 +154,8 @@ export function depositKeysRoot(keys: readonly Address[]): Bytes32 {
 export function authorityDigest(structHash: Bytes32, domain: Eip712Domain): Bytes32 {
   return digestOf(structHash, domainSeparator(domain));
 }
+
+/** `keccak256(abi.encode(owner, encryptionPubKey))` — matches `GrantManager.cardIdOf` (ADR-0011). */
+export function cardIdOf(owner: Address, encryptionPubKey: Bytes32): Bytes32 {
+  return keccak256Hex(concat(pad32(hexToBytes(owner)), w(encryptionPubKey)));
+}

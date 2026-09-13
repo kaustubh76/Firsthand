@@ -21,6 +21,9 @@ export interface Deployment {
   readonly genesis: number;
   readonly epochLength: number;
   readonly anchorsLayout: "baseline" | "paged";
+  /** USDC (EIP-3009) used by RoyaltyRouter; MockUSDC on local chains. */
+  readonly USDC: `0x${string}`;
+  readonly revealWindowBlocks: number;
 }
 
 const DEPLOYMENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "deployments");

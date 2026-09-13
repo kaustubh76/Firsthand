@@ -129,7 +129,7 @@ export const FirsthandLensAbi = [
     "name": "verify",
     "inputs": [
       {
-        "name": "",
+        "name": "passport",
         "type": "tuple",
         "internalType": "struct PassportLib.Passport",
         "components": [
@@ -166,17 +166,17 @@ export const FirsthandLensAbi = [
         ]
       },
       {
-        "name": "",
+        "name": "signature",
         "type": "bytes",
         "internalType": "bytes"
       },
       {
-        "name": "",
+        "name": "batchRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "proof",
         "type": "tuple",
         "internalType": "struct BatchProof",
         "components": [
@@ -193,33 +193,33 @@ export const FirsthandLensAbi = [
         ]
       },
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "ok",
         "type": "bool",
         "internalType": "bool"
       },
       {
-        "name": "",
+        "name": "reason",
         "type": "uint8",
         "internalType": "enum VerifyFailure"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
   },
   {
     "type": "error",
-    "name": "NotImplemented",
+    "name": "InvalidSignatureLength",
     "inputs": [
       {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   }

@@ -22,6 +22,11 @@ export const GrantManagerAbi = [
         "name": "priceFloor_",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "revealWindowBlocks_",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "nonpayable"
@@ -31,38 +36,157 @@ export const GrantManagerAbi = [
     "name": "acceptTerms",
     "inputs": [
       {
-        "name": "",
+        "name": "granteeCard",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
-        "type": "uint32",
-        "internalType": "uint32"
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct TermsInput",
+        "components": [
+          {
+            "name": "price",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "licenseId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scope",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "ns",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "rateLimit",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "payees",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "weights",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ]
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "",
+        "name": "cardSig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
-    "outputs": [],
+    "outputs": [
+      {
+        "name": "termsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cardIdOf",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "encryptionPubKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "cardOf",
+    "inputs": [
+      {
+        "name": "cardId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct Card",
+        "components": [
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "encryptionPubKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "currentEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "domainSeparator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -88,59 +212,59 @@ export const GrantManagerAbi = [
     "name": "grant",
     "inputs": [
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "granteeCard",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "ns",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "",
+        "name": "epochStart",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "term",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "termsHash",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "wrapRef",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "authoritySig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -242,6 +366,30 @@ export const GrantManagerAbi = [
   },
   {
     "type": "function",
+    "name": "nonceUsed",
+    "inputs": [
+      {
+        "name": "scope",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "priceFloor",
     "inputs": [],
     "outputs": [
@@ -274,13 +422,37 @@ export const GrantManagerAbi = [
   },
   {
     "type": "function",
+    "name": "registerCard",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "encryptionPubKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cardId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "registry",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IPrincipalRegistry"
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -290,28 +462,28 @@ export const GrantManagerAbi = [
     "name": "rescind",
     "inputs": [
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "authoritySig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -321,7 +493,7 @@ export const GrantManagerAbi = [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IRescissions"
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -331,28 +503,60 @@ export const GrantManagerAbi = [
     "name": "revealRescind",
     "inputs": [
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "salt",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "authoritySig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revealWindowBlocks",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "termOf",
+    "inputs": [
+      {
+        "name": "grantId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -390,6 +594,47 @@ export const GrantManagerAbi = [
   },
   {
     "type": "function",
+    "name": "termsOf",
+    "inputs": [
+      {
+        "name": "termsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct RegisteredTerms",
+        "components": [
+          {
+            "name": "price",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "rateLimit",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "ns",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "exists",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "wrapRefOf",
     "inputs": [
       {
@@ -406,6 +651,31 @@ export const GrantManagerAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "CardRegistered",
+    "inputs": [
+      {
+        "name": "cardId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "encryptionPubKey",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -537,6 +807,22 @@ export const GrantManagerAbi = [
   },
   {
     "type": "error",
+    "name": "EpochNotCurrent",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "current",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "GrantAlreadyRescinded",
     "inputs": [
       {
@@ -580,23 +866,23 @@ export const GrantManagerAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "NonceAlreadyUsed",
     "inputs": [
       {
         "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "NotImplemented",
-    "inputs": [
-      {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
       }
     ]
   },
@@ -617,6 +903,11 @@ export const GrantManagerAbi = [
     "inputs": [
       {
         "name": "commitBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "window",
         "type": "uint64",
         "internalType": "uint64"
       }
@@ -648,5 +939,32 @@ export const GrantManagerAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownCard",
+    "inputs": [
+      {
+        "name": "cardId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownPrincipal",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroTerm",
+    "inputs": []
   }
 ] as const;

@@ -13,3 +13,4 @@ export { MerkleLibAbi } from "./MerkleLib.js";
 export { PassportLibAbi } from "./PassportLib.js";
 export { EpochLibAbi } from "./EpochLib.js";
 export { P256Abi } from "./P256.js";
+export { MockUSDCAbi } from "./MockUSDC.js";

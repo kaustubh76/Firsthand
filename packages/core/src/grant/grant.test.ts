@@ -144,6 +144,27 @@ describe("verifyPredicate", () => {
     );
   });
 
+  it("rejects roots anchored by another principal or namespace when the owner is known", () => {
+    const owned = {
+      ...good,
+      anchorOwner: { principalId: ZERO_HASH as Bytes32, ns: 0 },
+      grant: { ...good.grant, principalId: ZERO_HASH as Bytes32, ns: 0 },
+    };
+    expect(verifyPredicate(owned)).toEqual({ ok: true, passportId: id });
+    expectFail(
+      { ...owned, anchorOwner: { principalId: `0x${"11".repeat(32)}`, ns: 0 } },
+      VerifyFailure.SCOPE_MISMATCH,
+    );
+    expectFail(
+      { ...owned, anchorOwner: { principalId: ZERO_HASH as Bytes32, ns: 1 } },
+      VerifyFailure.SCOPE_MISMATCH,
+    );
+    // Without grant-side identity the check is skipped (memory/offline verifiers).
+    expect(
+      verifyPredicate({ ...good, anchorOwner: { principalId: `0x${"11".repeat(32)}`, ns: 3 } }).ok,
+    ).toBe(true);
+  });
+
   it("rejects passports from epochs after e_now (no future-epoch admission)", () => {
     // Grant started at 10, passport epoch 12, but the world is still at epoch 11.
     expectFail(

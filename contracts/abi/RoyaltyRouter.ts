@@ -83,12 +83,12 @@ export const RoyaltyRouterAbi = [
     "name": "settle",
     "inputs": [
       {
-        "name": "",
+        "name": "grantId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "terms",
         "type": "tuple",
         "internalType": "struct TermsInput",
         "components": [
@@ -130,7 +130,7 @@ export const RoyaltyRouterAbi = [
         ]
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct TransferAuthorization",
         "components": [
@@ -179,12 +179,12 @@ export const RoyaltyRouterAbi = [
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "receiptId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -192,12 +192,12 @@ export const RoyaltyRouterAbi = [
     "inputs": [],
     "outputs": [
       {
-        "name": "",
+        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -275,19 +275,24 @@ export const RoyaltyRouterAbi = [
   },
   {
     "type": "error",
-    "name": "NotImplemented",
-    "inputs": [
-      {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
-      }
-    ]
+    "name": "NoRecipients",
+    "inputs": []
   },
   {
     "type": "error",
     "name": "NothingToSweep",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PriceTooLarge",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -307,6 +312,17 @@ export const RoyaltyRouterAbi = [
   },
   {
     "type": "error",
+    "name": "TooManyRecipients",
+    "inputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ValueMismatch",
     "inputs": [
       {
@@ -316,6 +332,17 @@ export const RoyaltyRouterAbi = [
       },
       {
         "name": "actual",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WeightsSumMismatch",
+    "inputs": [
+      {
+        "name": "sum",
         "type": "uint256",
         "internalType": "uint256"
       }

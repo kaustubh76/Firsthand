@@ -6,5 +6,5 @@ export {
   nextGrantStatus,
   PrincipalStatus,
 } from "./state.js";
-export type { GrantForVerify, VerifyInput, VerifyResult } from "./verify.js";
+export type { AnchorOwner, GrantForVerify, VerifyInput, VerifyResult } from "./verify.js";
 export { VerifyFailure, verifyPredicate } from "./verify.js";

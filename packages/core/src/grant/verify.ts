@@ -31,11 +31,21 @@ export const VerifyFailure = {
   GRANT_RESCINDED: "GRANT_RESCINDED",
   GRANT_EXPIRED: "GRANT_EXPIRED",
   GRANT_FROZEN: "GRANT_FROZEN",
+  /** The anchored root belongs to a different principal or namespace than the grant. */
+  SCOPE_MISMATCH: "SCOPE_MISMATCH",
 } as const;
 export type VerifyFailure = (typeof VerifyFailure)[keyof typeof VerifyFailure];
 
 export interface GrantForVerify extends GrantRecord {
   readonly termsHash: Bytes32;
+  /** When present together with `VerifyInput.anchorOwner`, the root must belong to this principal/namespace. */
+  readonly principalId?: Bytes32;
+  readonly ns?: number;
+}
+
+export interface AnchorOwner {
+  readonly principalId: Bytes32;
+  readonly ns: number;
 }
 
 export interface VerifyInput {
@@ -46,6 +56,8 @@ export interface VerifyInput {
   readonly batchRoot: Bytes32;
   /** Whether `batchRoot` is anchored on-chain for `(principal, ns, epoch)` — supplied by the caller. */
   readonly rootAnchored: boolean;
+  /** Who anchored `batchRoot` (from `PassportAnchors.anchorOf`), when known. */
+  readonly anchorOwner?: AnchorOwner;
   readonly grant: GrantForVerify;
   readonly principal: PrincipalRecord;
   readonly epochNow: bigint;
@@ -66,6 +78,14 @@ export function verifyPredicate(input: VerifyInput): VerifyResult {
   if (!input.rootAnchored) return fail(VerifyFailure.ROOT_UNKNOWN);
   if (!verifyPassportInBatch(input.batchRoot, id, input.proof)) {
     return fail(VerifyFailure.MERKLE_INVALID);
+  }
+  if (input.anchorOwner && input.grant.principalId !== undefined && input.grant.ns !== undefined) {
+    if (
+      input.anchorOwner.principalId !== input.grant.principalId ||
+      input.anchorOwner.ns !== input.grant.ns
+    ) {
+      return fail(VerifyFailure.SCOPE_MISMATCH);
+    }
   }
   if (input.passport.termsHash !== input.grant.termsHash) return fail(VerifyFailure.TERMS_MISMATCH);
 

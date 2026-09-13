@@ -53,14 +53,12 @@ contract StubsTest is Test {
         new PrincipalRegistry(GENESIS, 0, 2);
     }
 
-    function test_anchorsLayoutsAndStub() public {
+    function test_anchorsLayoutsWired() public {
+        // PassportAnchors is implemented (Phase 2) — see PassportAnchors.t.sol; only wiring is checked here.
         assertEq(anchors.layout(), "baseline");
         assertEq(new PassportAnchorsPaged(registry).layout(), "paged");
+        assertEq(anchors.registry(), address(registry));
         assertFalse(anchors.isAnchored(bytes32(0)));
-        assertEq(anchors.batchCount(bytes32(0), 0, 0), 0);
-        address[16] memory keys;
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "PassportAnchors.anchor"));
-        anchors.anchor(bytes32(0), 0, 0, bytes32(0), bytes32(0), bytes32(0), keys, "");
     }
 
     function test_grantManagerDefaultsAndStub() public {

@@ -98,3 +98,13 @@ struct TransferAuthorization {
     bytes32 r;
     bytes32 s;
 }
+
+/// @dev What PassportAnchors records per batch root, independent of storage layout (ADR-0010).
+struct AnchorRecord {
+    bytes32 principalId;
+    bytes32 termsHash;
+    uint64 epoch;
+    uint64 blockNumber;
+    uint32 ns;
+    uint32 batchIndex;
+}

@@ -35,6 +35,11 @@
     "gen:check": {
       "dependsOn": ["^build"],
       "cache": false
+    },
+    "test:anvil": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["ANVIL_RPC_URL", "DEPLOYMENTS_FILE", "RELAYER_PRIVATE_KEY"]
     }
   }
 }

@@ -26,7 +26,8 @@
     "forge:test": "cd contracts && forge test",
     "forge:build": "cd contracts && forge build",
     "abi:export": "node scripts/export-abi.mjs",
-    "check:all": "pnpm lint && pnpm check:deps && pnpm build && pnpm typecheck && pnpm coverage && pnpm vectors:check"
+    "check:all": "pnpm lint && pnpm check:deps && pnpm build && pnpm typecheck && pnpm coverage && pnpm vectors:check",
+    "test:anvil": "turbo run test:anvil"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

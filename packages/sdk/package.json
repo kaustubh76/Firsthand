@@ -2,7 +2,7 @@
   "name": "@firsthand/sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "FIRSTHAND SDK — deposit / query / rescind, verify(), Lineage Manifest, Locker, WebAuthn PRF",
+  "description": "FIRSTHAND SDK \u2014 deposit / query / rescind, verify(), Lineage Manifest, Locker, WebAuthn PRF",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -30,8 +30,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:testnet": "echo 'no testnet tests yet'",
-    "coverage": "vitest run --coverage"
+    "test:testnet": "vitest run -c vitest.anvil.config.ts",
+    "coverage": "vitest run --coverage",
+    "test:anvil": "vitest run -c vitest.anvil.config.ts"
   },
   "dependencies": {
     "@firsthand/adapters": "workspace:*",

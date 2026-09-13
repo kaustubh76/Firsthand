@@ -1,0 +1,14 @@
+import { defineConfig } from "vitest/config";
+
+/**
+ * Integration tier: runs the SDK against a live chain (anvil --odyssey in CI, Monad testnet by hand).
+ * Needs ANVIL_RPC_URL, DEPLOYMENTS_FILE and RELAYER_PRIVATE_KEY; tests skip themselves otherwise.
+ */
+export default defineConfig({
+  test: {
+    name: "sdk:anvil",
+    include: ["test/anvil/**/*.test.ts"],
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
+  },
+});

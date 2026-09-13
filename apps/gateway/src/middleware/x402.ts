@@ -14,6 +14,7 @@ import type { Context, MiddlewareHandler } from "hono";
  */
 export interface X402Options {
   readonly facilitator: X402Facilitator;
+  /** May throw (e.g. NotFoundError) — errors propagate to the problem+json handler. */
   readonly requirementsFor: (c: Context) => PaymentRequirements | Promise<PaymentRequirements>;
 }
 

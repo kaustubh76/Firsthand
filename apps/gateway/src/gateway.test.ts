@@ -27,43 +27,19 @@ describe("gateway", () => {
     expect(health.headers.get("x-firsthand-gateway")).toBe("0.1.0");
   });
 
-  it("returns 402 with requirements when no payment is presented", async () => {
+  it("answers 404 for a passport it does not host, before any payment negotiation", async () => {
     const res = await app.request(`/v1/query/${b32}/${b32}`);
-    expect(res.status).toBe(402);
-    const body = (await res.json()) as { accepts: Record<string, unknown>[] };
-    expect(body.accepts[0]).toMatchObject({
-      scheme: "exact",
-      payTo: `0x${"aa".repeat(20)}`,
-      maxAmountRequired: "1",
-    });
-    expect(body.accepts[0]?.["resource"]).toContain(b32);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: "FH_NOT_FOUND" });
   });
 
-  it("rejects invalid payments as problem+json and rate-limits", async () => {
-    const header = encodePaymentHeader({
-      x402Version: 1,
-      scheme: "exact",
-      network: "monad-testnet",
-      payload: {
-        signature: `0x${"11".repeat(65)}`,
-        authorization: {
-          from: `0x${"bb".repeat(20)}`,
-          to: `0x${"cc".repeat(20)}`,
-          value: "1",
-          validAfter: "0",
-          validBefore: "1",
-          nonce: b32,
-        },
-      },
-    });
-    // Third request on the same IP trips the pre-filter (capacity 2, no refill).
-    const bad = await app.request(`/v1/query/${b32}/${b32}`, { headers: { "x-payment": header } });
-    expect(bad.status).toBe(402);
-    expect(bad.headers.get("content-type")).toContain("problem+json");
-    expect(await bad.json()).toMatchObject({ code: "FH_PAYMENT_INVALID" });
+  it("rate-limits the query route as a pre-filter (429 with retry-after)", async () => {
+    // Capacity 2, no refill: the third hit on the same IP trips the limiter before any lookup.
+    await app.request(`/v1/query/${b32}/${b32}`);
     const limited = await app.request(`/v1/query/${b32}/${b32}`);
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBeDefined();
+    expect(limited.headers.get("content-type")).toContain("problem+json");
   });
 
   it("validates ids and serves blobs / anchor lookups", async () => {
@@ -75,30 +51,13 @@ describe("gateway", () => {
       root: b32,
       anchored: false,
     });
-    const paid = encodePaymentHeader({
-      x402Version: 1,
-      scheme: "exact",
-      network: "monad-testnet",
-      payload: {
-        signature: `0x${"11".repeat(65)}`,
-        authorization: {
-          from: `0x${"bb".repeat(20)}`,
-          to: `0x${"00".repeat(20)}`,
-          value: "1",
-          validAfter: "0",
-          validBefore: "1",
-          nonce: b32,
-        },
-      },
+    const put = await fresh.app.request("/v1/blobs", {
+      method: "POST",
+      body: new Uint8Array([1, 2, 3]).buffer as ArrayBuffer,
     });
-    const notYet = await fresh.app.request(`/v1/query/${b32}/${b32}`, {
-      headers: { "x-payment": paid },
-    });
-    expect(notYet.status).toBe(501); // Phase 3
-    const badId = await fresh.app.request(`/v1/query/0x12/${b32}`, {
-      headers: { "x-payment": paid },
-    });
-    expect(badId.status).toBe(400);
+    expect(put.status).toBe(201);
+    const { id } = (await put.json()) as { id: string };
+    expect((await fresh.app.request(`/v1/blobs/${id}`)).status).toBe(200);
   });
 
   it("binds read-only on-chain anchors from a deployment file and rejects chain-id mismatches", async () => {
@@ -112,6 +71,11 @@ describe("gateway", () => {
       JSON.stringify({
         chainId: 31337,
         PassportAnchors: `0x${"ab".repeat(20)}`,
+        PrincipalRegistry: `0x${"ac".repeat(20)}`,
+        GrantManager: `0x${"ad".repeat(20)}`,
+        ReceiptLedger: `0x${"ae".repeat(20)}`,
+        RoyaltyRouter: `0x${"af".repeat(20)}`,
+        USDC: `0x${"b0".repeat(20)}`,
         anchorsLayout: "baseline",
       }),
     );
@@ -124,6 +88,32 @@ describe("gateway", () => {
       { logger: noopLogger },
     );
     expect(gw.serving).toBeDefined();
+    expect(gw.memory).toBeNull();
+    expect(gw.domain.verifyingContract).toBe(`0x${"ab".repeat(20)}`);
+    expect(() =>
+      createGateway(
+        loadConfig({
+          DEPLOYMENTS_FILE: file,
+          CHAIN_ID: "31337",
+          MONAD_RPC_URL: "http://127.0.0.1:1",
+          SETTLEMENT_MODE: "onchain",
+        }),
+        { logger: noopLogger },
+      ),
+    ).toThrow(/RELAYER_PRIVATE_KEY/);
+    const relayed = createGateway(
+      loadConfig({
+        DEPLOYMENTS_FILE: file,
+        CHAIN_ID: "31337",
+        MONAD_RPC_URL: "http://127.0.0.1:1",
+        SETTLEMENT_MODE: "onchain",
+        RELAYER_PRIVATE_KEY: `0x${"01".repeat(32)}`,
+      }),
+      { logger: noopLogger },
+    );
+    expect(
+      ((await (await relayed.app.request("/healthz")).json()) as { settlement: string }).settlement,
+    ).toBe("onchain");
     expect(() =>
       createGateway(loadConfig({ DEPLOYMENTS_FILE: file, CHAIN_ID: "10143" }), {
         logger: noopLogger,

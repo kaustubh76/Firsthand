@@ -8,7 +8,7 @@ import {
   MAX_NAMESPACES,
   ValidationError,
 } from "@firsthand/core";
-import { type DepositKey, KeyTree, type PrfSource } from "@firsthand/crypto";
+import { type AuthorityKey, type DepositKey, KeyTree, type PrfSource } from "@firsthand/crypto";
 import { type Logger, noopLogger } from "@firsthand/runtime";
 
 /**
@@ -44,6 +44,7 @@ export class Locker {
   readonly #namespaces = new Map<number, NamespaceInfo>();
   readonly #clock: () => bigint;
   readonly #depositKeys = new Map<string, DepositKey>();
+  #authority: AuthorityKey | null = null;
 
   constructor(options: LockerOptions) {
     this.keys = options.keys;
@@ -54,7 +55,21 @@ export class Locker {
     this.logger = options.logger ?? noopLogger;
     this.#clock = options.clock ?? (() => BigInt(Math.floor(Date.now() / 1000)));
     for (const ns of options.namespaces ?? [{ ns: 0, label: "default" }]) this.addNamespace(ns);
-    this.principalId = this.keys.authorityKey().commitment;
+    this.principalId = this.authorityKey().commitment;
+  }
+
+  /** The derived P-256 authority key, memoised for the session (scalar is a SecretBytes). */
+  authorityKey(): AuthorityKey {
+    if (this.#authority === null) this.#authority = this.keys.authorityKey();
+    return this.#authority;
+  }
+
+  /**
+   * EIP-712 domain a given contract verifies authority signatures under (ADR-0009): same chain as
+   * passports, but `verifyingContract` is the contract being called, not PassportAnchors.
+   */
+  authorityDomain(verifyingContract: Address): Eip712Domain {
+    return { chainId: this.domain.chainId, verifyingContract };
   }
 
   static async open(source: PrfSource, options: Omit<LockerOptions, "keys">): Promise<Locker> {
@@ -108,6 +123,8 @@ export class Locker {
   dispose(): void {
     for (const dk of this.#depositKeys.values()) dk.privateKey.dispose();
     this.#depositKeys.clear();
+    this.#authority?.scalar.dispose();
+    this.#authority = null;
     this.keys.dispose();
   }
 

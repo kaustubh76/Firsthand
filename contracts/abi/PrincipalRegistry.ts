@@ -26,33 +26,33 @@ export const PrincipalRegistryAbi = [
     "name": "attest",
     "inputs": [
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "depositKeysRoot_",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "authoritySig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -117,34 +117,8 @@ export const PrincipalRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "enroll",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
+    "name": "domainSeparator",
+    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -152,7 +126,65 @@ export const PrincipalRegistryAbi = [
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "effectiveStatus",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum PrincipalStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "enroll",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "authoritySig",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -208,6 +240,30 @@ export const PrincipalRegistryAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nonceUsed",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -306,6 +362,22 @@ export const PrincipalRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadyAttested",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "AlreadyEnrolled",
     "inputs": [
       {
@@ -376,17 +448,6 @@ export const PrincipalRegistryAbi = [
         "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "NotImplemented",
-    "inputs": [
-      {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
       }
     ]
   },

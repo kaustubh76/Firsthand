@@ -4,12 +4,17 @@ import {
   MemoryFacilitator,
   MemoryTransport,
 } from "@firsthand/adapters";
+import { PrincipalRegistryAbi } from "@firsthand/contracts/abi";
 import {
   type Address,
   type Attestation,
   AttestationClass,
+  attestStructHash,
+  authorityDigest,
   type Bytes32,
   contentHash,
+  depositKeysRoot,
+  enrollStructHash,
   GrantStatus,
   hashTerms,
   LICENSE_FH_1_0,
@@ -22,6 +27,7 @@ import {
   type SignedPassport,
   type Terms,
   ValidationError,
+  verifyP256,
   WAD,
   ZERO_HASH,
 } from "@firsthand/core";
@@ -33,13 +39,16 @@ import {
   signPassportDigest,
   unwrapDek,
 } from "@firsthand/crypto";
+import { decodeFunctionData } from "viem";
 import { describe, expect, it } from "vitest";
 import { type AnchoredBatch, Batcher } from "./batch/Batcher.js";
 import { FirsthandClient } from "./client/FirsthandClient.js";
 import { Locker } from "./locker/Locker.js";
 import { exportManifest, serialiseManifest } from "./manifest/export.js";
 import { verifyManifest } from "./manifest/verify.js";
+import { planAttest } from "./verbs/attest.js";
 import { acceptSigned, deposit, mintPassport, refuseUnlessProvable } from "./verbs/deposit.js";
+import { planEnroll, sendEnroll } from "./verbs/enroll.js";
 import { planCommit, planDirectRescind, sendRescind } from "./verbs/rescind.js";
 import { verify } from "./verify/verify.js";
 
@@ -396,6 +405,7 @@ describe("rescind plans and client wiring", () => {
   const addresses = {
     grantManager: `0x${"b1".repeat(20)}` as Address,
     rescissions: `0x${"b2".repeat(20)}` as Address,
+    principalRegistry: `0x${"b3".repeat(20)}` as Address,
   };
   it("builds direct and commit-reveal calldata and records broadcast time", async () => {
     const locker = makeLocker(1);
@@ -464,6 +474,108 @@ describe("rescind plans and client wiring", () => {
     await expect(
       client.query({ gatewayUrl: "http://gw", grantId: ZERO_HASH, passportId: ZERO_HASH }),
     ).rejects.toThrow(NotImplementedError);
+    session.close();
+  });
+});
+
+describe("enroll / attest plans (Phase 1)", () => {
+  const registry = `0x${"b3".repeat(20)}` as Address;
+
+  it("planEnroll signs the Enroll digest under the registry's domain and encodes matching calldata", () => {
+    const locker = makeLocker(1);
+    const plan = planEnroll(locker, registry, 5n, `0x${"0f".repeat(32)}`);
+    const authority = locker.authorityKey();
+    expect(plan.principalId).toBe(locker.principalId);
+    expect(plan.x).toBe(authority.publicKey.x);
+    expect(plan.y).toBe(authority.publicKey.y);
+    // Digest parity with core (what the contract recomputes) and a signature core's verifier accepts.
+    const digest = authorityDigest(enrollStructHash(plan.principalId, 5n, plan.nonce), {
+      chainId: domain.chainId,
+      verifyingContract: registry,
+    });
+    expect(verifyP256(digest, plan.authoritySig, authority.publicKey)).toBe(true);
+    // Under the passport domain the same signature is invalid: domains are per contract (ADR-0009).
+    expect(
+      verifyP256(
+        authorityDigest(enrollStructHash(plan.principalId, 5n, plan.nonce), domain),
+        plan.authoritySig,
+        authority.publicKey,
+      ),
+    ).toBe(false);
+    const decoded = decodeFunctionData({ abi: PrincipalRegistryAbi, data: plan.tx.data });
+    expect(decoded.functionName).toBe("enroll");
+    expect(decoded.args).toEqual([
+      BigInt(plan.x),
+      BigInt(plan.y),
+      5n,
+      plan.nonce,
+      plan.authoritySig,
+    ]);
+    expect(plan.tx.to).toBe(registry);
+    // Random nonce by default, current epoch by default.
+    const fresh = planEnroll(locker, registry);
+    expect(fresh.epoch).toBe(5n);
+    expect(fresh.nonce).not.toBe(plan.nonce);
+  });
+
+  it("planAttest commits to the 16 epoch deposit addresses", () => {
+    const locker = makeLocker(1);
+    const plan = planAttest(locker, registry, 6n, ZERO_HASH);
+    expect(plan.depositKeys).toHaveLength(16);
+    expect(plan.depositKeys[2]).toBe(locker.depositKey(2, 6n).address);
+    expect(plan.depositKeysRoot).toBe(depositKeysRoot(locker.depositAddresses(6n)));
+    const digest = authorityDigest(
+      attestStructHash(plan.principalId, 6n, plan.depositKeysRoot, ZERO_HASH),
+      { chainId: domain.chainId, verifyingContract: registry },
+    );
+    expect(verifyP256(digest, plan.authoritySig, locker.authorityKey().publicKey)).toBe(true);
+    const decoded = decodeFunctionData({ abi: PrincipalRegistryAbi, data: plan.tx.data });
+    expect(decoded.functionName).toBe("attest");
+    expect(decoded.args).toEqual([
+      plan.principalId,
+      6n,
+      plan.depositKeysRoot,
+      ZERO_HASH,
+      plan.authoritySig,
+    ]);
+  });
+
+  it("sends over a transport and disposes the authority scalar with the locker", async () => {
+    const locker = makeLocker(1);
+    const transport = new MemoryTransport({ now: () => 99 });
+    const sent = await sendEnroll(locker, transport, planEnroll(locker, registry));
+    expect(sent.submittedAt).toBe(99);
+    expect(transport.sent[0]?.tx.to).toBe(registry);
+    expect(locker.authorityKey()).toBe(locker.authorityKey()); // memoised
+    locker.dispose();
+    expect(() => planEnroll(locker, registry, 5n)).toThrow();
+  });
+
+  it("LockerSession exposes enroll/attest over the client's transport", async () => {
+    StaticPrfSource.resetWarning();
+    const transport = new MemoryTransport();
+    const client = new FirsthandClient({
+      domain,
+      epochs,
+      anchors: new MemoryAnchorWriter(),
+      blobs: new MemoryBlobStore(),
+      transport,
+      facilitator: new MemoryFacilitator(),
+      addresses: {
+        grantManager: `0x${"b1".repeat(20)}`,
+        rescissions: `0x${"b2".repeat(20)}`,
+        principalRegistry: registry,
+      },
+      clock,
+    });
+    const session = await client.open(
+      new StaticPrfSource(prf(6), { unsafeAcknowledged: true, warn: () => {} }),
+    );
+    await session.enroll();
+    await session.attest();
+    expect(transport.sent.map((s) => s.tx.to)).toEqual([registry, registry]);
+    expect(session.planEnroll(5n).principalId).toBe(session.locker.principalId);
+    expect(session.planAttest(5n).depositKeys).toHaveLength(16);
     session.close();
   });
 });

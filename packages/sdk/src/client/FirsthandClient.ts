@@ -4,14 +4,16 @@ import type { PrfSource } from "@firsthand/crypto";
 import { type Logger, noopLogger } from "@firsthand/runtime";
 import { Batcher } from "../batch/Batcher.js";
 import { Locker, type NamespaceInfo } from "../locker/Locker.js";
+import { type AttestPlan, planAttest, sendAttest } from "../verbs/attest.js";
 import { acceptSigned, type DepositInput, type DepositResult, deposit } from "../verbs/deposit.js";
+import { type EnrollPlan, planEnroll, type SentTx, sendEnroll } from "../verbs/enroll.js";
 import { type QueryDeps, type QueryRequest, query } from "../verbs/query.js";
 import {
   planCommit,
   planDirectRescind,
-  type RescindAddresses,
   type RescindPlan,
   sendRescind,
+  type VerbAddresses,
 } from "../verbs/rescind.js";
 
 /**
@@ -25,7 +27,7 @@ export interface FirsthandClientOptions {
   readonly blobs: BlobStore;
   readonly transport: TxTransport;
   readonly facilitator: X402Facilitator;
-  readonly addresses: RescindAddresses;
+  readonly addresses: VerbAddresses;
   readonly namespaces?: readonly NamespaceInfo[];
   readonly logger?: Logger;
   readonly clock?: () => bigint;
@@ -69,6 +71,23 @@ export class LockerSession {
     this.#client = client;
     this.locker = locker;
     this.batcher = new Batcher(locker);
+  }
+
+  /** Registers the locker's authority key on-chain (Phase 1). Relayable: the transport pays gas. */
+  planEnroll(epoch?: bigint): EnrollPlan {
+    return planEnroll(this.locker, this.#client.options.addresses.principalRegistry, epoch);
+  }
+
+  enroll(epoch?: bigint): Promise<SentTx> {
+    return sendEnroll(this.locker, this.#client.options.transport, this.planEnroll(epoch));
+  }
+
+  planAttest(epoch?: bigint): AttestPlan {
+    return planAttest(this.locker, this.#client.options.addresses.principalRegistry, epoch);
+  }
+
+  attest(epoch?: bigint): Promise<SentTx> {
+    return sendAttest(this.locker, this.#client.options.transport, this.planAttest(epoch));
   }
 
   deposit(input: DepositInput): Promise<DepositResult> {

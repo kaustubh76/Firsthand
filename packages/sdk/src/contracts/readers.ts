@@ -36,6 +36,50 @@ export class ContractReaders {
     };
   }
 
+  depositKeysRoot(principalId: Bytes32, epoch: bigint): Promise<Bytes32> {
+    return this.#client.readContract({
+      address: this.addresses.principalRegistry,
+      abi: PrincipalRegistryAbi,
+      functionName: "depositKeysRoot",
+      args: [principalId, epoch],
+    });
+  }
+
+  async principalStatus(principalId: Bytes32): Promise<PrincipalStatus> {
+    const s = await this.#client.readContract({
+      address: this.addresses.principalRegistry,
+      abi: PrincipalRegistryAbi,
+      functionName: "effectiveStatus",
+      args: [principalId],
+    });
+    return s as PrincipalStatus;
+  }
+
+  isLive(principalId: Bytes32): Promise<boolean> {
+    return this.#client.readContract({
+      address: this.addresses.principalRegistry,
+      abi: PrincipalRegistryAbi,
+      functionName: "isLive",
+      args: [principalId],
+    });
+  }
+
+  registryDomainSeparator(): Promise<Bytes32> {
+    return this.#client.readContract({
+      address: this.addresses.principalRegistry,
+      abi: PrincipalRegistryAbi,
+      functionName: "domainSeparator",
+    });
+  }
+
+  registryEpoch(): Promise<bigint> {
+    return this.#client.readContract({
+      address: this.addresses.principalRegistry,
+      abi: PrincipalRegistryAbi,
+      functionName: "currentEpoch",
+    });
+  }
+
   currentEpoch(): Promise<bigint> {
     return this.#client.readContract({
       address: this.addresses.firsthandLens,

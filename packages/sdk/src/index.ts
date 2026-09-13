@@ -17,8 +17,12 @@ export type {
   SignatureMode,
 } from "./manifest/verify.js";
 export { verifyManifest } from "./manifest/verify.js";
+export type { AttestPlan } from "./verbs/attest.js";
+export { planAttest, sendAttest } from "./verbs/attest.js";
 export type { DepositInput, DepositResult, PassportSidecar } from "./verbs/deposit.js";
 export { acceptSigned, deposit, mintPassport, refuseUnlessProvable } from "./verbs/deposit.js";
+export type { EnrollPlan, SentTx } from "./verbs/enroll.js";
+export { planEnroll, sendEnroll } from "./verbs/enroll.js";
 export type { QueryDeps, QueryRequest, QueryResult } from "./verbs/query.js";
 export { query } from "./verbs/query.js";
 export type {

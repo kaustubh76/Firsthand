@@ -23,6 +23,11 @@ export interface RescindAddresses {
   readonly rescissions: Address;
 }
 
+/** Addresses every verb needs; extended per phase. */
+export interface VerbAddresses extends RescindAddresses {
+  readonly principalRegistry: Address;
+}
+
 export interface RescindPlan {
   readonly path: RescindPath;
   readonly to: Address;

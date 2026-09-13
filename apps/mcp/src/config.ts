@@ -10,6 +10,17 @@ export const McpConfigSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)
     .default("0x0000000000000000000000000000000000000000"),
+  PRINCIPAL_REGISTRY: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .default("0x0000000000000000000000000000000000000000"),
+  /** JSON-RPC endpoint; with RELAYER_PRIVATE_KEY set, enroll/attest broadcast through it. */
+  RPC_URL: z.string().url().optional(),
+  /** Relayer wallet that pays gas for relayable verbs. Never a user key. */
+  RELAYER_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{64}$/)
+    .optional(),
   GRANT_MANAGER: z
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)

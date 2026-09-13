@@ -13,7 +13,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { createMcpServer } from "./server.js";
 
-async function connect() {
+async function connect(canBroadcast = true) {
   StaticPrfSource.resetWarning();
   const fh = new FirsthandClient({
     domain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
@@ -25,6 +25,7 @@ async function connect() {
     addresses: {
       grantManager: `0x${"b1".repeat(20)}` as Address,
       rescissions: `0x${"b2".repeat(20)}` as Address,
+      principalRegistry: `0x${"b3".repeat(20)}` as Address,
     },
     namespaces: [{ ns: 0, label: "notes" }],
   });
@@ -38,6 +39,7 @@ async function connect() {
         }),
       )),
     logger: noopLogger,
+    canBroadcast,
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -50,11 +52,13 @@ const textOf = (r: { content: unknown }) =>
   JSON.parse((r.content as { text: string }[])[0]?.text ?? "null");
 
 describe("firsthand-mcp", () => {
-  it("lists the three verbs plus status", async () => {
+  it("lists the verbs, enroll/attest and status", async () => {
     const client = await connect();
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(tools).toEqual([
+      "firsthand_attest",
       "firsthand_deposit",
+      "firsthand_enroll",
       "firsthand_query",
       "firsthand_rescind",
       "firsthand_status",
@@ -112,5 +116,44 @@ describe("firsthand-mcp", () => {
       },
     });
     expect(query.isError).toBe(true);
+  });
+});
+
+describe("enroll / attest tools", () => {
+  it("broadcast through the transport when a relayer is configured", async () => {
+    const client = await connect(true);
+    const enrolled = textOf(
+      (await client.callTool({ name: "firsthand_enroll", arguments: {} })) as { content: unknown },
+    );
+    expect(enrolled.broadcast).toBe(true);
+    expect(enrolled.principalId).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(enrolled.txHash).toMatch(/^0x/);
+    const attested = textOf(
+      (await client.callTool({ name: "firsthand_attest", arguments: { epoch: "3" } })) as {
+        content: unknown;
+      },
+    );
+    expect(attested.broadcast).toBe(true);
+    expect(attested.epoch).toBe("3");
+    expect(attested.depositKeysRoot).toMatch(/^0x/);
+  });
+
+  it("return signed calldata for out-of-band submission without a relayer", async () => {
+    const client = await connect(false);
+    const plan = textOf(
+      (await client.callTool({ name: "firsthand_enroll", arguments: { epoch: "7" } })) as {
+        content: unknown;
+      },
+    );
+    expect(plan.broadcast).toBe(false);
+    expect(plan.tx.to).toBe(`0x${"b3".repeat(20)}`);
+    expect(plan.tx.data.startsWith("0x")).toBe(true);
+    const attest = textOf(
+      (await client.callTool({ name: "firsthand_attest", arguments: {} })) as { content: unknown },
+    );
+    expect(attest.broadcast).toBe(false);
+    expect(attest.tx.to).toBe(`0x${"b3".repeat(20)}`);
+    const bad = await client.callTool({ name: "firsthand_enroll", arguments: { epoch: "x" } });
+    expect(bad.isError).toBe(true);
   });
 });

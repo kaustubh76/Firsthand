@@ -1,8 +1,12 @@
 import {
+  anvil,
+  createChainClients,
   FsBlobStore,
   MemoryAnchorWriter,
   MemoryFacilitator,
   MemoryTransport,
+  monadTestnet,
+  PublicMempoolTransport,
 } from "@firsthand/adapters";
 import { type Address, ConfigError, hexToBytes } from "@firsthand/core";
 import { StaticPrfSource } from "@firsthand/crypto";
@@ -19,6 +23,19 @@ const logger = createLogger({
   sink: (_l, line) => process.stderr.write(`${line}\n`),
 });
 
+// With a relayer key the verbs broadcast for real; without one, tools return signed calldata.
+const relayerClients =
+  config.RPC_URL && config.RELAYER_PRIVATE_KEY
+    ? createChainClients({
+        rpcUrl: config.RPC_URL,
+        chain: config.CHAIN_ID === 31337n ? anvil : monadTestnet,
+        privateKey: config.RELAYER_PRIVATE_KEY as `0x${string}`,
+      })
+    : null;
+const transport = relayerClients?.walletClient
+  ? new PublicMempoolTransport(relayerClients.walletClient)
+  : new MemoryTransport();
+
 const client = new FirsthandClient({
   domain: {
     chainId: config.CHAIN_ID,
@@ -28,11 +45,12 @@ const client = new FirsthandClient({
   // Phase 2/4 swap these for OnchainAnchorWriter / BtxTransport built from the deployment file.
   anchors: new MemoryAnchorWriter(),
   blobs: new FsBlobStore(config.BLOB_DIR),
-  transport: new MemoryTransport(),
+  transport,
   facilitator: new MemoryFacilitator(),
   addresses: {
     grantManager: config.GRANT_MANAGER.toLowerCase() as Address,
     rescissions: config.RESCISSIONS.toLowerCase() as Address,
+    principalRegistry: config.PRINCIPAL_REGISTRY.toLowerCase() as Address,
   },
   logger,
 });
@@ -55,6 +73,10 @@ const openSession = () => {
   return session;
 };
 
-const server = createMcpServer({ session: openSession, logger });
+const server = createMcpServer({
+  session: openSession,
+  logger,
+  canBroadcast: transport.kind === "public",
+});
 await server.connect(new StdioServerTransport());
 logger.info("firsthand-mcp ready on stdio");

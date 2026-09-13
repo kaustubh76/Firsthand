@@ -13,7 +13,9 @@ import type { Logger } from "@firsthand/runtime";
 import type { LockerSession } from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  AttestInputSchema,
   DepositInputSchema,
+  EnrollInputSchema,
   QueryInputSchema,
   RescindInputSchema,
   StatusInputSchema,
@@ -23,6 +25,8 @@ export interface McpDeps {
   /** Opened lazily on first tool call so a stdio client can list tools without a PRF. */
   readonly session: () => Promise<LockerSession>;
   readonly logger: Logger;
+  /** Whether the configured transport actually reaches a chain (relayer key present). */
+  readonly canBroadcast: boolean;
 }
 
 const CLASS = {
@@ -149,6 +153,78 @@ export function createMcpServer(deps: McpDeps): McpServer {
           encryptedMempool: sent.encryptedMempool,
         });
       } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_enroll",
+    {
+      title: "Enrol the locker's authority key on-chain",
+      description:
+        "Registers the passkey-derived P-256 authority key in PrincipalRegistry (Phase 1). Relayable: with a relayer key configured the tool broadcasts; otherwise it returns the signed calldata for out-of-band submission.",
+      inputSchema: EnrollInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const session = await deps.session();
+        const epoch = input.epoch === undefined ? undefined : BigInt(input.epoch);
+        const plan = session.planEnroll(epoch);
+        if (!deps.canBroadcast) {
+          return text({
+            broadcast: false,
+            principalId: plan.principalId,
+            epoch: plan.epoch,
+            tx: plan.tx,
+          });
+        }
+        const sent = await session.enroll(epoch);
+        return text({
+          broadcast: true,
+          principalId: plan.principalId,
+          epoch: plan.epoch,
+          txHash: sent.txHash,
+        });
+      } catch (error) {
+        deps.logger.warn("enroll failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_attest",
+    {
+      title: "Attest this epoch's deposit keys",
+      description:
+        "Publishes the 16 epoch deposit addresses as one commitment and refreshes liveness — the weekly passkey ritual (README §7.4).",
+      inputSchema: AttestInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const session = await deps.session();
+        const epoch = input.epoch === undefined ? undefined : BigInt(input.epoch);
+        const plan = session.planAttest(epoch);
+        if (!deps.canBroadcast) {
+          return text({
+            broadcast: false,
+            principalId: plan.principalId,
+            epoch: plan.epoch,
+            depositKeysRoot: plan.depositKeysRoot,
+            tx: plan.tx,
+          });
+        }
+        const sent = await session.attest(epoch);
+        return text({
+          broadcast: true,
+          principalId: plan.principalId,
+          epoch: plan.epoch,
+          depositKeysRoot: plan.depositKeysRoot,
+          txHash: sent.txHash,
+        });
+      } catch (error) {
+        deps.logger.warn("attest failed", { error });
         return failure(error);
       }
     },

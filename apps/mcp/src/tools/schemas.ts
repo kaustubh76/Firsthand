@@ -34,4 +34,20 @@ export const RescindInputSchema = z.object({
     .describe("Transport path; btx is un-front-runnable"),
 });
 
+export const EnrollInputSchema = z.object({
+  epoch: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .describe("Epoch to enrol at; defaults to the current epoch"),
+});
+
+export const AttestInputSchema = z.object({
+  epoch: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .describe("Epoch to attest; defaults to the current epoch"),
+});
+
 export const StatusInputSchema = z.object({});

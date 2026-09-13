@@ -28,13 +28,16 @@ export function seededLocker(
   clock: Clock,
   batchSize = 256,
 ): { locker: Locker; batcher: Batcher } {
+  // Live-chain arms need a principal nobody has enrolled before: mix in randomness.
+  const prf = new Uint8Array(32).fill(seed);
+  if (arm.uniqueSeeds) crypto.getRandomValues(prf.subarray(1));
   const locker = new Locker({
-    keys: KeyTree.fromPrf(new Uint8Array(32).fill(seed)),
-    domain: DOMAIN,
-    epochs: EPOCHS,
+    keys: KeyTree.fromPrf(prf),
+    domain: arm.domain ?? DOMAIN,
+    epochs: arm.epochs ?? EPOCHS,
     anchors: arm.anchors,
     blobs: new MemoryBlobStore(),
-    clock: () => clock.nowSec(),
+    clock: arm.clock ?? (() => clock.nowSec()),
     namespaces: [{ ns: 0, label: "experiment" }],
   });
   return { locker, batcher: new Batcher(locker, arm.anchors, batchSize) };

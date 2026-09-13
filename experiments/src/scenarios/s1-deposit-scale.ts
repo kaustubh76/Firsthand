@@ -1,10 +1,10 @@
 import { BATCH_SIZE, type Bytes32 } from "@firsthand/core";
 import { deposit, exportManifest, verifyManifest } from "@firsthand/sdk";
-import { type Arm, Arms, memoryArm } from "../arms/index.js";
+import { Arms, resolveArm } from "../arms/index.js";
 import type { RunContext, Scenario } from "../harness/Runner.js";
 import { anchorCostPer1k } from "../metrics/gas.js";
 import { manifestBytes, proofBytesPerAsset } from "../metrics/proofSize.js";
-import { ATTESTATION, DOMAIN, datumBytes, seededLocker, termsFor } from "./common.js";
+import { ATTESTATION, datumBytes, seededLocker, termsFor } from "./common.js";
 
 /**
  * S1 — deposit at scale (README §15): N passports at batch=256, then export a manifest over all of
@@ -14,10 +14,11 @@ import { ATTESTATION, DOMAIN, datumBytes, seededLocker, termsFor } from "./commo
 export const s1: Scenario = {
   id: "s1",
   hypothesis: "H3",
-  arms: [Arms.MEMORY],
+  arms: [Arms.MEMORY, Arms.ANCHORS_BASELINE, Arms.ANCHORS_PAGED],
   async run(arm: string, ctx: RunContext) {
-    const adapters = memoryArm(arm as Arm);
+    const adapters = await resolveArm(arm);
     const { locker, batcher } = seededLocker(1, adapters, ctx.clock);
+    await adapters.prepare(locker);
     const terms = termsFor(locker);
     const n = ctx.dryRun ? Math.min(ctx.n, 300) : ctx.n;
 
@@ -34,7 +35,7 @@ export const s1: Scenario = {
     const depositMs = ctx.clock.nowMs() - t0;
 
     const manifest = exportManifest({
-      domain: DOMAIN,
+      domain: locker.domain,
       principalId: locker.principalId,
       ns: 0,
       batches: batcher.flushed(),
@@ -42,7 +43,7 @@ export const s1: Scenario = {
     });
     const verifyCtx = {
       anchors: adapters.anchors,
-      headBlock: BigInt(batcher.flushed().length + 1),
+      headBlock: await adapters.headBlock(),
       now: () => ctx.clock.nowMs(),
     };
     // H3 as specified: Merkle inclusion + anchoring, O(log n) per asset.
@@ -51,12 +52,22 @@ export const s1: Scenario = {
     const full = ctx.dryRun
       ? merkleOnly
       : await verifyManifest(manifest, verifyCtx, { signatures: "all" });
-    if (!merkleOnly.ok || !full.ok) throw new Error("S1: manifest failed to verify");
+    if (!merkleOnly.ok || !full.ok) {
+      const bad = [...merkleOnly.assets, ...full.assets].filter((a) => !a.ok);
+      const reasons = bad.reduce<Record<string, number>>((acc, a) => {
+        acc[a.reason ?? "?"] = (acc[a.reason ?? "?"] ?? 0) + 1;
+        return acc;
+      }, {});
+      throw new Error(
+        `S1: manifest failed to verify: ${JSON.stringify(reasons)} (${bad.length} of ${merkleOnly.assets.length + full.assets.length})`,
+      );
+    }
 
-    const gas = anchorCostPer1k(
-      batcher.flushed().map((b) => b.anchor),
-      BATCH_SIZE,
-    );
+    const anchorsRefs = batcher.flushed().map((b) => b.anchor);
+    const gas = anchorCostPer1k(anchorsRefs, BATCH_SIZE);
+    const gasPerAnchor = anchorsRefs.every((a) => a.gasUsed !== null)
+      ? anchorsRefs.reduce((sum, a) => sum + Number(a.gasUsed), 0) / Math.max(1, anchorsRefs.length)
+      : null;
     const roots: Bytes32[] = batcher.flushed().map((b) => b.root);
     return {
       metrics: {
@@ -71,6 +82,9 @@ export const s1: Scenario = {
         proofBytesPerAsset: { value: proofBytesPerAsset(), unit: "bytes" },
         manifestBytes: { value: manifestBytes(manifest), unit: "bytes" },
         ...(gas === null ? {} : { anchorGasPer1k: { value: gas, unit: "gas" } }),
+        ...(gasPerAnchor === null
+          ? {}
+          : { anchorGasPerBatch: { value: gasPerAnchor, unit: "gas" } }),
       },
       onChain: adapters.onChain,
       notes: [

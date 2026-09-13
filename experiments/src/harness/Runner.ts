@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Logger, noopLogger } from "@firsthand/runtime";
+import { ArmUnavailableError } from "../arms/index.js";
 import type { Clock } from "./Clock.js";
 import { systemClock } from "./Clock.js";
 import { type ResultsFile, ResultsFileSchema, type TrialResult } from "./Trial.js";
@@ -31,6 +32,8 @@ export interface RunnerOptions {
 
 /** Runs scenarios across arms and appends trials to results/<scenario>.json. */
 export class Runner {
+  /** Arms that could not run in this environment (no chain env); never written to results. */
+  readonly skipped: { scenario: string; arm: string; reason: string }[] = [];
   readonly #dir: string;
   readonly #clock: Clock;
   readonly #logger: Logger;
@@ -57,7 +60,17 @@ export class Runner {
         n: ctx.n,
         dryRun: ctx.dryRun,
       });
-      const partial = await scenario.run(arm, { ...ctx, clock: this.#clock, logger: this.#logger });
+      let partial: Awaited<ReturnType<Scenario["run"]>>;
+      try {
+        partial = await scenario.run(arm, { ...ctx, clock: this.#clock, logger: this.#logger });
+      } catch (error) {
+        if (error instanceof ArmUnavailableError) {
+          this.#logger.warn("arm skipped", { scenario: scenario.id, arm, reason: error.message });
+          this.skipped.push({ scenario: scenario.id, arm, reason: error.message });
+          continue;
+        }
+        throw error;
+      }
       const trial: TrialResult = {
         scenario: scenario.id,
         arm,

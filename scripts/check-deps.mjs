@@ -87,12 +87,14 @@ const GRAPH = {
     external: ["react", "react-dom"],
   },
   "@firsthand/experiments": {
+    // Runs on a developer machine with throw-away keys; the S4 on-chain arm forges deposit signatures.
     internal: [
       "@firsthand/sdk",
       "@firsthand/adapters",
       "@firsthand/contracts",
       "@firsthand/runtime",
       "@firsthand/core",
+      "@firsthand/crypto",
     ],
     external: ["viem", "zod"],
   },

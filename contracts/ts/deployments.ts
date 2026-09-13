@@ -10,7 +10,10 @@ export interface Deployment {
   readonly chainId: number;
   readonly PrincipalRegistry: `0x${string}`;
   readonly Rescissions: `0x${string}`;
+  /** Primary anchors deployment (per ANCHORS_LAYOUT at deploy time). */
   readonly PassportAnchors: `0x${string}`;
+  readonly PassportAnchorsBaseline: `0x${string}`;
+  readonly PassportAnchorsPaged: `0x${string}`;
   readonly GrantManager: `0x${string}`;
   readonly ReceiptLedger: `0x${string}`;
   readonly RoyaltyRouter: `0x${string}`;
@@ -41,6 +44,8 @@ export function getDeployment(chainId: number | bigint): Deployment {
     "PrincipalRegistry",
     "Rescissions",
     "PassportAnchors",
+    "PassportAnchorsBaseline",
+    "PassportAnchorsPaged",
     "GrantManager",
     "ReceiptLedger",
     "RoyaltyRouter",

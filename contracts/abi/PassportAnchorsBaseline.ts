@@ -16,61 +16,61 @@ export const PassportAnchorsBaselineAbi = [
     "name": "anchor",
     "inputs": [
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "ns",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "",
+        "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "batchRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "termsHash",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "nonce",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "depositKeys",
         "type": "address[16]",
         "internalType": "address[16]"
       },
       {
-        "name": "",
+        "name": "depositSig",
         "type": "bytes",
         "internalType": "bytes"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "batchIndex",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "anchorBlock",
     "inputs": [
       {
-        "name": "",
+        "name": "batchRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -82,24 +82,75 @@ export const PassportAnchorsBaselineAbi = [
         "internalType": "uint64"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "anchorOf",
+    "inputs": [
+      {
+        "name": "batchRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct AnchorRecord",
+        "components": [
+          {
+            "name": "principalId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "termsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "epoch",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "blockNumber",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "ns",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "batchIndex",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "batchCount",
     "inputs": [
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "ns",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "",
+        "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
       }
@@ -111,29 +162,29 @@ export const PassportAnchorsBaselineAbi = [
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "batchRootAt",
     "inputs": [
       {
-        "name": "",
+        "name": "principalId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "ns",
         "type": "uint32",
         "internalType": "uint32"
       },
       {
-        "name": "",
+        "name": "epoch",
         "type": "uint64",
         "internalType": "uint64"
       },
       {
-        "name": "",
+        "name": "batchIndex",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -145,14 +196,27 @@ export const PassportAnchorsBaselineAbi = [
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "domainSeparator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "isAnchored",
     "inputs": [
       {
-        "name": "",
+        "name": "batchRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -164,7 +228,48 @@ export const PassportAnchorsBaselineAbi = [
         "internalType": "bool"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isIncluded",
+    "inputs": [
+      {
+        "name": "batchRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "passportId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "proof",
+        "type": "tuple",
+        "internalType": "struct BatchProof",
+        "components": [
+          {
+            "name": "index",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "siblings",
+            "type": "bytes32[8]",
+            "internalType": "bytes32[8]"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -181,13 +286,37 @@ export const PassportAnchorsBaselineAbi = [
   },
   {
     "type": "function",
+    "name": "nonceUsed",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "registry",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IPrincipalRegistry"
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -197,7 +326,7 @@ export const PassportAnchorsBaselineAbi = [
     "name": "termsOf",
     "inputs": [
       {
-        "name": "",
+        "name": "batchRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -209,7 +338,7 @@ export const PassportAnchorsBaselineAbi = [
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
   },
   {
     "type": "event",
@@ -262,6 +391,11 @@ export const PassportAnchorsBaselineAbi = [
         "name": "expectedRoot",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "actualRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ]
   },
@@ -278,6 +412,38 @@ export const PassportAnchorsBaselineAbi = [
   },
   {
     "type": "error",
+    "name": "EpochInFuture",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "current",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EpochNotAttested",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidDepositSignature",
     "inputs": [
       {
@@ -289,6 +455,17 @@ export const PassportAnchorsBaselineAbi = [
         "name": "expected",
         "type": "address",
         "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },
@@ -316,24 +493,7 @@ export const PassportAnchorsBaselineAbi = [
   },
   {
     "type": "error",
-    "name": "NotImplemented",
-    "inputs": [
-      {
-        "name": "feature",
-        "type": "string",
-        "internalType": "string"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PrincipalNotLive",
-    "inputs": [
-      {
-        "name": "principalId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
+    "name": "ZeroRoot",
+    "inputs": []
   }
 ] as const;

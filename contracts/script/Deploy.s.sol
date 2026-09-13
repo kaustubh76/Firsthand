@@ -23,7 +23,9 @@ contract Deploy is Script {
     struct Deployed {
         address principalRegistry;
         address rescissions;
-        address passportAnchors;
+        address passportAnchors; // the primary (per ANCHORS_LAYOUT) — what Lens, gateway and SDK bind to
+        address passportAnchorsBaseline; // both layouts are always deployed so S1 can compare arms
+        address passportAnchorsPaged;
         address grantManager;
         address receiptLedger;
         address royaltyRouter;
@@ -53,9 +55,10 @@ contract Deploy is Script {
         PrincipalRegistry registry = new PrincipalRegistry(d.genesis, d.epochLength, EpochLib.LIVENESS_GRACE_EPOCHS);
         d.principalRegistry = address(registry);
         d.rescissions = address(new Rescissions());
-        d.passportAnchors = keccak256(bytes(d.anchorsLayout)) == keccak256("paged")
-            ? address(new PassportAnchorsPaged(registry))
-            : address(new PassportAnchorsBaseline(registry));
+        d.passportAnchorsBaseline = address(new PassportAnchorsBaseline(registry));
+        d.passportAnchorsPaged = address(new PassportAnchorsPaged(registry));
+        d.passportAnchors =
+            keccak256(bytes(d.anchorsLayout)) == keccak256("paged") ? d.passportAnchorsPaged : d.passportAnchorsBaseline;
         d.grantManager = address(new GrantManager(registry, Rescissions(d.rescissions), 0, 0));
     }
 
@@ -96,6 +99,8 @@ contract Deploy is Script {
         vm.serializeAddress(root, "PrincipalRegistry", d.principalRegistry);
         vm.serializeAddress(root, "Rescissions", d.rescissions);
         vm.serializeAddress(root, "PassportAnchors", d.passportAnchors);
+        vm.serializeAddress(root, "PassportAnchorsBaseline", d.passportAnchorsBaseline);
+        vm.serializeAddress(root, "PassportAnchorsPaged", d.passportAnchorsPaged);
         vm.serializeAddress(root, "GrantManager", d.grantManager);
         vm.serializeAddress(root, "ReceiptLedger", d.receiptLedger);
         vm.serializeAddress(root, "RoyaltyRouter", d.royaltyRouter);

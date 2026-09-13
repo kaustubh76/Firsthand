@@ -1,0 +1,341 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "depositPublicKey": "0x04d0c4193a2cbbc02a4d1690780c77235e0ff41c2f4f4b64ecaea0e04e781c14cfa8118d213815659aa4fd3f648733025a0023163312989f82c73dbf85380593bb",
+        "kDepScalar": "0x341f66342d2e890c6f546596afffd4ba210759e215ebe2ce56aabb079f6ca800",
+        "kIdScalar": "0x9b937c1d985f4da2384908aad8e7e9fdf14ad5a71e1f5ed3dcfb9131c097fa9c",
+        "kNonce": "0x070df6d1cd817763e8f81e4da1cf0b7c35542f2c8a44c6ad53ceccf9d14cd89e",
+        "kNs": "0x1ab8cfed78aff008d7431e744c51ae782fdcc36a1dd02c573326425bc3b6b962",
+        "origin": "0x2223df8ecb8c866a83a4246207c8df3c3e64b21f",
+        "p256Commit": "0xf55f44dfb222251dcb5eedd8068d03f83aa4fdcc961206edd346bf43e7fbd034",
+        "p256X": "0xcdd61de9b78f38ec9fd29181202f4fdd5f1b42f9bacb4d3198f9c4268bbdac39",
+        "p256Y": "0x0ce7ab1ac7587227ffd5387b1db83aa9a642f55396b872f143e2a5ee46d23cd8",
+        "passportNonce": "0x2501fcda7fec921c552096aaae42b5389a9d8f09f289d468b1bb7f5762d51a80",
+        "prk": "0x26a0ff788f176270f43f566e92bb0234eaec718c0c3c96aba630d7d8409e5827"
+      },
+      "hand": true,
+      "input": {
+        "contentHash": "0xd4e97fef3fcde556cb9be1107f3c61fc3d91f9452eee898293736f50d318f1af",
+        "epoch": "7",
+        "ns": 3,
+        "prf": "0x0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "name": "hand/openssl-prf01-ns3-e7"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x0494d375c6c771b5b96bfccd03ae7c8176c3feb5522e0b28adcfbf49f6c34b69572b8c918d2cb56c8b3e7a631038465d689b61cad176d95b4685995a1c7dbdbbcd",
+        "kDepScalar": "0x157e88c8e0067afd13c3a4950e1698f73df138f0d8250aa0535e9a8afe0647c0",
+        "kIdScalar": "0x9b937c1d985f4da2384908aad8e7e9fdf14ad5a71e1f5ed3dcfb9131c097fa9c",
+        "kNonce": "0xe01575d23ca535b740f99ea2a9fd15722e43b584b58f0dcd5021d9eaf0a7950d",
+        "kNs": "0xc773313c45d36455a32676726d9c980286a1e294e5aeb6a8455edf3bd81db827",
+        "origin": "0x1d56379563619e224f875a0ce8cce1ac71409e58",
+        "p256Commit": "0xf55f44dfb222251dcb5eedd8068d03f83aa4fdcc961206edd346bf43e7fbd034",
+        "p256X": "0xcdd61de9b78f38ec9fd29181202f4fdd5f1b42f9bacb4d3198f9c4268bbdac39",
+        "p256Y": "0x0ce7ab1ac7587227ffd5387b1db83aa9a642f55396b872f143e2a5ee46d23cd8",
+        "passportNonce": "0x246f04d8db1c92ffc71cea9a1791f31ce581601b3ee6a7a5ff2c76c8113e22f3",
+        "prk": "0x26a0ff788f176270f43f566e92bb0234eaec718c0c3c96aba630d7d8409e5827"
+      },
+      "hand": true,
+      "input": {
+        "contentHash": "0xf33d2128b63bd08b90fb9bc8762239e305f855ee7d1359733a20dc1a4d8ed521",
+        "epoch": "0",
+        "ns": 0,
+        "prf": "0x0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "name": "hand/openssl-prf01-ns0-e0"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x0494fb21e048be5b8436b9b89156176a79e26e3d53eb4fef8e7ab07459b71ca584c562795b410991ca5372bca8cca63706fbd0f91ed960f8fbbd13b663f3c37434",
+        "kDepScalar": "0x3c82b49cd234977d40db12429526a474f96feabe1f002e7f887a046a10d79456",
+        "kIdScalar": "0x9b937c1d985f4da2384908aad8e7e9fdf14ad5a71e1f5ed3dcfb9131c097fa9c",
+        "kNonce": "0xce47009b9cdec267b6297573cab82e9f7cf1be2630f0a08cb6d89be9e554931e",
+        "kNs": "0x5a64935f14dcdb6694c2f98b6fb337fb6292cc0f8f679ec37f7ea8d781796299",
+        "origin": "0xf20334f45c23c89794f167f533a5fe2bcd8129e0",
+        "p256Commit": "0xf55f44dfb222251dcb5eedd8068d03f83aa4fdcc961206edd346bf43e7fbd034",
+        "p256X": "0xcdd61de9b78f38ec9fd29181202f4fdd5f1b42f9bacb4d3198f9c4268bbdac39",
+        "p256Y": "0x0ce7ab1ac7587227ffd5387b1db83aa9a642f55396b872f143e2a5ee46d23cd8",
+        "passportNonce": "0xf5717bcb5c3febb824bc7e4271e9864bcad0cadbc27485ee7b7f3b368b54344e",
+        "prk": "0x26a0ff788f176270f43f566e92bb0234eaec718c0c3c96aba630d7d8409e5827"
+      },
+      "hand": true,
+      "input": {
+        "contentHash": "0xadae21f31e6939c61209ddafd79478b839769eeb8b20ae8eb8277502b4e59ff1",
+        "epoch": "18446744073709551615",
+        "ns": 15,
+        "prf": "0x0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "name": "hand/openssl-prf01-ns15-emax"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x047d85d203590df35452efd148cef67ff4280fbe0faf2b130d13aa0cd836cd0c110684d724bbdc2a2384342f70ad1ffe87956ce68c4a361464aad6b337b089ff1e",
+        "kDepScalar": "0x63b3ced835aaf69375dfd6c8e8bc0fa7d1408016abd85811a35867376ad8f48b",
+        "kIdScalar": "0xc729f630b3b529ecd8b569a955ff35a5e3bf68364c6719704f4ba661111a6999",
+        "kNonce": "0xcb09ec8f715c47c3992808de09eb488f61b6b4ecf25791848c60a67b2b642deb",
+        "kNs": "0x25edcc6bc94e7169914007df04321a0b1fecbace8e53c3f493060207bccf0f73",
+        "origin": "0xd109b7061cb0b70c16eba624a6eabf11f458329e",
+        "p256Commit": "0x660dde02f434f816bb16ac404bcb30ae93215fb41b6750f6b1325b59c2c37906",
+        "p256X": "0xeb404f026b2e1e38ed399eaf091ce4fcf7a35e3ce69e1d0b40c6f140df5aabfa",
+        "p256Y": "0x2ed4a7a0aac63be9fbd434b494db131a07529efe9a91f09d3407c821ef589b2d",
+        "passportNonce": "0xd99c655851312e15206b25507faa35930607e4cf733f9887b10bd467f0158270",
+        "prk": "0x855dfb4227af99b7172be55d644d71664956333128a2a516aeda9a596e7809eb"
+      },
+      "input": {
+        "contentHash": "0x93be22652b175b55a67beb7debbed003351d3b348d5650b6f071a90b3aac4be2",
+        "epoch": "810179059922",
+        "ns": 15,
+        "prf": "0x8a85883d688fc237cfaa4527106a8544a1beb0dcf692a1b0f80a94d653b777a9"
+      },
+      "name": "gen/00"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x040758ea1c63b6f0fb46ef54f6d476659da3f305c14ffd9ac5be93bce5c69ff77bc0021550f97e0a8506d7b46f9f747fa392ea8d70ace1052affff8e9784ad9cc7",
+        "kDepScalar": "0x379f57c6ea11a68fa43ab4a87d851d8bb6e3d53fd3a6b83de6afb511d0e87577",
+        "kIdScalar": "0x4df7876edff05d2b91f4c61d389434a355591ddd97b23ea0b99a827ec5199575",
+        "kNonce": "0x818b411b13e5dc36f185c8853288b89baddb77d205348dfbcbaa8081a88ef453",
+        "kNs": "0xb7ee2ac0588ab52a415f05edf530a0cf1c60ebb8b6bea68812c16c2f687192a9",
+        "origin": "0x21d08e8ad0c71f714a10a9db94697adc5db2344a",
+        "p256Commit": "0xba8feb883ed1ba6462cc78cdc2de25feb437e8dae4db1a5cb8b0b16403796959",
+        "p256X": "0xa543cd41943d31ef6c74f0bcc04cddcf83aa7ab5c0728b5ab9032e73e10f895d",
+        "p256Y": "0xe24a052cdc3d4a72064dc91af17654b71114ed5ca4545cd7e9edab94ca047baf",
+        "passportNonce": "0xadfe018bd5ac4f99c5d2d4a580e9397fe5da331b2637ed5c485b37c00f05909b",
+        "prk": "0xb0be7557a62751478f7e747d580e721629714c731da70284a56066ec3d3011c7"
+      },
+      "input": {
+        "contentHash": "0xd058bfc651cd2390431434eda1f6b42a756dc221e828ce2e85a4263c12a3f25b",
+        "epoch": "1052945374443",
+        "ns": 5,
+        "prf": "0x71cb4187d5edef7e8868ea6cbe057c50602406b01ead46a708ec541f57a1953b"
+      },
+      "name": "gen/01"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x040cf38e8d1d3f4be38955f385c3c230853db3249bc9adf6bf2099f18cb142845bd87e1f9ea8399af5ffb993879b8eeac2c6d3ae0deea4e8d46126ec7970fa6fe5",
+        "kDepScalar": "0xb05daf414f5249aeff20520577f50e288489574dbf9efc1bec71c871e44efdfe",
+        "kIdScalar": "0x3e65545b866b57de4102298768c00c95dc30e13b35171ae8f8ad8ab15ffcac56",
+        "kNonce": "0x1d6739551a202dec7cf9b8ef97452c5e805e7af7dd05b27226c3cd81212ab8d6",
+        "kNs": "0x774b51d920542366acb91117cb3d210725637e911ef561ba6178beb55a4f2d90",
+        "origin": "0x5c4b00f962411e75dae321e2f537d4f29e7379cd",
+        "p256Commit": "0x1f0257168bb32117ffb55366420a6a90b83a3e648ab51c11f2df1e04f6f3925b",
+        "p256X": "0x7c060baf4a3cdb1c82dfab92e23e235154038778ca9f95786c62c0a6f83daccb",
+        "p256Y": "0x3878395afe02b8807cba80ea09bc599d2dcc154919ddb599402b456f7ca1766e",
+        "passportNonce": "0x429347125f328842f7ce12fd7be632b6b0eea97a62ef58b65e951becb9d09f5c",
+        "prk": "0x9780bdc8adbbe5c65a2dfbb457b44a00f6b7c3ff6229bdf62c77f41b05304478"
+      },
+      "input": {
+        "contentHash": "0x8ae8a2e01622f9c4bcef25cce9017638414cc2061b663959527ef581b1296cad",
+        "epoch": "261341275476",
+        "ns": 4,
+        "prf": "0x11bb0eeebb2a98cae9463696092b8782a07a21de4749d5d5704a4f71daf374f2"
+      },
+      "name": "gen/02"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x04ca3bd3f3176c7539c8ece2e9991549de81f8a1530c1f07541cf33dd5383aee61b09cedac743c11df8761bf559a93700d566334db6df392fce24a6d7c419d995e",
+        "kDepScalar": "0xc1a72a280ae4efe7c9e0cb375c7235b0751d3c09e8c88c0a95f219bc4f8a5bf3",
+        "kIdScalar": "0x2d1ff4ea7f185785088c031d0341b5717b7019bc9273925f7b704ccd087f63c9",
+        "kNonce": "0x15be47f6f430b640801dce6511760b25b14eb1dfa4eac550f11c86b058f388d9",
+        "kNs": "0x7b514566e8e3bae179be7c24d0192ed67b107da271f8ee8148c0fcc761e61885",
+        "origin": "0xee6485951022dd498feb38918b918615ffe9b869",
+        "p256Commit": "0x36a646bcf48568606d97f5e61aca68c0e69300f8f6f0c799c5acaa61273e33f2",
+        "p256X": "0xeab27822c4bc05e5f12761a0033c1cd3d3d7e894fd6c140fa09e515847dad382",
+        "p256Y": "0xaf5fd1604d135555739831022232932872b395e5831c1efc5808fa0629ed6679",
+        "passportNonce": "0xfac1842834195800a5684e7796f0ddbc95899acbed26c97a67047a2b4eea075f",
+        "prk": "0x2dedd9ecf45c9fe8661ff28ebbbd28f5783e734deec3de323c4a2c97ed5d60b9"
+      },
+      "input": {
+        "contentHash": "0x6b73921b9109ffedaaf0bac8396a0d6bae97f06d810a2dd5b95a4c335f8cff62",
+        "epoch": "223262914331",
+        "ns": 15,
+        "prf": "0xc3fdc48b28c297c64027a2d54a989b90584b7b1fc6bae3b4ce3ecd2bd1454d88"
+      },
+      "name": "gen/03"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x04e73c92e5da8bde94e1c98467277b86198a8a6470f7791e51206c618c4097b4a6edb4edc7f30d5eecae550443bc62a183a869bbe7cd0b7d296178f18d2e2ae471",
+        "kDepScalar": "0xa3ed9c42e694ddb5cc2f8fddec74ad7fc87bf6ee531416e9f9c1184c794f685c",
+        "kIdScalar": "0x11e98287f5d1ca21f22bdac9ea476b4cd92678181dae79f5f589406667cce3e8",
+        "kNonce": "0xfe5dd4b83563419b7e4aa7adfd3a941ad869d4b31ade950a8b066aaa20a839be",
+        "kNs": "0x69cec3e9357f71a060d4fd1f3b3ebaaf1319ec8e16f2c89c874c736e27ced346",
+        "origin": "0x3e7b4959fcb1c067a3dfa8cd0ff92a75ee88b4aa",
+        "p256Commit": "0x69f0f9e1c5bc83472886fcc22182cda47ee80bab0c07cc5f64578b7e42f5c492",
+        "p256X": "0x6941719c172932311cf9bfe75b8fa45ac0598d768287f48b7f65970a8eb35a94",
+        "p256Y": "0xf3615fa654c3c49783b963541ab93c8eac1ce5b0e455e4310ee9bbfc845ce490",
+        "passportNonce": "0x845458f85f04f459e89e34264721664024e52a3b3d376ac413313f949f0fed97",
+        "prk": "0xab5ce4d7785c6f6af29599528ebc053cae3c60a39444f29e170f1386c2e10259"
+      },
+      "input": {
+        "contentHash": "0x6d3763394846805fcc8f070c42efd3b3fff00b0d5803109f971f3f08695bea5f",
+        "epoch": "812717313749",
+        "ns": 11,
+        "prf": "0xc1097596237b7deaf7514af64eca08776c4bef8704f742a85c0fa5e90b4da71b"
+      },
+      "name": "gen/04"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x048336e58bb30570347e7f73efd6020eaef61e0a032d63c76b61eff6915080f7c004b4601b5228cba094138de1eb321c88e3571b5ed89dc7aed9543a898d2b5a93",
+        "kDepScalar": "0xbefe6e39253617faaf633c795469ca5d448e67c9ff739457154667b1eefb1875",
+        "kIdScalar": "0x9a084ab627ac26b8313c7c29575b3b5195cdc26e84c773011aabc2d2bab8dbea",
+        "kNonce": "0x71f3c134c26ba39d16741b423c8605d7a9ed1df2c779080243841bed8092a921",
+        "kNs": "0x2b2baafa2c159a58dc371c8e1dba5c743fee65d77d08bfc5ed09ac72303c6c87",
+        "origin": "0xebb456f4b336d0819dc407b69e6e5a59764009b5",
+        "p256Commit": "0x67dc8736b7d371f4031ee7e20c321dbe1a4f4818a3c8fc6843ce7583bd33e501",
+        "p256X": "0x6a7f0b45e1fd4d3ad6816a455ab291507e5becfcbd63f830bbeb15f092571460",
+        "p256Y": "0xb64f1bdcdf268430b7326c7deb43336e801ea9c1d106702d188c78752a6dde06",
+        "passportNonce": "0xea06eef87f0867e0ea8904046f1bfcb8c46ceb1027a4a1c06304320b691f6fc4",
+        "prk": "0x238d3f0b0c43a3d293a13a52fe58c9e7afc0df341f6541ff8648fb5cef9e947a"
+      },
+      "input": {
+        "contentHash": "0xe387bb07f6af2145665210c4db3885d08d913e52b9c646a212118a215a98b54a",
+        "epoch": "502198582893",
+        "ns": 12,
+        "prf": "0xf121e1162eb0dfd04422919a945ab4db91c13f35e47465d9773822399f717439"
+      },
+      "name": "gen/05"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x04cbfe6fbec517b6da04f2ac5aeb137c6682b088efd08a3be9712586b0afa8fb358a8bbc8d4bc1f2a62ec22aba8330eb833d593186f5c10d11742745f751b6161b",
+        "kDepScalar": "0x198a2fa6c6ba64482f9b43d58958c034d769b79f20e8eef9d455ce1a55141dd8",
+        "kIdScalar": "0x720d766765642bc41f6e5bb59befdebf1d1f15a99a825f7f386d8d5dd1e6ac37",
+        "kNonce": "0x1e989c89aa5c80ab392490589b6495f827083c7bcda9b9ce53f7714e5bac4836",
+        "kNs": "0x9cf3186c3c2055b59f9d4f5160a24a83a063794924d8d09dd06613170ff477d5",
+        "origin": "0x94855a2a60a50c7df7c39e40c5e2434b7f7ac780",
+        "p256Commit": "0x22f7172247c7083580ba9db4e10b97ede38a16ed899b40b9cab55f98803c56b8",
+        "p256X": "0x814c4b198ea275e2151c8e33afb4ad00aff16eca0522b7217a6e4f15d292891d",
+        "p256Y": "0xa55d6ebe776dfe7e9da0517213898cabecd534ec337d5ef7f843851339a23a28",
+        "passportNonce": "0x869500c054ccf40f816793b79a0dd5403877c9c5a23165969177b7e327927ca2",
+        "prk": "0xd452c5250b2a78d5c12b4ec27b74db4fe106ad5dcee54144b0307cc1a49df594"
+      },
+      "input": {
+        "contentHash": "0xaab5c690295c9329a9cc42fd396ba65c58205832f8f6d1c7730352cd3f94b4b8",
+        "epoch": "206638426036",
+        "ns": 3,
+        "prf": "0xdcb14640da608cc8956b02ba95861b6dbc3449bf82447da68445ace89d326e0f"
+      },
+      "name": "gen/06"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x047e43f49733727639c367f1b070758ae162a0f6867982c512ce2dc00b6e19088e0d712639faa977eb6c4b59f5a1debcf0d5608aa29544eade489025282b6c0680",
+        "kDepScalar": "0x3e62b83f6f24efe62024f7cb4c8a94a9ff5b317de01e5e410871dfac41a000ee",
+        "kIdScalar": "0x73d662a9a3f0fb606b3a1dcbb11356b32c97505391940be288b90b0792b1ce78",
+        "kNonce": "0x8c17f757cd8bff8e94c78cd1824a58764a7ee6b968a2ef93fb3c2556d29e9d67",
+        "kNs": "0xc94974873c8bd2c360e6c9a3a3daac0bd61ead78919d44fd991f41dabcae2ebb",
+        "origin": "0x7d77250e4e14d44208126ef9c07b0a609b058aac",
+        "p256Commit": "0x375c4eb42209e439da9592e44492b4878eb32de9d210fe08c2b1cc024f07fcc8",
+        "p256X": "0x0cda4df4ca79947e6ab05a61f607badb15f94b77c02b804c5d2b7f4cedf697f3",
+        "p256Y": "0xf49b7ff74efe2ec57430d0388dac64361780bc323655eaa3288033ef11aaef1d",
+        "passportNonce": "0xc3576f5a6088d924f2e8d18d50b92177a1eac74b543e3f2d7506e4eda537deb2",
+        "prk": "0xefa582e382f1a833d25f266004c3791e7e3fbeeeb630cc6ca0300dc22ab0024d"
+      },
+      "input": {
+        "contentHash": "0x0e069e4612670c7c2184c22f9d9849059056128dc124910a3cfc1233adfcb842",
+        "epoch": "49519599667",
+        "ns": 14,
+        "prf": "0x5dbb37e596507bc167c92680ddcb703a75bbbf734802dbf01137f0b0ae8a9ce5"
+      },
+      "name": "gen/07"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x0450ea33ef0e620083da380acb6f71e8faaaadb0fce534a236c341bf5d3a0acb99d30c2b38336e03b183146618f1e7acfe0ca47f286ff39d51cc673eb4fba00ffc",
+        "kDepScalar": "0x7af12bab03c26d2aa53d37cc35343f8b0a2f50c739036fd128ca23a27a60188f",
+        "kIdScalar": "0xc1f606fb9e1a8f50ec16fd945347974a7f1c1c593eb9e0e36f0abfc7bbae5714",
+        "kNonce": "0xd2033666a4e225c17b30a8319f80975ec2096f1839cb11e73737ed9cd608cc00",
+        "kNs": "0xff9c1d01babc5abac5bf9130a9cc673de36e7d74ac01f7d880b48809fd9a7f8d",
+        "origin": "0xa7462b567402dff92ddbf1675981febdc3ab8191",
+        "p256Commit": "0xcedffd768f6d5c1706635064f172594c81f1825ac2c736e37b846e42b4554359",
+        "p256X": "0x917a53d8e82095ebbe16de116039ebb916984a5233778ad885e78460f2ac6dfe",
+        "p256Y": "0xaf3f54fc734c2ca08ab24fd88e5cca5bb245dad3133795761ca8ad1a9189f0fe",
+        "passportNonce": "0x5822085a109e748c5b56f08a4a1b4d650da65e137d579a328b1f541d09d51cc6",
+        "prk": "0xa596f110d476a01ea4ab52a3ebbdd43157551dd93cb9e23d255df84b7adea92e"
+      },
+      "input": {
+        "contentHash": "0xa6825caa28b06746c5d52f6ea379644b3414bad64d6de14568a2a8d77dd4446c",
+        "epoch": "300027300808",
+        "ns": 6,
+        "prf": "0x80171d3bb39b8d207c63efdbc2c0b0c4120aad3971444dbbcf4332f6aa50ee70"
+      },
+      "name": "gen/08"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x049dd486b7d962e1dddb00f22cbd22b56f7eee9fc5081bc3117a273bab2aaec4ce21775362b0609886f748a8bc5eca07e010a669b8ecfdfaff40acc9eb6e9b36fb",
+        "kDepScalar": "0x61a46ada2fd9e277c738ec34176f6e454bad8d135c3528055331cf59624d20f0",
+        "kIdScalar": "0xd5fddf9217ffa6da2a6f2b9fe2f2dc7ea7ae1e4a88d61c229585644f81f0036d",
+        "kNonce": "0xc84d9876a829d8b8cdc2c80e1793409f0e420c95c2d444c0c3149296c2ea8fae",
+        "kNs": "0xc422fb82c913b0009419f49b78e8279b7724fc0507e01337698eb524ecab0275",
+        "origin": "0x169dc2ba23862046a239fc3625f69b1a0b9866c6",
+        "p256Commit": "0x02d4eb8d06cdff501bd85427722e89113c6b88bda2d5e52d672393d5431a607a",
+        "p256X": "0xcf87e0e6e5b08845d129780a48e2cde618b7ceee1c32bc95d49ffef9e4afcc33",
+        "p256Y": "0x787ceee936aa05cc9f3415030fa1379b29fd85edafe93ac2761dd398f48ea1a9",
+        "passportNonce": "0xdf4498fa258151ec42cb80fb27e3bf306df30084bee1056c142f0f33025e4870",
+        "prk": "0x594fa27c9a78a21c2f010c35936a904227ee00e148c89cb41b9a9dde444a9182"
+      },
+      "input": {
+        "contentHash": "0x9a4080efe57343142750bccfad41d7b48af253b0105ef31cf7fa8c12be0b4b8e",
+        "epoch": "603825036643",
+        "ns": 9,
+        "prf": "0x89c987ab7eecdd255710e5b7f60adfc6d1c54063dbd6dcbe84a632eb8fd98d05"
+      },
+      "name": "gen/09"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x04565ff235b5246a7639e2c68b98bd1fc04c15365115b2f46639db592da18b916533ecc57f93786c49a7751f96473049983aa9392c9183782351df0bd0ab74b485",
+        "kDepScalar": "0x1d2ed9a120d7d80c398ef13a65d15f1dd4983dad88f69decc1081e67d021d228",
+        "kIdScalar": "0xde33195a142c48a69f97978f0483b9aa35e7bc6887f803f92176aef1e9d87029",
+        "kNonce": "0x390c20e313d45e79b6b295d2098667f53aa97c7807c4fa46f30d99b8d5d7e98d",
+        "kNs": "0x1e0b1eb6494674422dc6786a8a6508af635964a4b0d5d8ff302b440535b53600",
+        "origin": "0x45ee4d7577a67a577fe3623deaa00eb6e8d75d95",
+        "p256Commit": "0x8f98250b97273d3cac7ed0d6810018ee75036795a644acfa27cf273b92cd3108",
+        "p256X": "0x741387d8c03eb0677e6723e8be4b48ea8fe90a62ffd072ee9b54aaa9800cd7cf",
+        "p256Y": "0xa6f146d0dd4532cb4fee60d38120e3d374fab93635a653f66000589e3428c437",
+        "passportNonce": "0xf1312809d4d55430923135bb9fc55c343e757399e82939fc2793396f34b63ce1",
+        "prk": "0xfb375da7af5642e12b6449a420700211b5aa6d4677040dd4a7d3d5433701dbe6"
+      },
+      "input": {
+        "contentHash": "0x85ba133b4e5ac643d820bf834f12470f7c061b124f23abb0843b8c13c147c4b3",
+        "epoch": "261646165481",
+        "ns": 6,
+        "prf": "0x252c1a0094f5b255b2509b2942b59896e7bb65818ee2586d0cba5f17398e2819"
+      },
+      "name": "gen/10"
+    },
+    {
+      "expected": {
+        "depositPublicKey": "0x044db415537a18e9197bc014efd71c3078ce948084f955436cf99aa0d3a4dffe4986ef112f64c1db04e8af9038c2547583889474bc182b10de0d43da7cdb45e197",
+        "kDepScalar": "0xa66d1b027406d552d0ddaf38826df30093119f3506b16bb6469e99a1be8688fa",
+        "kIdScalar": "0x8c385bcfbbaa495833eb0876cce56688520a0300aeb73d281e712a3a18fcc9e0",
+        "kNonce": "0x3c40c151a7173134c374849cbf8cd748ec64c7d467de154701094f8651c00f56",
+        "kNs": "0x3ecf2fa5c23c695789de0625e54706312ac400e4d6ecefc1eb533eec031faf5e",
+        "origin": "0x3aeb5203c287ccc30bf2568f9646a7d3cff513b3",
+        "p256Commit": "0x623d087151eb5fc638db2c67f051682e90a4d24e8aa96a5d4061add0104ab86f",
+        "p256X": "0xc1b0e0cd23e1e08729132801bec498426fb359a8716811eb0b72f9bd5792d488",
+        "p256Y": "0x984df9c05dc764be2c81cae2b4048bc9924538029943fa29b66384dcfcb4fbe4",
+        "passportNonce": "0xdfbd019751155d0aacc4ce749d988ee278babe228dc43d10adefbca04362930e",
+        "prk": "0x42bd6630fd95bf5584b09d372489e73205cd82918f9c6141d82645cc923a0244"
+      },
+      "input": {
+        "contentHash": "0x26a05770fd800c5a12f535e614b86a98392aa756f1782d13b016d9e8b7b41300",
+        "epoch": "560749661134",
+        "ns": 0,
+        "prf": "0x1e83c462c487b0342589bb4c0350782692c2ec14c5502ebe76fd63ea4b14d229"
+      },
+      "name": "gen/11"
+    }
+  ],
+  "count": 15,
+  "generator": "packages/crypto/scripts/gen-vectors.ts",
+  "suite": "keys",
+  "version": 1
+}

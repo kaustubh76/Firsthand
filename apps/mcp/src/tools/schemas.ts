@@ -1,0 +1,37 @@
+import { z } from "zod";
+
+/** Tool input schemas — zod here becomes the JSON Schema agents see. */
+const hex32 = z.string().regex(/^0x[0-9a-f]{64}$/, "32-byte lowercase hex");
+const address = z.string().regex(/^0x[0-9a-f]{40}$/, "20-byte lowercase hex address");
+
+export const DepositInputSchema = z.object({
+  ns: z.number().int().min(0).max(15).describe("Namespace index within the locker (0..15)"),
+  text: z
+    .string()
+    .min(1)
+    .describe("Plaintext to deposit. Sealed client-side; the gateway never sees it."),
+  priceUnits: z
+    .string()
+    .regex(/^\d+$/)
+    .default("1")
+    .describe("Price per query in USDC base units (6 decimals)"),
+  payee: address.describe("Address that receives royalties"),
+  attestationClass: z.enum(["unattested", "import", "device_capture"]).default("unattested"),
+  sourceTag: z.string().optional().describe("Import source label, e.g. chatgpt-export-v1"),
+});
+
+export const QueryInputSchema = z.object({
+  gatewayUrl: z.string().url(),
+  grantId: hex32,
+  passportId: hex32,
+});
+
+export const RescindInputSchema = z.object({
+  grantId: hex32,
+  path: z
+    .enum(["btx", "commit-reveal", "public"])
+    .default("btx")
+    .describe("Transport path; btx is un-front-runnable"),
+});
+
+export const StatusInputSchema = z.object({});

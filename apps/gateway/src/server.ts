@@ -1,12 +1,18 @@
+import { readFileSync } from "node:fs";
 import {
+  type AnchorWriter,
+  anvil,
+  createChainClients,
   FsBlobStore,
   MemoryAnchorWriter,
   MemoryBlobStore,
   MemoryFacilitator,
   MonadFacilitatorClient,
+  monadTestnet,
+  OnchainAnchorWriter,
   type PaymentRequirements,
 } from "@firsthand/adapters";
-import { Bytes32Schema, ConfigError, ValidationError } from "@firsthand/core";
+import { type Address, Bytes32Schema, ConfigError, ValidationError } from "@firsthand/core";
 import {
   createLogger,
   type Logger,
@@ -19,6 +25,28 @@ import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { type X402Vars, x402 } from "./middleware/x402.js";
 import { Serving } from "./services/Serving.js";
+
+function onchainAnchors(config: GatewayConfig): AnchorWriter {
+  const deployment = JSON.parse(readFileSync(config.DEPLOYMENTS_FILE as string, "utf8")) as {
+    chainId: number;
+    PassportAnchors: string;
+    anchorsLayout: "baseline" | "paged";
+  };
+  if (BigInt(deployment.chainId) !== config.CHAIN_ID) {
+    throw new ConfigError(
+      `DEPLOYMENTS_FILE is for chain ${deployment.chainId}, CHAIN_ID is ${config.CHAIN_ID}`,
+    );
+  }
+  const { publicClient } = createChainClients({
+    rpcUrl: config.MONAD_RPC_URL,
+    chain: deployment.chainId === 31337 ? anvil : monadTestnet,
+  });
+  return new OnchainAnchorWriter({
+    address: deployment.PassportAnchors.toLowerCase() as Address,
+    layout: deployment.anchorsLayout,
+    publicClient,
+  });
+}
 
 export interface GatewayApp {
   readonly app: Hono<{ Variables: X402Vars }>;
@@ -50,8 +78,9 @@ export function createGateway(
         })();
   const blobs =
     config.BLOB_STORE === "fs" ? new FsBlobStore(config.BLOB_DIR) : new MemoryBlobStore();
-  // Phase 2 swaps this for OnchainAnchorWriter built from DEPLOYMENTS_FILE.
-  const anchors = new MemoryAnchorWriter();
+  // With a deployment file the gateway reads anchors from chain (read-only: it never signs); the memory
+  // double stays for tests and dry runs.
+  const anchors = config.DEPLOYMENTS_FILE ? onchainAnchors(config) : new MemoryAnchorWriter();
   const serving = new Serving({ anchors, blobs, facilitator, logger });
   const limiter = new MemoryTokenBucketLimiter({
     capacity: config.RATE_LIMIT_CAPACITY,

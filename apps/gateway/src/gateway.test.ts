@@ -101,6 +101,36 @@ describe("gateway", () => {
     expect(badId.status).toBe(400);
   });
 
+  it("binds read-only on-chain anchors from a deployment file and rejects chain-id mismatches", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "fh-gw-"));
+    const file = join(dir, "31337.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        chainId: 31337,
+        PassportAnchors: `0x${"ab".repeat(20)}`,
+        anchorsLayout: "baseline",
+      }),
+    );
+    const gw = createGateway(
+      loadConfig({
+        DEPLOYMENTS_FILE: file,
+        CHAIN_ID: "31337",
+        MONAD_RPC_URL: "http://127.0.0.1:1",
+      }),
+      { logger: noopLogger },
+    );
+    expect(gw.serving).toBeDefined();
+    expect(() =>
+      createGateway(loadConfig({ DEPLOYMENTS_FILE: file, CHAIN_ID: "10143" }), {
+        logger: noopLogger,
+      }),
+    ).toThrow(/chain 31337/);
+  });
+
   it("refuses to boot in monad mode without a facilitator URL", () => {
     expect(() => createGateway(loadConfig({ X402_MODE: "monad" }), { logger: noopLogger })).toThrow(
       /X402_FACILITATOR_URL/,

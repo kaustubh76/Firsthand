@@ -114,3 +114,4 @@ jobs:
           pnpm --filter @firsthand/experiments s1 -- --arm anchors-baseline --n 300 --dry-run
           pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 300 --dry-run
           pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 30 --dry-run
+          pnpm --filter @firsthand/experiments s2 -- --arm anchors-baseline --n 5 --dry-run

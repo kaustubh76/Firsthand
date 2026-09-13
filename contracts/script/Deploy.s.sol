@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {Script, console} from "forge-std/Script.sol";
+import {PrincipalRegistry} from "../src/PrincipalRegistry.sol";
+import {Rescissions} from "../src/Rescissions.sol";
+import {PassportAnchorsBaseline} from "../src/PassportAnchorsBaseline.sol";
+import {PassportAnchorsPaged} from "../src/PassportAnchorsPaged.sol";
+import {GrantManager} from "../src/GrantManager.sol";
+import {ReceiptLedger} from "../src/ReceiptLedger.sol";
+import {RoyaltyRouter} from "../src/RoyaltyRouter.sol";
+import {FirsthandLens} from "../src/FirsthandLens.sol";
+import {IERC3009} from "../src/interfaces/IERC3009.sol";
+import {IPassportAnchors} from "../src/interfaces/IPassportAnchors.sol";
+import {EpochLib} from "../src/libraries/EpochLib.sol";
+
+/// @title Deploy
+/// @notice Immutable deployment (README §12): no proxies, no admin keys. Writes deployments/<chainId>.json.
+/// @dev    Env: DEPLOYER_PRIVATE_KEY, USDC_ADDRESS, DUST_POOL (defaults to deployer), EPOCH_GENESIS (defaults
+///         to the previous Monday 00:00 UTC), ANCHORS_LAYOUT=baseline|paged (default baseline).
+///         The router↔ledger cycle is broken by precomputing the router's CREATE address.
+contract Deploy is Script {
+    struct Deployed {
+        address principalRegistry;
+        address rescissions;
+        address passportAnchors;
+        address grantManager;
+        address receiptLedger;
+        address royaltyRouter;
+        address firsthandLens;
+        uint64 genesis;
+        uint64 epochLength;
+        string anchorsLayout;
+    }
+
+    function run() external returns (Deployed memory d) {
+        uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        d.genesis = uint64(vm.envOr("EPOCH_GENESIS", defaultGenesis()));
+        d.epochLength = EpochLib.DEFAULT_EPOCH_SECONDS;
+        d.anchorsLayout = vm.envOr("ANCHORS_LAYOUT", string("baseline"));
+
+        vm.startBroadcast(pk);
+        deployCore(d);
+        deploySettlement(d, vm.addr(pk));
+        vm.stopBroadcast();
+
+        writeDeployment(d);
+    }
+
+    function deployCore(
+        Deployed memory d
+    ) internal {
+        PrincipalRegistry registry = new PrincipalRegistry(d.genesis, d.epochLength, EpochLib.LIVENESS_GRACE_EPOCHS);
+        d.principalRegistry = address(registry);
+        d.rescissions = address(new Rescissions());
+        d.passportAnchors = keccak256(bytes(d.anchorsLayout)) == keccak256("paged")
+            ? address(new PassportAnchorsPaged(registry))
+            : address(new PassportAnchorsBaseline(registry));
+        d.grantManager = address(new GrantManager(registry, Rescissions(d.rescissions), 0, 0));
+    }
+
+    function deploySettlement(Deployed memory d, address deployer) internal {
+        // ReceiptLedger needs the router address; the router is the *next* CREATE from the deployer.
+        address predictedRouter = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 1);
+        d.receiptLedger = address(new ReceiptLedger(predictedRouter));
+        d.royaltyRouter = address(
+            new RoyaltyRouter(
+                IERC3009(vm.envAddress("USDC_ADDRESS")),
+                GrantManager(d.grantManager),
+                ReceiptLedger(d.receiptLedger),
+                vm.envOr("DUST_POOL", deployer)
+            )
+        );
+        require(d.royaltyRouter == predictedRouter, "router address prediction failed");
+        d.firsthandLens = address(
+            new FirsthandLens(
+                PrincipalRegistry(d.principalRegistry),
+                IPassportAnchors(d.passportAnchors),
+                GrantManager(d.grantManager)
+            )
+        );
+    }
+
+    /// @dev Most recent Monday 00:00 UTC before now — aligns epochs with the weekly attestation ritual.
+    function defaultGenesis() internal view returns (uint256) {
+        uint256 week = 7 days;
+        // 1970-01-01 was a Thursday; shift by 4 days so weeks start on Monday.
+        uint256 shifted = block.timestamp + 4 days;
+        return (shifted / week) * week - 4 days;
+    }
+
+    function writeDeployment(
+        Deployed memory d
+    ) internal {
+        string memory root = "deployment";
+        vm.serializeAddress(root, "PrincipalRegistry", d.principalRegistry);
+        vm.serializeAddress(root, "Rescissions", d.rescissions);
+        vm.serializeAddress(root, "PassportAnchors", d.passportAnchors);
+        vm.serializeAddress(root, "GrantManager", d.grantManager);
+        vm.serializeAddress(root, "ReceiptLedger", d.receiptLedger);
+        vm.serializeAddress(root, "RoyaltyRouter", d.royaltyRouter);
+        vm.serializeAddress(root, "FirsthandLens", d.firsthandLens);
+        vm.serializeUint(root, "genesis", d.genesis);
+        vm.serializeUint(root, "epochLength", d.epochLength);
+        vm.serializeUint(root, "chainId", block.chainid);
+        string memory out = vm.serializeString(root, "anchorsLayout", d.anchorsLayout);
+        string memory path = string.concat("../deployments/", vm.toString(block.chainid), ".json");
+        vm.writeJson(out, path);
+        console.log("wrote", path);
+    }
+}

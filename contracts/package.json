@@ -1,0 +1,46 @@
+{
+  "name": "@firsthand/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIRSTHAND Solidity contracts (Foundry) with generated TypeScript ABIs and deployment addresses",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./abi": {
+      "types": "./dist/abi/index.d.ts",
+      "import": "./dist/abi/index.js",
+      "require": "./dist/abi/index.cjs"
+    },
+    "./deployments": {
+      "types": "./dist/ts/deployments.d.ts",
+      "import": "./dist/ts/deployments.js",
+      "require": "./dist/ts/deployments.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "abi",
+    "src"
+  ],
+  "scripts": {
+    "build": "forge build && node ../scripts/export-abi.mjs && tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "forge test",
+    "test:unit": "forge test",
+    "test:testnet": "forge test --match-path 'test/fork/*' --rpc-url $MONAD_RPC_URL",
+    "coverage": "FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)' && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/",
+    "lint": "forge fmt --check",
+    "format": "forge fmt",
+    "deploy:anvil": "forge script script/Deploy.s.sol --rpc-url anvil --broadcast",
+    "deploy:testnet": "forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast --verify"
+  },
+  "dependencies": {
+    "abitype": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

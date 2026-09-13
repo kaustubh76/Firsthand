@@ -23,7 +23,6 @@ import {
   hashTerms,
   LICENSE_FH_1_0,
   MONAD_TESTNET_CHAIN_ID,
-  NotImplementedError,
   passportDigest,
   passportId,
   RefusalError,
@@ -728,7 +727,7 @@ describe("grant, publish and query (Phase 3)", () => {
             { status: 402 },
           );
         const payload = decodePaymentHeader(header);
-        if (!payload || payload.payload.authorization.value !== "1000")
+        if (payload?.payload.authorization.value !== "1000")
           return new Response(JSON.stringify({ code: "FH_PAYMENT_INVALID" }), { status: 402 });
         return new Response(
           JSON.stringify({

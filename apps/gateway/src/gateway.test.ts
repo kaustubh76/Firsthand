@@ -1,4 +1,3 @@
-import { encodePaymentHeader } from "@firsthand/adapters";
 import { noopLogger } from "@firsthand/runtime";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";

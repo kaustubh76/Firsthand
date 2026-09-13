@@ -11,7 +11,6 @@ import {
   passportId,
   Scope,
   type Terms,
-  WAD,
   ZERO_HASH,
 } from "@firsthand/core";
 import { verifyTypedData } from "viem";

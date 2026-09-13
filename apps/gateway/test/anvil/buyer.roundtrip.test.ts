@@ -181,6 +181,13 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
       transport: new PublicMempoolTransport(buyerClients.walletClient),
       fetch: fetchApp,
     });
+    const balanceOf = (who: Address) =>
+      relayer.publicClient.readContract({
+        address: d.USDC.toLowerCase() as Address,
+        abi: usdcAbi,
+        functionName: "balanceOf",
+        args: [who],
+      });
     const mintHash = await relayer.walletClient.writeContract({
       address: d.USDC.toLowerCase() as Address,
       abi: usdcAbi,
@@ -188,6 +195,9 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
       args: [buyerAccount.address, 10_000n],
     });
     await wait(mintHash);
+    // Deltas, not absolutes: the buyer account (anvil #2) is shared with the S2 harness on a long-lived node.
+    const buyerBefore = await balanceOf(buyerAccount.address);
+    const payeeBefore = await balanceOf(locker.depositKey(0).address);
     await wait((await buyer.registerCard()).txHash);
     const accept = buyer.acceptTerms(locker.principalId, terms);
     await wait((await accept.send()).txHash);
@@ -222,22 +232,8 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
     }
     const epoch = await reader.currentEpoch();
     expect(await reader.queriesThisEpoch(plan.grantId, epoch)).toBe(3);
-    expect(
-      await relayer.publicClient.readContract({
-        address: d.USDC.toLowerCase() as Address,
-        abi: usdcAbi,
-        functionName: "balanceOf",
-        args: [buyerAccount.address],
-      }),
-    ).toBe(7_000n);
-    expect(
-      await relayer.publicClient.readContract({
-        address: d.USDC.toLowerCase() as Address,
-        abi: usdcAbi,
-        functionName: "balanceOf",
-        args: [locker.depositKey(0).address],
-      }),
-    ).toBe(3_000n);
+    expect(buyerBefore - (await balanceOf(buyerAccount.address))).toBe(3_000n);
+    expect((await balanceOf(locker.depositKey(0).address)) - payeeBefore).toBe(3_000n);
 
     // The manifest now carries receipts and verifies against the chain's anchors.
     const last = receipts[2];

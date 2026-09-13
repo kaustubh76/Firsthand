@@ -1,8 +1,6 @@
 import { encodePaymentHeader, MemoryBlobStore, MemoryTransport } from "@firsthand/adapters";
 import {
-  type Address,
   AttestationClass,
-  type Bytes32,
   hashTerms,
   LICENSE_FH_1_0,
   Scope,

@@ -47,10 +47,8 @@ contract StubsTest is Test {
         assertFalse(registry.isLive(bytes32(uint256(1))));
         (uint256 x, uint256 y) = registry.authorityKey(bytes32(uint256(1)));
         assertEq(x + y, 0);
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "PrincipalRegistry.enroll"));
-        registry.enroll(1, 2, 3, bytes32(0), "");
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "PrincipalRegistry.attest"));
-        registry.attest(bytes32(0), 3, bytes32(0), bytes32(0), "");
+        // PrincipalRegistry is implemented (Phase 1) — see PrincipalRegistry.t.sol; only wiring is checked here.
+        assertEq(registry.livenessGrace(), EpochLib.LIVENESS_GRACE_EPOCHS);
         vm.expectRevert(EpochLib.ZeroEpochLength.selector);
         new PrincipalRegistry(GENESIS, 0, 2);
     }

@@ -40,6 +40,7 @@ async function connect(canBroadcast = true) {
       )),
     logger: noopLogger,
     canBroadcast,
+    passportDomain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -59,6 +60,7 @@ describe("firsthand-mcp", () => {
       "firsthand_attest",
       "firsthand_deposit",
       "firsthand_enroll",
+      "firsthand_grant",
       "firsthand_query",
       "firsthand_rescind",
       "firsthand_status",
@@ -102,11 +104,37 @@ describe("firsthand-mcp", () => {
     );
     expect(rescinded.path).toBe("commit-reveal");
     expect(rescinded.commitment).toMatch(/^0x/);
-    const direct = await client.callTool({
-      name: "firsthand_rescind",
-      arguments: { grantId: `0x${"dd".repeat(32)}` },
-    });
-    expect(direct.isError).toBe(true);
+    const direct = textOf(
+      (await client.callTool({
+        name: "firsthand_rescind",
+        arguments: { grantId: `0x${"dd".repeat(32)}` },
+      })) as {
+        content: unknown;
+      },
+    );
+    expect(direct.path).toBe("btx");
+    expect(direct.txHash).toMatch(/^0x/);
+    const reveal = textOf(
+      (await client.callTool({
+        name: "firsthand_rescind",
+        arguments: { grantId: `0x${"dd".repeat(32)}`, path: "commit-reveal", salt: rescinded.salt },
+      })) as { content: unknown },
+    );
+    expect(reveal.commitment).toBe(rescinded.commitment);
+    const granted = textOf(
+      (await client.callTool({
+        name: "firsthand_grant",
+        arguments: {
+          granteeCard: `0x${"ca".repeat(32)}`,
+          granteeEncryptionPubKey: `0x${"25".repeat(32)}`,
+          ns: 0,
+          termsHash: `0x${"7e".repeat(32)}`,
+        },
+      })) as { content: unknown },
+    );
+    expect(granted.broadcast).toBe(true);
+    expect(granted.grantId).toMatch(/^0x/);
+    expect(granted.wrapRef).toMatch(/^0x/);
     const query = await client.callTool({
       name: "firsthand_query",
       arguments: {
@@ -115,7 +143,7 @@ describe("firsthand-mcp", () => {
         passportId: `0x${"ee".repeat(32)}`,
       },
     });
-    expect(query.isError).toBe(true);
+    expect(query.isError).toBe(true); // no buyer keys configured in this session
   });
 });
 

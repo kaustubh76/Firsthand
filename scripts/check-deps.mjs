@@ -80,7 +80,7 @@ const GRAPH = {
       "@firsthand/runtime",
       "@firsthand/core",
     ],
-    external: ["@modelcontextprotocol/sdk", "zod"],
+    external: ["@modelcontextprotocol/sdk", "zod", "viem"],
   },
   "firsthand-capture": {
     internal: ["@firsthand/sdk", "@firsthand/crypto", "@firsthand/core"],

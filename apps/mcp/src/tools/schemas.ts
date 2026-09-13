@@ -31,7 +31,8 @@ export const RescindInputSchema = z.object({
   path: z
     .enum(["btx", "commit-reveal", "public"])
     .default("btx")
-    .describe("Transport path; btx is un-front-runnable"),
+    .describe("Transport path; btx is un-front-runnable, commit-reveal is the fallback"),
+  salt: hex32.optional().describe("For commit-reveal step 2: the salt returned by the commit call"),
 });
 
 export const EnrollInputSchema = z.object({
@@ -48,6 +49,17 @@ export const AttestInputSchema = z.object({
     .regex(/^\d+$/)
     .optional()
     .describe("Epoch to attest; defaults to the current epoch"),
+});
+
+export const GrantInputSchema = z.object({
+  granteeCard: hex32.describe("The buyer's card id (keccak(owner, x25519PubKey))"),
+  granteeEncryptionPubKey: hex32.describe(
+    "The buyer's X25519 public key, as registered in the card",
+  ),
+  ns: z.number().int().min(0).max(15),
+  termsHash: hex32.describe("Terms the buyer accepted for this namespace"),
+  term: z.string().regex(/^\d+$/).default("4").describe("Grant term in epochs (≤ 8)"),
+  gatewayUrl: z.string().url().optional().describe("Where to publish the wrap bytes for the buyer"),
 });
 
 export const StatusInputSchema = z.object({});

@@ -11,8 +11,9 @@ import {
 import { type Address, ConfigError, hexToBytes } from "@firsthand/core";
 import { StaticPrfSource } from "@firsthand/crypto";
 import { createLogger } from "@firsthand/runtime";
-import { FirsthandClient, type LockerSession } from "@firsthand/sdk";
+import { BuyerSession, createBuyerKeys, FirsthandClient, type LockerSession } from "@firsthand/sdk";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { privateKeyToAccount } from "viem/accounts";
 import { loadConfig } from "./config.js";
 import { createMcpServer } from "./server.js";
 
@@ -73,10 +74,38 @@ const openSession = () => {
   return session;
 };
 
+let buyer: Promise<BuyerSession> | null = null;
+const openBuyer = () => {
+  if (buyer === null) {
+    if (!config.BUYER_PRIVATE_KEY || !config.GRANTEE_SEED_HEX) {
+      throw new ConfigError("BUYER_PRIVATE_KEY and GRANTEE_SEED_HEX are required for buyer tools");
+    }
+    const account = privateKeyToAccount(config.BUYER_PRIVATE_KEY as `0x${string}`);
+    buyer = Promise.resolve(
+      new BuyerSession({
+        keys: createBuyerKeys(
+          hexToBytes(config.BUYER_PRIVATE_KEY as `0x${string}`),
+          account,
+          hexToBytes(config.GRANTEE_SEED_HEX as `0x${string}`),
+        ),
+        grantManager: config.GRANT_MANAGER.toLowerCase() as Address,
+        chainId: config.CHAIN_ID,
+        transport,
+      }),
+    );
+  }
+  return buyer;
+};
+
 const server = createMcpServer({
   session: openSession,
   logger,
   canBroadcast: transport.kind === "public",
+  buyer: openBuyer,
+  passportDomain: {
+    chainId: config.CHAIN_ID,
+    verifyingContract: config.PASSPORT_ANCHORS.toLowerCase() as Address,
+  },
 });
 await server.connect(new StdioServerTransport());
 logger.info("firsthand-mcp ready on stdio");

@@ -24,6 +24,7 @@
     "@firsthand/runtime": "workspace:*",
     "@firsthand/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
+    "viem": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

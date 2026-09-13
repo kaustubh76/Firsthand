@@ -2,6 +2,7 @@ import {
   type Address,
   AttestationClass,
   type Bytes32,
+  type Eip712Domain,
   isFirsthandError,
   LICENSE_FH_1_0,
   Scope,
@@ -10,12 +11,13 @@ import {
   ZERO_HASH,
 } from "@firsthand/core";
 import type { Logger } from "@firsthand/runtime";
-import type { LockerSession } from "@firsthand/sdk";
+import type { BuyerSession, LockerSession } from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   AttestInputSchema,
   DepositInputSchema,
   EnrollInputSchema,
+  GrantInputSchema,
   QueryInputSchema,
   RescindInputSchema,
   StatusInputSchema,
@@ -27,6 +29,9 @@ export interface McpDeps {
   readonly logger: Logger;
   /** Whether the configured transport actually reaches a chain (relayer key present). */
   readonly canBroadcast: boolean;
+  /** Buyer-side session, when BUYER_PRIVATE_KEY / GRANTEE_SEED_HEX are configured. */
+  readonly buyer?: () => Promise<BuyerSession>;
+  readonly passportDomain: Eip712Domain;
 }
 
 const CLASS = {
@@ -106,19 +111,36 @@ export function createMcpServer(deps: McpDeps): McpServer {
     {
       title: "Query a passport under a grant",
       description:
-        "Buyer side: pay per query over x402 and receive data with its passport and Merkle proof. Lands in Phase 3.",
+        "Buyer side: pay per query over x402 and receive data with its passport, Merkle proof and receipt; the plaintext is opened with the grantee's key. Needs BUYER_PRIVATE_KEY and GRANTEE_SEED_HEX.",
       inputSchema: QueryInputSchema.shape,
     },
     async (input) => {
       try {
-        const session = await deps.session();
-        void session;
-        return failure(
-          new Error(
-            `query not implemented yet (gateway ${input.gatewayUrl}, grant ${input.grantId})`,
-          ),
+        if (!deps.buyer)
+          return failure(
+            new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)"),
+          );
+        const buyer = await deps.buyer();
+        const { result, plaintext } = await buyer.queryAndOpen(
+          {
+            gatewayUrl: input.gatewayUrl,
+            grantId: input.grantId as Bytes32,
+            passportId: input.passportId as Bytes32,
+          },
+          deps.passportDomain,
         );
+        return text({
+          passportId: result.passportId,
+          receipt: result.receipt,
+          paid: {
+            value: result.paid.requirements.maxAmountRequired,
+            payTo: result.paid.requirements.payTo,
+          },
+          passport: result.signed.passport,
+          plaintextUtf8: new TextDecoder().decode(plaintext),
+        });
       } catch (error) {
+        deps.logger.warn("query failed", { error });
         return failure(error);
       }
     },
@@ -129,30 +151,84 @@ export function createMcpServer(deps: McpDeps): McpServer {
     {
       title: "Rescind consent for a grant",
       description:
-        "Withdraw consent. `btx` uses Monad's encrypted mempool so no grantee can race the revocation; `commit-reveal` is the fallback.",
+        "Withdraw consent. `btx` uses Monad's encrypted mempool so no grantee can race the revocation; `public` is the measurable baseline; `commit-reveal` posts a commitment now (pass the returned salt back with the same path to reveal).",
       inputSchema: RescindInputSchema.shape,
     },
     async (input) => {
       try {
         const session = await deps.session();
+        const grantId = input.grantId as Bytes32;
         const plan =
-          input.path === "commit-reveal" ? session.planCommit(input.grantId as Bytes32) : null;
-        if (plan === null) {
-          return failure(
-            new Error(
-              "direct rescind needs the P-256 authority signature (Phase 4); use path=commit-reveal to post a commitment now",
-            ),
-          );
-        }
+          input.path === "commit-reveal"
+            ? input.salt
+              ? session.planReveal(grantId, input.salt as Bytes32)
+              : session.planCommit(grantId)
+            : session.planRescind(grantId, input.path);
+        if (!deps.canBroadcast)
+          return text({
+            broadcast: false,
+            path: plan.path,
+            salt: plan.salt,
+            commitment: plan.commitment,
+            tx: { to: plan.to, data: plan.data },
+          });
         const sent = await session.sendRescind(plan);
         return text({
+          broadcast: true,
           path: plan.path,
+          salt: plan.salt,
           commitment: plan.commitment,
           txHash: sent.txHash,
           submittedAt: sent.submittedAt,
           encryptedMempool: sent.encryptedMempool,
         });
       } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_grant",
+    {
+      title: "Grant a buyer access to a namespace",
+      description:
+        "Wraps the namespace-epoch vault key to the buyer's card key, signs the grant with the passkey-derived authority key, and (optionally) publishes the wrap to a gateway. The chain stores only the wrap hash.",
+      inputSchema: GrantInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const session = await deps.session();
+        const grantInput = {
+          granteeCard: input.granteeCard as Bytes32,
+          granteeEncryptionPubKey: input.granteeEncryptionPubKey as Bytes32,
+          ns: input.ns,
+          termsHash: input.termsHash as Bytes32,
+          term: BigInt(input.term),
+        };
+        if (!deps.canBroadcast) {
+          const plan = session.planGrant(grantInput);
+          return text({
+            broadcast: false,
+            grantId: plan.grantId,
+            wrapRef: plan.wrapRef,
+            wrapHex: `0x${Buffer.from(plan.wrap).toString("hex")}`,
+            tx: plan.tx,
+          });
+        }
+        const { plan, sent } = await session.grant(
+          grantInput,
+          input.gatewayUrl ? { gatewayUrl: input.gatewayUrl } : undefined,
+        );
+        return text({
+          broadcast: true,
+          grantId: plan.grantId,
+          wrapRef: plan.wrapRef,
+          txHash: sent.txHash,
+          wrapPublishedTo: input.gatewayUrl ?? null,
+        });
+      } catch (error) {
+        deps.logger.warn("grant failed", { error });
         return failure(error);
       }
     },

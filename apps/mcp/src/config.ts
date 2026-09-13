@@ -42,6 +42,15 @@ export const McpConfigSchema = z.object({
     .regex(/^0x[0-9a-f]{64}$/)
     .optional(),
   BLOB_DIR: z.string().default("./data/blobs"),
+  /** Buyer side (optional): the agent's EVM key (pays + signs terms) and its X25519 seed. */
+  BUYER_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{64}$/)
+    .optional(),
+  GRANTEE_SEED_HEX: z
+    .string()
+    .regex(/^0x[0-9a-f]{64}$/)
+    .optional(),
 });
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 

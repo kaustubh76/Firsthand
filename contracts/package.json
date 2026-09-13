@@ -29,7 +29,7 @@
     "test": "forge test",
     "test:unit": "forge test",
     "test:testnet": "forge test --match-path 'test/fork/*' --rpc-url $MONAD_RPC_URL",
-    "coverage": "FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)' && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/",
+    "coverage": "FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)' && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/ && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/PrincipalRegistry.sol",
     "lint": "forge fmt --check",
     "format": "forge fmt",
     "deploy:anvil": "forge script script/Deploy.s.sol --rpc-url anvil --broadcast",

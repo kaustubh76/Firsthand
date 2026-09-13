@@ -4,7 +4,7 @@ import {
   type PaymentRequirements,
   PaymentRequirementsSchema,
   type TypedDataSigner,
-} from "@firsthand/adapters";
+} from "@firsthand/adapters/x402";
 import {
   type Bytes32,
   hexToBytes,

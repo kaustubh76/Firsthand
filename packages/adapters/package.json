@@ -19,6 +19,11 @@
       "types": "./dist/memory/index.d.ts",
       "import": "./dist/memory/index.js",
       "require": "./dist/memory/index.cjs"
+    },
+    "./x402": {
+      "types": "./dist/x402/index.d.ts",
+      "import": "./dist/x402/index.js",
+      "require": "./dist/x402/index.cjs"
     }
   },
   "files": [

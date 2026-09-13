@@ -74,30 +74,22 @@ contract StubsTest is Test {
         assertFalse(grants.termsAccepted(bytes32(0), bytes32(0), 0, bytes32(0)));
     }
 
-    function test_ledgerOnlyRouterMayRecord() public {
+    function test_ledgerWired() public view {
+        // ReceiptLedger and RoyaltyRouter are implemented (Phase 3) — see their own tests.
         assertEq(ledger.router(), address(router));
         assertEq(
             ledger.receiptIdOf(bytes32(uint256(1)), bytes32(uint256(2))),
             keccak256(abi.encode(bytes32(uint256(1)), bytes32(uint256(2))))
         );
-        vm.expectRevert(abi.encodeWithSelector(IReceiptLedger.NotRouter.selector, address(this)));
-        ledger.record(bytes32(0), bytes32(0), address(0), 0, bytes32(0), 0);
-        vm.prank(address(router));
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "ReceiptLedger.record"));
-        ledger.record(bytes32(0), bytes32(0), address(0), 0, bytes32(0), 0);
         assertEq(ledger.queriesThisEpoch(bytes32(0), 0), 0);
     }
 
-    function test_routerWiringAndStub() public {
+    function test_routerWired() public view {
         assertEq(router.usdc(), usdc);
         assertEq(router.dustPool(), address(0xD057));
         assertEq(router.dustBalance(), 0);
-        TermsInput memory terms;
-        TransferAuthorization memory auth;
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "RoyaltyRouter.settle"));
-        router.settle(bytes32(0), terms, auth);
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "RoyaltyRouter.sweepDust"));
-        router.sweepDust();
+        assertEq(address(router.grants()), address(grants));
+        assertEq(address(router.ledger()), address(ledger));
     }
 
     function test_lensViewsAndDomain() public {

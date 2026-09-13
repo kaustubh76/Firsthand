@@ -7,7 +7,7 @@ import {Receipt} from "../types/Structs.sol";
 /// @notice Query receipts and per-grant, per-epoch rate-limit counters (README §9, decisions #3/#4).
 /// @dev    Written only by the immutable RoyaltyRouter (the settlement path). Receipts are unique per
 ///         `(grantId, queryNonce)` where `queryNonce` is the EIP-3009 authorization nonce, so payment dedup and
-///         receipt dedup coincide.
+///         receipt dedup coincide. `rateLimit == 0` means unlimited.
 interface IReceiptLedger {
     event ReceiptRecorded(
         bytes32 indexed receiptId,
@@ -28,12 +28,16 @@ interface IReceiptLedger {
         address payer,
         uint32 ns,
         bytes32 termsHash,
-        uint32 rateLimit
+        uint32 rateLimit,
+        uint64 epoch
     ) external returns (bytes32 receiptId);
 
     function receipt(
         bytes32 receiptId
     ) external view returns (Receipt memory);
+    function exists(
+        bytes32 receiptId
+    ) external view returns (bool);
     function queriesThisEpoch(bytes32 grantId, uint64 epoch) external view returns (uint32);
     function receiptIdOf(bytes32 grantId, bytes32 queryNonce) external pure returns (bytes32);
     function router() external view returns (address);

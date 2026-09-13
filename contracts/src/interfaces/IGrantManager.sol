@@ -27,7 +27,6 @@ interface IGrantManager {
     error UnknownCard(bytes32 cardId);
     error UnknownPrincipal(bytes32 principalId);
     error TermsNotAccepted(bytes32 granteeCard, bytes32 termsHash);
-    error TermsNamespaceMismatch(uint32 termsNs, uint32 ns);
     error GrantExists(bytes32 grantId);
     error GrantNotLive(bytes32 grantId);
     error GrantAlreadyRescinded(bytes32 grantId);

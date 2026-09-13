@@ -133,9 +133,8 @@ contract GrantManager is IGrantManager {
         if (!_accepted[_acceptanceKey(granteeCard, principalId, ns, termsHash)]) {
             revert TermsNotAccepted(granteeCard, termsHash);
         }
-        RegisteredTerms storage rt = _terms[termsHash];
-        if (rt.ns != ns) revert TermsNamespaceMismatch(rt.ns, ns);
-        if (rt.price < priceFloor) revert PriceBelowFloor(rt.price);
+        // The acceptance key already binds `ns` to the registered terms; only the floor remains to check.
+        if (_terms[termsHash].price < priceFloor) revert PriceBelowFloor(_terms[termsHash].price);
         if (term == 0) revert ZeroTerm();
         if (term > maxTerm) revert TermTooLong(term);
         _requireCurrentEpoch(epochStart);

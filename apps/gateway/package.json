@@ -1,0 +1,36 @@
+{
+  "name": "firsthand-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hostable FIRSTHAND gateway — the serving path: x402-gated query, verify gate, receipts, blob hosting. Holds no key material.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'no testnet tests yet'",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@firsthand/adapters": "workspace:*",
+    "@firsthand/core": "workspace:*",
+    "@firsthand/runtime": "workspace:*",
+    "@firsthand/sdk": "workspace:*",
+    "@hono/node-server": "catalog:",
+    "hono": "catalog:",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

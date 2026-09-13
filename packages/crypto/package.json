@@ -1,0 +1,75 @@
+{
+  "name": "@firsthand/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIRSTHAND privacy boundary — the only package that touches PRF output, derived keys, DEKs or plaintext",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./prf": {
+      "types": "./dist/prf/index.d.ts",
+      "import": "./dist/prf/index.js",
+      "require": "./dist/prf/index.cjs"
+    },
+    "./kdf": {
+      "types": "./dist/kdf/index.d.ts",
+      "import": "./dist/kdf/index.js",
+      "require": "./dist/kdf/index.cjs"
+    },
+    "./sign": {
+      "types": "./dist/sign/index.d.ts",
+      "import": "./dist/sign/index.js",
+      "require": "./dist/sign/index.cjs"
+    },
+    "./envelope": {
+      "types": "./dist/envelope/index.d.ts",
+      "import": "./dist/envelope/index.js",
+      "require": "./dist/envelope/index.cjs"
+    },
+    "./wrap": {
+      "types": "./dist/wrap/index.d.ts",
+      "import": "./dist/wrap/index.js",
+      "require": "./dist/wrap/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'no testnet tests'",
+    "coverage": "vitest run --coverage",
+    "gen": "tsx scripts/gen-vectors.ts",
+    "gen:check": "tsx scripts/gen-vectors.ts --check"
+  },
+  "dependencies": {
+    "@firsthand/core": "workspace:*",
+    "@noble/ciphers": "catalog:",
+    "@noble/curves": "catalog:",
+    "@noble/hashes": "catalog:"
+  },
+  "devDependencies": {
+    "@firsthand/test-vectors": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "zod": "catalog:"
+  }
+}

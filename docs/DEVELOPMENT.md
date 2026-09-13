@@ -38,6 +38,18 @@ RELAYER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b
 pnpm test:anvil
 ```
 
+### Phase 2 gate locally (deposit → anchor → on-chain inclusion) and H1 arms
+
+With anvil, the deployment and the env from the recipe above:
+
+```sh
+pnpm test:anvil                                                     # both gates, both layouts
+pnpm --filter @firsthand/experiments s1 -- --arm anchors-baseline --n 2560
+pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 2560
+pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 200
+pnpm --filter @firsthand/experiments report
+```
+
 ### Monad testnet runbook (README §16 Phase 1 gate on the real precompile)
 
 1. Fund a deployer and a relayer with testnet MON; put `MONAD_RPC_URL`, `DEPLOYER_PRIVATE_KEY`,
@@ -46,7 +58,9 @@ pnpm test:anvil
 3. `pnpm --filter @firsthand/contracts test:testnet` — fork test enrolls a throw-away key through the
    native precompile.
 4. `ANVIL_RPC_URL=$MONAD_RPC_URL DEPLOYMENTS_FILE=$PWD/deployments/10143.json RELAYER_PRIVATE_KEY=… pnpm test:anvil`
-   — the same SDK round-trip, now on testnet. Record the tx hashes in `deployments/NOTES.md`.
+   — the same SDK round-trips, now on testnet. Record the tx hashes in `deployments/NOTES.md`.
+5. Same env, run the H1 arms: `… s1 -- --arm anchors-baseline --n 2560` and `--arm anchors-paged`;
+   commit `experiments/results/s1.json`. This is the only place MIP-8's page pricing can show.
 
 ## Golden vectors
 

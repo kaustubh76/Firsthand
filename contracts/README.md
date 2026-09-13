@@ -13,7 +13,7 @@ Solidity (Foundry) contracts of README §9, plus generated TypeScript ABIs and a
 - `src/libraries/` — pure, independently fuzz-tested libraries (`SplitMath`, `MerkleLib`, `PassportLib`,
   `AuthorityDigests`, `EpochLib`, `P256`). Coverage gate: ≥ 95 % lines and branches (`pnpm coverage`).
 - `src/interfaces/` — the protocol API each phase implements.
-- `src/*.sol` — contracts. `PrincipalRegistry` (Phase 1) and `Rescissions` are complete; the rest are Phase 2–4 stubs that deploy, wire their
+- `src/*.sol` — contracts. `PrincipalRegistry` (Phase 1), `PassportAnchors{Baseline,Paged}` (Phase 2) and `Rescissions` are complete; the rest are Phase 3–4 stubs that deploy, wire their
   immutables, answer views, and revert `NotImplemented(feature)` on mutating entry points.
 - `test/unit` (vector-driven via `stdJson`), `test/fuzz`, `test/invariant`, `test/doubles` (etched RIP-7212
   P-256 verifier), `test/fork` (`test:testnet`, needs `MONAD_RPC_URL`).

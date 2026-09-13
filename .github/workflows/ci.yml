@@ -99,9 +99,18 @@ jobs:
           DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           USDC_ADDRESS=0x0000000000000000000000000000000000000dc0 \
           forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
-      - name: SDK round-trip through the real contract path
+      - name: SDK round-trips through the real contract path (Phase 1 + Phase 2 gates)
         env:
           ANVIL_RPC_URL: http://127.0.0.1:8545
           DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
           RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
         run: pnpm test:anvil
+      - name: Experiments on-chain arms (S1 both layouts, S4) — dry run
+        env:
+          ANVIL_RPC_URL: http://127.0.0.1:8545
+          DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
+          RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+        run: |
+          pnpm --filter @firsthand/experiments s1 -- --arm anchors-baseline --n 300 --dry-run
+          pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 300 --dry-run
+          pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 30 --dry-run

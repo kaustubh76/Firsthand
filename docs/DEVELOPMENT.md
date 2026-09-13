@@ -21,8 +21,11 @@
 ## Test tiers
 
 - `test:unit` — pure, offline, memory adapters. Runs everywhere.
-- `test:anvil` — the SDK against a live local chain (`anvil --odyssey`, which ships the RIP-7212 P-256
-  precompile). Needs `ANVIL_RPC_URL`, `DEPLOYMENTS_FILE`, `RELAYER_PRIVATE_KEY`; skipped otherwise.
+- `test:anvil` — the SDK and the gateway against a live local chain (`anvil --odyssey`, which ships
+  the RIP-7212 P-256 precompile). Needs `ANVIL_RPC_URL`, `DEPLOYMENTS_FILE`, `RELAYER_PRIVATE_KEY`;
+  skipped otherwise. Runs serialised (`turbo --concurrency=1`, `fileParallelism: false`) because
+  every file shares the relayer's nonce. Kill stale nodes with `pkill -f anvil` before restarting —
+  a leftover node keeps the old deployment and the round-trips fail on `EpochNotAttested`.
 - `test:testnet` — needs `MONAD_RPC_URL` (and `DEPLOYER_PRIVATE_KEY` for scripts). Skipped otherwise.
 - Foundry: `forge test` (default profile), `FOUNDRY_PROFILE=ci forge test` (10k fuzz runs).
 
@@ -49,6 +52,24 @@ pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 2560
 pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 200
 pnpm --filter @firsthand/experiments report
 ```
+
+### Phase 3 gate locally (grant → paid queries → receipts → rescission) and S2
+
+`pnpm test:anvil` also runs `apps/gateway/test/anvil/buyer.roundtrip.test.ts`: the real gateway app
+in `SETTLEMENT_MODE=onchain` against anvil's `MockUSDC` (deployed by default on 31337) — a buyer
+registers a card, accepts terms, the principal grants and publishes the wrap, three paid queries
+settle through `RoyaltyRouter.settle` (receipts on chain, plaintext opened client-side), the fourth
+hits the rate limit (429), and after rescission the next query is refused (403) with no settlement.
+S2 measures the same loop without HTTP:
+
+```sh
+pnpm --filter @firsthand/experiments s2 -- --n 100                          # memory arm
+pnpm --filter @firsthand/experiments s2 -- --arm anchors-baseline --n 100   # settle gas per query
+```
+
+To drive the gateway by hand: `DEPLOYMENTS_FILE=$PWD/deployments/31337.json SETTLEMENT_MODE=onchain
+RELAYER_PRIVATE_KEY=… pnpm --filter @firsthand/gateway dev`, then `firsthand_query` from the MCP
+server with `BUYER_PRIVATE_KEY` / `GRANTEE_SEED_HEX` set (`apps/mcp/.env.example`).
 
 ### Monad testnet runbook (README §16 Phase 1 gate on the real precompile)
 

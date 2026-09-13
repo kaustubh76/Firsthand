@@ -3,11 +3,20 @@
 Self-hostable serving path (README §4, §11). **Holds no key material** — enforced by
 `scripts/check-deps.mjs` and Biome.
 
-Routes: `GET /healthz`, `GET /.well-known/firsthand.json` (discovery), `GET /v1/query/:grantId/:passportId`
-(x402-gated; Phase 3 fills `Serving.serve`), `GET /v1/blobs/:id` (ciphertext), `GET /v1/anchors/:root`.
+Routes: `GET /healthz`, `GET /.well-known/firsthand.json` (discovery),
+`GET /v1/query/:grantId/:passportId` (402 priced from the sidecar's terms → `X-PAYMENT` → `verify()`
+→ settle → `{sidecar, blob, wrappedDek, receipt}`), `GET /v1/passports/:id` (public sidecar),
+`GET /v1/blobs/:id` (ciphertext), `GET /v1/grants/:id/wrap`, `GET /v1/anchors/:root`; ingest
+`POST /v1/passports` (accepted only if the signature verifies, the root is anchored to the same
+owner and the terms preimage matches), `POST /v1/blobs` (content-addressed), `POST /v1/grants/:id/wrap`
+(only if `keccak256 == wrapRef` on chain). Verified ingest, verified serve — ADR-0011.
 
 ```sh
 cp .env.example .env
-pnpm --filter firsthand-gateway dev     # X402_MODE=memory needs no network
+pnpm --filter firsthand-gateway dev     # memory mode: no network, in-process grants + settlement
+# chain mode: DEPLOYMENTS_FILE=…/31337.json SETTLEMENT_MODE=onchain RELAYER_PRIVATE_KEY=0x…
+pnpm --filter firsthand-gateway test:anvil   # Phase 3 gate against anvil --odyssey + MockUSDC
 ```
-Errors are RFC 9457 problem+json with FIRSTHAND codes; rate limiting is a pre-filter only.
+Errors are RFC 9457 problem+json with FIRSTHAND codes (`FH_GRANT_RESCINDED` 403, `FH_RATE_LIMITED`
+429, `FH_PAYMENT_INVALID` 402, `FH_NOT_FOUND` 404); rate limiting is a pre-filter only — the
+`ReceiptLedger` is the truth. The relayer key pays gas for `RoyaltyRouter.settle` and nothing else.

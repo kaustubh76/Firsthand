@@ -32,6 +32,8 @@ nothing else. Implementation: `packages/crypto/src/kdf/keytree.ts` (ADR-0005).
 | Secret bytes at runtime | `SecretBytes` handles | `use()`/`expose()` are the only accessors (grep `expose(` to audit); `JSON.stringify`, `String()`, `util.inspect` all redact; `dispose()` zeroizes — regression test `packages/crypto/src/memory.test.ts` |
 | Logs | `@firsthand/runtime` logger | non-removable redaction of `prf`, `prk`, `secret`, `privateKey`, `dek`, `vaultKey`, `scalar`, `seed`, … plus `[bytes N]` for buffers |
 | Ciphertext at rest | `BlobStore` | content-addressed; AADs bind blobs to `passportId` and `(ns, e)` so they cannot be re-attached |
+| Grant wraps | `GrantManager.wrapRef` + gateway `POST /v1/grants/:id/wrap` | the gateway hosts only bytes whose `keccak256` equals the on-chain `wrapRef`; the sealed box opens only with the grantee's X25519 key, which the gateway never sees |
+| Settlement relayer key (`RELAYER_PRIVATE_KEY`) | `apps/gateway` (`OnchainSettlement`) | pays gas for `RoyaltyRouter.settle` only; it is not a user key, holds no user funds, cannot sign passports, grants or rescissions, and the buyer's EIP-3009 authorization names the router, not the relayer |
 
 Limits: JavaScript cannot guarantee zeroization (engine copies, GC). `zeroize` is best effort;
 WebAuthn PRF output is the only long-lived root and it is evaluated on demand, never stored.
@@ -62,6 +64,9 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 | Malicious MCP client | deposits valid only under the user's derived keys — `refuseUnlessProvable` |
 | Chain reorg | manifests carry `anchorBlock`; verifier enforces `finalityDepth` |
 | Protocol capture (us) | no admin keys, immutable contracts, open spec, self-hostable gateway |
+| Poisoned gateway catalog | verified ingest (`Serving.ingestPassport`: signature, anchored root, owner, index, terms preimage) and `verifyPredicate` re-run against the chain on every serve — a bad catalog can refuse, never mis-serve (ADR-0011) |
+| Payment authorization griefing | `receiptId = keccak(grantId, nonce)` binds payment to receipt; a replayed raw `transferWithAuthorization` moves funds into the router as dust, not to an attacker; `receiveWithAuthorization` is the hardening path (ADR-0011) |
+| Serving a passport from another principal under a grant | `SCOPE_MISMATCH`: the anchor's `(principal, ns)` must equal the grant's, on chain (`Lens.verify`) and off (`verifyPredicate`) |
 
 ## 6. Honest limitations (README §14, verbatim in spirit)
 
@@ -80,7 +85,10 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 - Direct path (`GrantManager.rescind`): effective at inclusion. Over BTX the payload is unreadable
   before inclusion, so an observer's race never starts.
 - Commit-reveal fallback: `Rescissions.commit(keccak(grantId ‖ salt))` by anyone (relayable, sender
-  unlinkable), reveal within one epoch; **the effective end of consent is the commit block**.
+  unlinkable), reveal (`GrantManager.revealRescind`, authority-signed) within `revealWindowBlocks`;
+  **the effective end of consent is the commit block**.
+- Both paths are authority-signed under GrantManager's own domain and nonce-scoped per principal;
+  the next `RoyaltyRouter.settle` on a rescinded grant reverts (`GrantNotLive`) before any transfer.
 - No transition ever re-releases a wrapped key; re-granting needs a fresh grant.
 
 ## 8. Reporting

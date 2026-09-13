@@ -25,18 +25,33 @@ Where the README and this file disagree, this file wins for encodings and the RE
 
 `FH_VALIDATION FH_CONFIG FH_NOT_IMPLEMENTED FH_REFUSED_ORIGIN FH_REFUSED_DUPLICATE FH_MERKLE_INVALID
 FH_SIG_INVALID FH_GRANT_NOT_LIVE FH_GRANT_RESCINDED FH_GRANT_FROZEN FH_GRANT_EXPIRED FH_RATE_LIMITED
-FH_PAYMENT_REQUIRED FH_PAYMENT_INVALID FH_TRANSPORT FH_BTX_UNAVAILABLE FH_CIRCUIT_OPEN FH_CHAIN FH_CRYPTO`
+FH_PAYMENT_REQUIRED FH_PAYMENT_INVALID FH_NOT_FOUND FH_TRANSPORT FH_BTX_UNAVAILABLE FH_CIRCUIT_OPEN
+FH_CHAIN FH_CRYPTO`
 — `packages/core/src/errors.ts`; HTTP mapping via `toProblemDetails` (RFC 9457). Solidity custom
 errors share names (`RefusedOrigin`, `DuplicateRoot`, `GrantNotLive`, …).
 
 `verify()` reason codes: `SIG_INVALID MERKLE_INVALID ROOT_UNKNOWN TERMS_MISMATCH EPOCH_OUT_OF_GRANT
-GRANT_NOT_LIVE GRANT_RESCINDED GRANT_EXPIRED GRANT_FROZEN` — identical in
-`packages/core/src/grant/verify.ts` and `contracts/src/types/Structs.sol`.
+GRANT_NOT_LIVE GRANT_RESCINDED GRANT_EXPIRED GRANT_FROZEN SCOPE_MISMATCH` — identical in
+`packages/core/src/grant/verify.ts` and `contracts/src/types/Structs.sol`, checked in the same
+order on and off chain (ADR-0011). `SCOPE_MISMATCH`: the anchored root belongs to a different
+`(principal, ns)` than the grant.
 
 ## C. Port contracts
 
 See `packages/adapters/src/ports/*.ts` and ADR-0006. Each port has a memory double with call
-recording and `failNext()` fault injection; conformance tests live in `packages/adapters/src/adapters.test.ts`.
+recording and `failNext()` fault injection; conformance tests live in `packages/adapters/src/adapters.test.ts`
+and `demand.test.ts`.
+
+| Port | Supply / demand | Live implementation |
+|---|---|---|
+| `AnchorWriter` (`anchor`, `isAnchored`, `isIncluded`, `anchorOf`) | supply | `OnchainAnchorWriter` (viem) |
+| `TxTransport` | supply | `PublicMempoolTransport`; BTX in Phase 4 |
+| `BlobStore` | supply | memory / fs |
+| `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog` |
+| `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLastAttested`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |
+| `Settlement` (`settle(grantId, terms, payment) → receipt`) | demand | `OnchainSettlement` → `RoyaltyRouter.settle` |
+| `PaymentFacilitator` | demand | memory; Monad x402 facilitator in Phase 5 |
+| `ConsentLedger` | audit | `EnvioConsentLedger` (Phase 5) |
 
 ## D. The verification predicate
 
@@ -45,6 +60,7 @@ verify(P, sig, proof, root, G, principal, e_now) =
   SigOK(P, sig, domain)
 ∧ rootAnchored(root)
 ∧ MerkleOK(root, hashLeaf(id(P)), proof)
+∧ anchorOf(root).(principalId, ns) == (G.principalId, G.ns)   // SCOPE_MISMATCH
 ∧ P.termsHash == G.termsHash
 ∧ status(G, principal, e_now) == ACTIVE        // RESCINDED > EXPIRED > FROZEN > ACTIVE
 ∧ G.epochStart ≤ P.epoch ≤ e_now               // no future-epoch admission

@@ -1,0 +1,88 @@
+{
+  "name": "@firsthand/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIRSTHAND pure protocol math \u2014 public inputs only, no secrets, browser-safe",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./split": {
+      "types": "./dist/split/index.d.ts",
+      "import": "./dist/split/index.js",
+      "require": "./dist/split/index.cjs"
+    },
+    "./merkle": {
+      "types": "./dist/merkle/index.d.ts",
+      "import": "./dist/merkle/index.js",
+      "require": "./dist/merkle/index.cjs"
+    },
+    "./passport": {
+      "types": "./dist/passport/index.d.ts",
+      "import": "./dist/passport/index.js",
+      "require": "./dist/passport/index.cjs"
+    },
+    "./epoch": {
+      "types": "./dist/epoch/index.d.ts",
+      "import": "./dist/epoch/index.js",
+      "require": "./dist/epoch/index.cjs"
+    },
+    "./grant": {
+      "types": "./dist/grant/index.d.ts",
+      "import": "./dist/grant/index.js",
+      "require": "./dist/grant/index.cjs"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js",
+      "require": "./dist/errors.cjs"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js",
+      "require": "./dist/schemas/index.cjs"
+    },
+    "./authority": {
+      "types": "./dist/authority/index.d.ts",
+      "import": "./dist/authority/index.js",
+      "require": "./dist/authority/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'no testnet tests'",
+    "coverage": "vitest run --coverage",
+    "gen": "tsx scripts/gen-vectors.ts",
+    "gen:check": "tsx scripts/gen-vectors.ts --check"
+  },
+  "dependencies": {
+    "@noble/curves": "catalog:",
+    "@noble/hashes": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@firsthand/test-vectors": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

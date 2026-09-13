@@ -1,0 +1,86 @@
+# SECURITY.md
+
+FIRSTHAND is a hackathon build (Monad Metropolis 2026). This document is the honest account of what
+the code protects, how the repository enforces it, and what it does **not** claim.
+
+## 1. Scope and contact
+
+In scope: everything under `packages/`, `apps/`, `contracts/`. Report issues to the maintainer
+(Kaushtubh, see repository profile) — please do not open public issues for key-handling bugs.
+
+## 2. Derivation tree (byte-exact)
+
+```
+passkey ──WebAuthn prf(eval.first = SHA-256("FIRSTHAND/prf/v1"))──▶ prf (32 B, zeroized after extract)
+                                                                       │
+                              PRK = HKDF-Extract(SHA-256, salt "FIRSTHAND/kdf/v1", prf)
+                                                                       │
+        ┌──────────────────────────┬───────────────────────────────────┼──────────────────────────────┐
+  "id"‖00 → k_id (48 B → P-256)   "ns"‖00‖ns‖e → k_ns,e (32 B)   "dep"‖00‖ns‖e → k_dep (48 B → secp)   "nonce"‖00‖ns‖e → k_nonce (32 B)
+  human authority: enroll/attest/  vault KEK: wraps per-blob DEKs;  machine labour: signs passports     HMAC key for deterministic
+  grant/rescind (P256 precompile)  wrapped to grantees per grant    and anchors (ecrecover)             passport nonces
+```
+
+Scope is enforced by *which key exists*: a grantee receives `k_ns,e` for one `(ns, e)` and can derive
+nothing else. Implementation: `packages/crypto/src/kdf/keytree.ts` (ADR-0005).
+
+## 3. What never leaves the client, and how the repo enforces it
+
+| Material | Lives in | Enforcement |
+|---|---|---|
+| PRF output, PRK, all derived scalars, vault keys, DEKs, plaintext | `@firsthand/crypto` and its callers (`sdk`, `mcp`, `capture`) | `scripts/check-deps.mjs` forbids `apps/gateway → @firsthand/crypto`; pnpm isolated `node_modules` makes a stray import fail to resolve; Biome `noRestrictedImports` on the gateway |
+| Secret bytes at runtime | `SecretBytes` handles | `use()`/`expose()` are the only accessors (grep `expose(` to audit); `JSON.stringify`, `String()`, `util.inspect` all redact; `dispose()` zeroizes — regression test `packages/crypto/src/memory.test.ts` |
+| Logs | `@firsthand/runtime` logger | non-removable redaction of `prf`, `prk`, `secret`, `privateKey`, `dek`, `vaultKey`, `scalar`, `seed`, … plus `[bytes N]` for buffers |
+| Ciphertext at rest | `BlobStore` | content-addressed; AADs bind blobs to `passportId` and `(ns, e)` so they cannot be re-attached |
+
+Limits: JavaScript cannot guarantee zeroization (engine copies, GC). `zeroize` is best effort;
+WebAuthn PRF output is the only long-lived root and it is evaluated on demand, never stored.
+
+## 4. Rotation semantics
+
+- Keys rotate **per epoch** (7 days) per namespace: `k_ns,e`, `k_dep(ns,e)`, `k_nonce(ns,e)`.
+- A stolen deposit key exposes one `(ns, e)` of signing capability; deposit keys never hold funds
+  (anchors are relayable, ADR-0006).
+- A stolen passkey is catastrophic for future epochs; platform-authenticator protections apply.
+  Guardian-threshold recovery is documented as roadmap (README §13); the demo uses a single passkey.
+- Re-attestation each epoch is the liveness signal; a principal who stops re-attesting freezes their
+  grants lazily after 2 epochs (no keepers), and thaws only future epochs (README §7.6).
+
+## 5. Threat model (README §13) → where it is handled
+
+| Threat | Code / test |
+|---|---|
+| Grantee front-runs rescission | `TxTransport` (btx vs public), `Rescissions` commit store, S3 harness (`experiments/src/scenarios/s3-rescission-race.ts`) |
+| Synthetic laundering through a real passkey | `AttestationClass` + `sourceTag` in every passport; buyers filter; not prevented — see §6 |
+| Passport replay / re-mint | deterministic nonce (ADR-0005) → structural dedup; `Batcher`, `PassportAnchors.DuplicateRoot`; S4 (`s4-refusal.ts`) |
+| Stolen passkey | epoch rotation (§4) |
+| Bulk scraping within a live grant | `rateLimit` middleware pre-filter; `ReceiptLedger` counters (chain is truth) |
+| Sybil lockers | not prevented at protocol layer (stated) |
+| Malicious MCP client | deposits valid only under the user's derived keys — `refuseUnlessProvable` |
+| Chain reorg | manifests carry `anchorBlock`; verifier enforces `finalityDepth` |
+| Protocol capture (us) | no admin keys, immutable contracts, open spec, self-hostable gateway |
+
+## 6. Honest limitations (README §14, verbatim in spirit)
+
+1. Rescission governs **future** access and timestamps the end of consent; it cannot un-read
+   delivered plaintext or un-train a model.
+2. A buyer can cache and re-use delivered data; FIRSTHAND provides accountability (provable license
+   breach via receipts), not prevention.
+3. A passport proves origin key, attestation class, consent and integrity — **not** truth, quality,
+   or one-human-one-passkey. Commodity capture attestation is heuristic; hardware attestation is roadmap.
+4. No injection/poisoning screening ships in core.
+5. BTX advantage holds only where BTX is live; the commit-reveal fallback narrows but does not
+   eliminate the race — measured, not asserted.
+
+## 7. Rescission semantics
+
+- Direct path (`GrantManager.rescind`): effective at inclusion. Over BTX the payload is unreadable
+  before inclusion, so an observer's race never starts.
+- Commit-reveal fallback: `Rescissions.commit(keccak(grantId ‖ salt))` by anyone (relayable, sender
+  unlinkable), reveal within one epoch; **the effective end of consent is the commit block**.
+- No transition ever re-releases a wrapped key; re-granting needs a fresh grant.
+
+## 8. Reporting
+
+Email the maintainer with steps to reproduce. Expect an acknowledgement within 72 hours during the
+build window.

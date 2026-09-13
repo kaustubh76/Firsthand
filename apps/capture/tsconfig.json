@@ -1,0 +1,8 @@
+{
+  "extends": "../../tooling/tsconfig.app.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": ["vite/client", "vite-plugin-pwa/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

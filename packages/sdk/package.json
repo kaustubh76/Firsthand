@@ -1,0 +1,52 @@
+{
+  "name": "@firsthand/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIRSTHAND SDK — deposit / query / rescind, verify(), Lineage Manifest, Locker, WebAuthn PRF",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'no testnet tests yet'",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@firsthand/adapters": "workspace:*",
+    "@firsthand/contracts": "workspace:*",
+    "@firsthand/core": "workspace:*",
+    "@firsthand/crypto": "workspace:*",
+    "@firsthand/runtime": "workspace:*",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

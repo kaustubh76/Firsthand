@@ -1,0 +1,15 @@
+{
+  "name": "@firsthand/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envio indexer for the FIRSTHAND Consent Ledger (principals, anchors, grants, receipts, rescissions)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start",
+    "typecheck": "echo 'run `pnpm codegen` first; generated types are not part of the default typecheck'",
+    "lint": "echo 'biome runs from the repo root'"
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "conversation_id": "loop",
+    "title": "Loop",
+    "create_time": 1,
+    "current_node": "a",
+    "mapping": {
+      "a": {
+        "id": "a",
+        "parent": "b",
+        "message": { "author": { "role": "user" }, "content": { "parts": ["A"] } }
+      },
+      "b": {
+        "id": "b",
+        "parent": "a",
+        "message": { "author": { "role": "assistant" }, "content": { "parts": ["B"] } }
+      }
+    }
+  }
+]

@@ -1,0 +1,37 @@
+# Envio HyperIndex configuration — FIRSTHAND Consent Ledger (README §22).
+# Addresses are filled from deployments/<chainId>.json by `pnpm --filter @firsthand/indexer codegen`
+# once Phase 1–4 contracts emit the events below.
+name: firsthand-consent-ledger
+description: Per-asset provenance, consent and receipt timeline for FIRSTHAND on Monad
+networks:
+  - id: 10143 # Monad testnet — verify against the current testnet before deployment
+    start_block: 0
+    contracts:
+      - name: PrincipalRegistry
+        address: "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: PrincipalEnrolled(bytes32 indexed principalId, uint256 x, uint256 y, uint64 epoch)
+          - event: PrincipalAttested(bytes32 indexed principalId, uint64 indexed epoch, bytes32 depositKeysRoot)
+      - name: PassportAnchors
+        address: "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: BatchAnchored(bytes32 indexed principalId, uint32 indexed ns, uint64 indexed epoch, bytes32 batchRoot, bytes32 termsHash, uint256 batchIndex)
+      - name: GrantManager
+        address: "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: TermsAccepted(bytes32 indexed granteeCard, bytes32 indexed principalId, uint32 ns, bytes32 termsHash)
+          - event: GrantCreated(bytes32 indexed grantId, bytes32 indexed principalId, bytes32 indexed granteeCard, uint32 ns, uint64 epochStart, uint64 term, bytes32 termsHash, bytes32 wrapRef)
+          - event: GrantRescinded(bytes32 indexed grantId, uint64 epochEnd, uint64 effectiveBlock, bool viaCommitReveal)
+      - name: Rescissions
+        address: "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: RescissionCommitted(bytes32 indexed commitment, uint64 blockNumber, address relayer)
+      - name: ReceiptLedger
+        address: "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: ReceiptRecorded(bytes32 indexed receiptId, bytes32 indexed grantId, address indexed payer, uint32 ns, bytes32 termsHash, uint64 epoch)

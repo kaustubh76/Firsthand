@@ -1,0 +1,66 @@
+# Consent Ledger read model. Mirrors packages/adapters ConsentLedger port views.
+
+type Principal {
+  id: ID! # principalId
+  keyX: BigInt!
+  keyY: BigInt!
+  enrolledEpoch: BigInt!
+  lastAttestedEpoch: BigInt!
+  anchors: [Anchor!]! @derivedFrom(field: "principal")
+  grants: [Grant!]! @derivedFrom(field: "principal")
+  events: [ConsentEvent!]! @derivedFrom(field: "principal")
+}
+
+type Anchor {
+  id: ID! # batchRoot
+  principal: Principal!
+  ns: Int!
+  epoch: BigInt!
+  termsHash: String!
+  batchIndex: BigInt!
+  blockNumber: BigInt!
+  txHash: String!
+}
+
+type Grant {
+  id: ID! # grantId
+  principal: Principal!
+  granteeCard: String!
+  ns: Int!
+  epochStart: BigInt!
+  epochEnd: BigInt!
+  term: BigInt!
+  termsHash: String!
+  wrapRef: String!
+  status: String! # ACTIVE | RESCINDED (EXPIRED / FROZEN are derived at query time)
+  rescindedViaCommitReveal: Boolean
+  effectiveBlock: BigInt
+  receipts: [Receipt!]! @derivedFrom(field: "grant")
+}
+
+type Receipt {
+  id: ID! # receiptId
+  grant: Grant!
+  payer: String!
+  ns: Int!
+  termsHash: String!
+  epoch: BigInt!
+  blockNumber: BigInt!
+  txHash: String!
+}
+
+type Rescission {
+  id: ID! # commitment
+  blockNumber: BigInt!
+  relayer: String!
+}
+
+type ConsentEvent {
+  id: ID! # txHash-logIndex
+  kind: String! # enrolled | attested | granted | rescinded
+  principal: Principal!
+  grant: Grant
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: String!
+}

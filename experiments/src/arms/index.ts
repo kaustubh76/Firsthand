@@ -50,6 +50,12 @@ export interface ArmAdapters {
   readonly uniqueSeeds: boolean;
   /** Current head block, for finality-depth checks in manifest verification. */
   readonly headBlock: () => Promise<bigint>;
+  /** Live-chain arms expose their clients and deployment so demand-side scenarios can build settlement. */
+  readonly chain?: {
+    readonly clients: ReturnType<typeof createChainClients>;
+    readonly deployment: Deployment;
+    readonly env: ChainEnv;
+  };
 }
 
 /** Memory-backed arms available everywhere. */
@@ -83,11 +89,16 @@ export function chainEnv(
   return { rpcUrl, deploymentsFile, relayerKey: relayerKey as `0x${string}` };
 }
 
-interface Deployment {
+export interface Deployment {
   chainId: number;
   PrincipalRegistry: Address;
   PassportAnchorsBaseline: Address;
   PassportAnchorsPaged: Address;
+  GrantManager: Address;
+  ReceiptLedger: Address;
+  RoyaltyRouter: Address;
+  Rescissions: Address;
+  USDC: Address;
   genesis: number;
   epochLength: number;
 }
@@ -132,6 +143,7 @@ export async function onchainArm(
     epochs: { genesis: BigInt(deployment.genesis), length: BigInt(deployment.epochLength) },
     clock: () => block.timestamp,
     uniqueSeeds: true,
+    chain: { clients, deployment, env },
     headBlock: () => clients.publicClient.getBlockNumber({ cacheTime: 0 }),
     prepare: async (locker) => {
       const e = await sendEnroll(locker, transport, planEnroll(locker, registry));

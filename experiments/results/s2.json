@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-13T18:37:47.604Z",
+  "trials": [
+    {
+      "scenario": "s2",
+      "arm": "memory",
+      "hypothesis": "H1",
+      "startedAt": "2026-09-13T18:36:39.896Z",
+      "durationMs": 805.8395839999998,
+      "metrics": {
+        "queries": {
+          "value": 100,
+          "unit": "count"
+        },
+        "receiptsRecorded": {
+          "value": 100,
+          "unit": "count"
+        },
+        "queryLatencyP50Ms": {
+          "value": 4.4781660000003285,
+          "unit": "ms"
+        },
+        "queryLatencyP95Ms": {
+          "value": 8.032959000000119,
+          "unit": "ms"
+        },
+        "manifestWithReceiptsVerified": {
+          "value": 1,
+          "unit": "bool"
+        },
+        "refusedAfterRescind": {
+          "value": 1,
+          "unit": "bool"
+        }
+      },
+      "onChain": false,
+      "notes": [
+        "Memory arm: accounting double, no token movement; latency is predicate + payment signing.",
+        "Each query is one receipt; the last receipt rides in the exported manifest (H3 audit file)."
+      ]
+    },
+    {
+      "scenario": "s2",
+      "arm": "anchors-baseline",
+      "hypothesis": "H1",
+      "startedAt": "2026-09-13T18:37:34.326Z",
+      "durationMs": 13254.185292,
+      "metrics": {
+        "queries": {
+          "value": 100,
+          "unit": "count"
+        },
+        "receiptsRecorded": {
+          "value": 100,
+          "unit": "count"
+        },
+        "queryLatencyP50Ms": {
+          "value": 102.05554200000006,
+          "unit": "ms"
+        },
+        "queryLatencyP95Ms": {
+          "value": 200.9980830000004,
+          "unit": "ms"
+        },
+        "manifestWithReceiptsVerified": {
+          "value": 1,
+          "unit": "bool"
+        },
+        "refusedAfterRescind": {
+          "value": 1,
+          "unit": "bool"
+        },
+        "settleGasPerQuery": {
+          "value": 241741,
+          "unit": "gas"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "settleGasPerQuery = RoyaltyRouter.settle (EIP-3009 pull + split + receipt) on a vanilla EVM; Monad pricing applies on testnet.",
+        "Each query is one receipt; the last receipt rides in the exported manifest (H3 audit file)."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-12T23:24:05.190Z",
+  "trials": [
+    {
+      "scenario": "s1",
+      "arm": "memory",
+      "hypothesis": "H3",
+      "startedAt": "2026-09-12T23:22:48.149Z",
+      "durationMs": 77034.726667,
+      "metrics": {
+        "passports": {
+          "value": 10000,
+          "unit": "count"
+        },
+        "batches": {
+          "value": 40,
+          "unit": "count"
+        },
+        "depositMs": {
+          "value": 42974.050749999995,
+          "unit": "ms"
+        },
+        "verifyMerkleMs": {
+          "value": 1931.9107920000024,
+          "unit": "ms"
+        },
+        "verifyMerklePerAssetUs": {
+          "value": 193.19107920000025,
+          "unit": "us"
+        },
+        "verifyFullMs": {
+          "value": 31353.865792000004,
+          "unit": "ms"
+        },
+        "verifySignaturePerAssetUs": {
+          "value": 2926.5283272000274,
+          "unit": "us"
+        },
+        "hashesPerAsset": {
+          "value": 8,
+          "unit": "hashes"
+        },
+        "proofBytesPerAsset": {
+          "value": 257,
+          "unit": "bytes"
+        },
+        "manifestBytes": {
+          "value": 12363633,
+          "unit": "bytes"
+        }
+      },
+      "onChain": false,
+      "notes": [
+        "H3 target: ≤ 8 hashes/asset and a 10k-asset corpus verifies in < 2 s (verifyMerkleMs) in the reference verifier.",
+        "verifyFullMs additionally re-proves every origin signature; pure-JS ECDSA recovery costs ~ms/asset (native path is roadmap).",
+        "H1 gas not observable on the memory arm; run with an on-chain arm (Phase 2)."
+      ]
+    }
+  ]
+}

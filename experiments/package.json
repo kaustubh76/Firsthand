@@ -1,0 +1,40 @@
+{
+  "name": "@firsthand/experiments",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Research harness for README §15: scenarios S1–S4, arms B1/B2/BTX/commit-reveal, metrics for H1–H3",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'S1/S3 on-chain arms need MONAD_RPC_URL (Phase 2/4)'",
+    "coverage": "vitest run --coverage",
+    "run": "tsx src/cli.ts",
+    "s1": "tsx src/cli.ts s1",
+    "s2": "tsx src/cli.ts s2",
+    "s3": "tsx src/cli.ts s3",
+    "s4": "tsx src/cli.ts s4",
+    "report": "tsx src/cli.ts report"
+  },
+  "dependencies": {
+    "@firsthand/adapters": "workspace:*",
+    "@firsthand/contracts": "workspace:*",
+    "@firsthand/core": "workspace:*",
+    "@firsthand/runtime": "workspace:*",
+    "@firsthand/sdk": "workspace:*",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@firsthand/crypto": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

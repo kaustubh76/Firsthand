@@ -45,6 +45,9 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
   Guardian-threshold recovery is documented as roadmap (README §13); the demo uses a single passkey.
 - Re-attestation each epoch is the liveness signal; a principal who stops re-attesting freezes their
   grants lazily after 2 epochs (no keepers), and thaws only future epochs (README §7.6).
+- Enroll and attest are **relayable**: authorisation is the P-256 signature under the registry's own
+  EIP-712 domain (ADR-0009), never `msg.sender`, so the paying wallet is unlinkable to the principal.
+  Nonces are scoped per principal; a stranger cannot burn them.
 
 ## 5. Threat model (README §13) → where it is handled
 

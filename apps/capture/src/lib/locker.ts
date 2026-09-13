@@ -27,6 +27,8 @@ export function createClient(): FirsthandClient {
     addresses: {
       grantManager: (import.meta.env["VITE_GRANT_MANAGER"] ?? `0x${"00".repeat(20)}`) as Address,
       rescissions: (import.meta.env["VITE_RESCISSIONS"] ?? `0x${"00".repeat(20)}`) as Address,
+      principalRegistry: (import.meta.env["VITE_PRINCIPAL_REGISTRY"] ??
+        `0x${"00".repeat(20)}`) as Address,
     },
     namespaces: [
       { ns: 0, label: "captures" },

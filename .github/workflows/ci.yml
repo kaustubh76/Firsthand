@@ -71,3 +71,37 @@ jobs:
           DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           USDC_ADDRESS=0x0000000000000000000000000000000000000dc0 \
           forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+
+  anvil-roundtrip:
+    name: Phase 1 gate · enroll → attest round-trip on anvil --odyssey
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.1.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Start anvil with the RIP-7212 precompile
+        run: |
+          anvil --odyssey --silent --port 8545 &
+          sleep 2
+      - name: Deploy
+        working-directory: contracts
+        run: |
+          DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+          USDC_ADDRESS=0x0000000000000000000000000000000000000dc0 \
+          forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+      - name: SDK round-trip through the real contract path
+        env:
+          ANVIL_RPC_URL: http://127.0.0.1:8545
+          DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
+          RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+        run: pnpm test:anvil

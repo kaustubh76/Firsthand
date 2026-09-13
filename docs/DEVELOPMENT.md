@@ -21,8 +21,32 @@
 ## Test tiers
 
 - `test:unit` — pure, offline, memory adapters. Runs everywhere.
+- `test:anvil` — the SDK against a live local chain (`anvil --odyssey`, which ships the RIP-7212 P-256
+  precompile). Needs `ANVIL_RPC_URL`, `DEPLOYMENTS_FILE`, `RELAYER_PRIVATE_KEY`; skipped otherwise.
 - `test:testnet` — needs `MONAD_RPC_URL` (and `DEPLOYER_PRIVATE_KEY` for scripts). Skipped otherwise.
 - Foundry: `forge test` (default profile), `FOUNDRY_PROFILE=ci forge test` (10k fuzz runs).
+
+### Phase 1 gate locally (enroll → attest round-trip)
+
+```sh
+anvil --odyssey --silent &
+export DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   # anvil #0
+export USDC_ADDRESS=0x0000000000000000000000000000000000000dc0
+(cd contracts && forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast)
+ANVIL_RPC_URL=http://127.0.0.1:8545 DEPLOYMENTS_FILE=$PWD/deployments/31337.json \
+RELAYER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+pnpm test:anvil
+```
+
+### Monad testnet runbook (README §16 Phase 1 gate on the real precompile)
+
+1. Fund a deployer and a relayer with testnet MON; put `MONAD_RPC_URL`, `DEPLOYER_PRIVATE_KEY`,
+   `USDC_ADDRESS` (testnet USDC with EIP-3009) in `.env` — never in chat or commits.
+2. `pnpm --filter @firsthand/contracts deploy:testnet` → writes `deployments/10143.json`; commit it.
+3. `pnpm --filter @firsthand/contracts test:testnet` — fork test enrolls a throw-away key through the
+   native precompile.
+4. `ANVIL_RPC_URL=$MONAD_RPC_URL DEPLOYMENTS_FILE=$PWD/deployments/10143.json RELAYER_PRIVATE_KEY=… pnpm test:anvil`
+   — the same SDK round-trip, now on testnet. Record the tx hashes in `deployments/NOTES.md`.
 
 ## Golden vectors
 

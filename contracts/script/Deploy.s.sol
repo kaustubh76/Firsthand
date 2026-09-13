@@ -59,7 +59,11 @@ contract Deploy is Script {
         d.passportAnchorsPaged = address(new PassportAnchorsPaged(registry));
         d.passportAnchors =
             keccak256(bytes(d.anchorsLayout)) == keccak256("paged") ? d.passportAnchorsPaged : d.passportAnchorsBaseline;
-        d.grantManager = address(new GrantManager(registry, Rescissions(d.rescissions), 0, 0));
+        d.grantManager = address(
+            new GrantManager(
+                registry, Rescissions(d.rescissions), 0, 0, uint64(vm.envOr("REVEAL_WINDOW_BLOCKS", uint256(1000)))
+            )
+        );
     }
 
     function deploySettlement(Deployed memory d, address deployer) internal {

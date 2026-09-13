@@ -40,7 +40,8 @@ enum VerifyFailure {
     GRANT_NOT_LIVE,
     GRANT_RESCINDED,
     GRANT_EXPIRED,
-    GRANT_FROZEN
+    GRANT_FROZEN,
+    SCOPE_MISMATCH
 }
 
 /// @dev README §11 `PrincipalState`.
@@ -107,4 +108,18 @@ struct AnchorRecord {
     uint64 blockNumber;
     uint32 ns;
     uint32 batchIndex;
+}
+
+/// @dev Grantee card commitment: `cardId = keccak256(abi.encode(owner, encryptionPubKey))` (ADR-0011).
+struct Card {
+    address owner; // secp256k1 key that signs terms acceptance
+    bytes32 encryptionPubKey; // X25519 public key vault keys are wrapped to
+}
+
+/// @dev Terms registered by preimage at acceptance so grant() and the ledger need no re-supply (ADR-0011).
+struct RegisteredTerms {
+    uint64 price;
+    uint32 rateLimit;
+    uint32 ns;
+    bool exists;
 }

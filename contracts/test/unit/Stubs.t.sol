@@ -34,7 +34,7 @@ contract StubsTest is Test {
         registry = new PrincipalRegistry(GENESIS, EpochLib.DEFAULT_EPOCH_SECONDS, EpochLib.LIVENESS_GRACE_EPOCHS);
         rescissions = new Rescissions();
         anchors = new PassportAnchorsBaseline(registry);
-        grants = new GrantManager(registry, rescissions, 0, 0);
+        grants = new GrantManager(registry, rescissions, 0, 0, 1000);
         address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         ledger = new ReceiptLedger(predicted);
         router = new RoyaltyRouter(IERC3009(usdc), grants, ledger, address(0xD057));
@@ -61,22 +61,17 @@ contract StubsTest is Test {
         assertFalse(anchors.isAnchored(bytes32(0)));
     }
 
-    function test_grantManagerDefaultsAndStub() public {
+    function test_grantManagerWired() public view {
+        // GrantManager is implemented (Phase 3) — see GrantManager.t.sol; only wiring is checked here.
         assertEq(grants.maxTerm(), EpochLib.MAX_GRANT_TERM_EPOCHS);
         assertEq(grants.priceFloor(), 1);
+        assertEq(grants.revealWindowBlocks(), 1000);
         assertEq(address(grants.rescissions()), address(rescissions));
+        assertEq(address(grants.registry()), address(registry));
         bytes32 id = grants.grantIdOf(bytes32(uint256(1)), bytes32(uint256(2)), 3, 4);
         assertEq(id, keccak256(abi.encode(bytes32(uint256(1)), bytes32(uint256(2)), uint32(3), uint64(4))));
         assertEq(uint8(grants.effectiveStatus(id)), uint8(GrantStatus.NONE));
         assertFalse(grants.termsAccepted(bytes32(0), bytes32(0), 0, bytes32(0)));
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "GrantManager.grant"));
-        grants.grant(bytes32(0), bytes32(0), 0, 0, 1, bytes32(0), bytes32(0), bytes32(0), "");
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "GrantManager.rescind"));
-        grants.rescind(id, 0, bytes32(0), "");
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "GrantManager.revealRescind"));
-        grants.revealRescind(id, bytes32(0), bytes32(0), "");
-        vm.expectRevert(abi.encodeWithSelector(NotImplemented.selector, "GrantManager.acceptTerms"));
-        grants.acceptTerms(bytes32(0), bytes32(0), 0, bytes32(0), bytes32(0), "");
     }
 
     function test_ledgerOnlyRouterMayRecord() public {

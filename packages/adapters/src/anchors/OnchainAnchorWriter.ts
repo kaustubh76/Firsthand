@@ -8,9 +8,11 @@ import {
   ValidationError,
 } from "@firsthand/core";
 import {
+  type Abi,
   BaseError,
   type Chain,
   ContractFunctionRevertedError,
+  decodeErrorResult,
   type PublicClient,
   type Transport,
   type WalletClient,
@@ -205,15 +207,39 @@ export class OnchainAnchorWriter implements AnchorWriter {
 }
 
 /** Turns a viem simulation failure into a ChainError carrying the decoded custom error, when there is one. */
-export function decodeRevert(cause: unknown, message: string): ChainError {
+export function decodeRevert(
+  cause: unknown,
+  message: string,
+  abis: readonly Abi[] = [],
+): ChainError {
   if (cause instanceof BaseError) {
     const reverted = cause.walk((e) => e instanceof ContractFunctionRevertedError);
     if (reverted instanceof ContractFunctionRevertedError) {
-      const reason = reverted.data?.errorName ?? reverted.reason ?? "unknown";
-      const args = (reverted.data?.args ?? []).map((a) =>
-        typeof a === "bigint" ? a.toString() : a,
-      );
-      return new ChainError(`${message}: ${reason}`, { cause, context: { reason, args } });
+      let reason = reverted.data?.errorName ?? reverted.reason;
+      let args = (reverted.data?.args ?? []).map((a) => (typeof a === "bigint" ? a.toString() : a));
+      const raw = reverted.raw;
+      // Nested reverts (token, ledger, libraries) are not in the caller's ABI: try the extra ones.
+      if (!reason && raw) {
+        for (const abi of abis) {
+          try {
+            const decoded = decodeErrorResult({ abi, data: raw });
+            reason = decoded.errorName;
+            args = (decoded.args ?? []).map((a) => (typeof a === "bigint" ? a.toString() : a));
+            break;
+          } catch {
+            // not this ABI
+          }
+        }
+      }
+      return new ChainError(`${message}: ${reason ?? "unknown"}`, {
+        cause,
+        context: {
+          reason: reason ?? "unknown",
+          args,
+          raw: raw ?? null,
+          selector: reverted.signature ?? null,
+        },
+      });
     }
     return new ChainError(`${message}: ${cause.shortMessage}`, { cause, retryable: true });
   }

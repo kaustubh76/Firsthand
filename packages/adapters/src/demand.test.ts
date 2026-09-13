@@ -216,6 +216,18 @@ describe("MemorySettlement", () => {
   });
 });
 
+describe("toSettlementError", () => {
+  it("maps decoded contract reasons to FIRSTHAND codes and passes unknown ones through", async () => {
+    const { toSettlementError } = await import("./settlement/OnchainSettlement.js");
+    const { ChainError } = await import("@firsthand/core");
+    const mk = (reason: string) => new ChainError("x", { context: { reason } });
+    expect(toSettlementError(mk("RateLimitExceeded")).code).toBe("FH_RATE_LIMITED");
+    expect(toSettlementError(mk("GrantNotLive")).code).toBe("FH_GRANT_NOT_LIVE");
+    expect(toSettlementError(mk("AuthorizationExpired")).code).toBe("FH_PAYMENT_INVALID");
+    expect(toSettlementError(mk("Whatever")).code).toBe("FH_CHAIN");
+  });
+});
+
 describe("x402 typed data", () => {
   const account = privateKeyToAccount(`0x${"07".repeat(32)}`);
   const requirements: PaymentRequirements = {

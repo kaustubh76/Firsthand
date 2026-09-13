@@ -157,6 +157,11 @@ export class MemoryGrantReader extends Recorder implements GrantReader {
     return this.#epoch;
   }
 
+  async chainTime(): Promise<bigint> {
+    this.record("chainTime");
+    return BigInt(Math.floor(Date.now() / 1000));
+  }
+
   async queriesThisEpoch(grantId: Bytes32, epoch: bigint): Promise<number> {
     this.record("queriesThisEpoch", grantId, epoch);
     return this.#queries.get(`${grantId}:${epoch}`) ?? 0;

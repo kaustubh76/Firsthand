@@ -33,5 +33,7 @@ export interface GrantReader {
   principalLastAttested(principalId: Bytes32): Promise<bigint | null>;
   isPrincipalLive(principalId: Bytes32): Promise<boolean>;
   currentEpoch(): Promise<bigint>;
+  /** Latest block timestamp (unix seconds) — what EIP-3009 validity windows are judged against. */
+  chainTime(): Promise<bigint>;
   queriesThisEpoch(grantId: Bytes32, epoch: bigint): Promise<number>;
 }

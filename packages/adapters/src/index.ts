@@ -54,7 +54,7 @@ export {
   PaymentRequirementsSchema,
 } from "./ports/X402Facilitator.js";
 export type { OnchainSettlementOptions } from "./settlement/OnchainSettlement.js";
-export { OnchainSettlement } from "./settlement/OnchainSettlement.js";
+export { OnchainSettlement, toSettlementError } from "./settlement/OnchainSettlement.js";
 export type { BtxTransportOptions } from "./tx/BtxTransport.js";
 export { BtxTransport } from "./tx/BtxTransport.js";
 export { PublicMempoolTransport } from "./tx/PublicMempoolTransport.js";

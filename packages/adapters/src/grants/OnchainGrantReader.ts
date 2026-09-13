@@ -124,6 +124,10 @@ export class OnchainGrantReader implements GrantReader {
     });
   }
 
+  async chainTime(): Promise<bigint> {
+    return (await this.#c.getBlock()).timestamp;
+  }
+
   queriesThisEpoch(grantId: Bytes32, epoch: bigint): Promise<number> {
     return this.#c.readContract({
       address: this.#o.receiptLedger,

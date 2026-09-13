@@ -173,8 +173,9 @@ describe.skipIf(!enabled)("Phase 2 gate: deposit → anchor → on-chain inclusi
         batches: batcher.flushed(),
         finalityDepth: 0,
       });
-      const head = await clients.publicClient.getBlockNumber();
+      const head = await clients.publicClient.getBlockNumber({ cacheTime: 0 });
       const verdict = await verifyManifest(manifest, { anchors: writer, headBlock: head });
+      expect(verdict.assets.map((a) => a.reason ?? "ok")).toEqual(["ok", "ok", "ok"]);
       expect(verdict.ok).toBe(true);
       expect(verdict.assets).toHaveLength(3);
     });

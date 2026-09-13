@@ -1,11 +1,11 @@
 {
   "extends": "../../tooling/tsconfig.lib.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
     "types": ["node"],
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

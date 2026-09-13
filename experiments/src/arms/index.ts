@@ -132,7 +132,7 @@ export async function onchainArm(
     epochs: { genesis: BigInt(deployment.genesis), length: BigInt(deployment.epochLength) },
     clock: () => block.timestamp,
     uniqueSeeds: true,
-    headBlock: () => clients.publicClient.getBlockNumber(),
+    headBlock: () => clients.publicClient.getBlockNumber({ cacheTime: 0 }),
     prepare: async (locker) => {
       const e = await sendEnroll(locker, transport, planEnroll(locker, registry));
       await clients.publicClient.waitForTransactionReceipt({ hash: e.txHash });

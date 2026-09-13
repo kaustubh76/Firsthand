@@ -2,7 +2,7 @@
   "name": "firsthand-gateway",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hostable FIRSTHAND gateway — the serving path: x402-gated query, verify gate, receipts, blob hosting. Holds no key material.",
+  "description": "Self-hostable FIRSTHAND gateway \u2014 the serving path: x402-gated query, verify gate, receipts, blob hosting. Holds no key material.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:testnet": "echo 'no testnet tests yet'",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "test:anvil": "vitest run -c vitest.anvil.config.ts"
   },
   "dependencies": {
     "@firsthand/adapters": "workspace:*",
@@ -31,6 +32,7 @@
     "tsup": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "viem": "catalog:"
   }
 }

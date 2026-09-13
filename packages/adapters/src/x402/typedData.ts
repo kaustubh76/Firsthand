@@ -74,7 +74,14 @@ export async function buildPaymentPayload(
   options: BuildPaymentOptions = {},
 ): Promise<PaymentPayload> {
   const domain = assetDomainFrom(requirements);
-  const now = Math.floor((options.now ?? Date.now)() / 1000);
+  // Validity is judged by the chain's clock: prefer the gateway-advertised chain time over wall-clock.
+  const extra = (requirements.extra ?? {}) as { chainTime?: string | number };
+  const now =
+    options.now !== undefined
+      ? Math.floor(options.now() / 1000)
+      : extra.chainTime !== undefined
+        ? Number(extra.chainTime)
+        : Math.floor(Date.now() / 1000);
   const validAfter = 0n;
   const validBefore = BigInt(now + (options.validitySeconds ?? requirements.maxTimeoutSeconds));
   const nonce = options.nonce ?? (options.randomNonce ?? defaultNonce)();

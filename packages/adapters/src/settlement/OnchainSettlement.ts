@@ -1,5 +1,11 @@
-import { ReceiptLedgerAbi, RoyaltyRouterAbi } from "@firsthand/contracts/abi";
-import { type Address, type Bytes32, ChainError } from "@firsthand/core";
+import {
+  GrantManagerAbi,
+  MockUSDCAbi,
+  ReceiptLedgerAbi,
+  RoyaltyRouterAbi,
+  SplitMathAbi,
+} from "@firsthand/contracts/abi";
+import { type Address, type Bytes32, ChainError, GrantError, PaymentError } from "@firsthand/core";
 import type { Chain, PublicClient, Transport, WalletClient } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { decodeRevert } from "../anchors/OnchainAnchorWriter.js";
@@ -61,7 +67,12 @@ export class OnchainSettlement implements Settlement {
       });
       simulated = sim.request;
     } catch (cause) {
-      throw decodeRevert(cause, "settlement refused");
+      throw decodeRevert(cause, "settlement refused", [
+        ReceiptLedgerAbi,
+        MockUSDCAbi,
+        SplitMathAbi,
+        GrantManagerAbi,
+      ]);
     }
     try {
       const hash = await wallet.writeContract(simulated);
@@ -85,5 +96,35 @@ export class OnchainSettlement implements Settlement {
       if (cause instanceof ChainError) throw cause;
       throw new ChainError("settlement failed", { cause, retryable: true });
     }
+  }
+}
+
+/** Maps decoded contract refusals onto the FIRSTHAND error codes the memory double raises. */
+export function toSettlementError(error: ChainError): ChainError | GrantError | PaymentError {
+  const reason = String(error.context["reason"] ?? "");
+  const context = { ...error.context };
+  switch (reason) {
+    case "RateLimitExceeded":
+      return new GrantError("FH_RATE_LIMITED", "rate limit exceeded for this epoch", {
+        retryable: true,
+        context,
+        cause: error,
+      });
+    case "GrantNotLive":
+      return new GrantError("FH_GRANT_NOT_LIVE", "grant is not live", { context, cause: error });
+    case "TermsMismatch":
+    case "ValueMismatch":
+    case "InvalidSignature":
+    case "AuthorizationExpired":
+    case "AuthorizationNotYetValid":
+    case "AuthorizationAlreadyUsed":
+    case "InsufficientBalance":
+    case "DuplicateReceipt":
+      return new PaymentError("FH_PAYMENT_INVALID", `payment rejected: ${reason}`, {
+        context,
+        cause: error,
+      });
+    default:
+      return error;
   }
 }

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["tooling/**", "biome.json", "pnpm-workspace.yaml"],
+  "globalEnv": ["CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**", "abi/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "lint": {},
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:testnet": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["MONAD_RPC_URL", "MONAD_CHAIN_ID", "DEPLOYER_PRIVATE_KEY"]
+    },
+    "coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "gen": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "gen:check": {
+      "dependsOn": ["^build"],
+      "cache": false
+    }
+  }
+}

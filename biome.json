@@ -1,0 +1,130 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/coverage",
+      "!**/node_modules",
+      "!**/.turbo",
+      "!contracts/out",
+      "!contracts/cache",
+      "!contracts/lib",
+      "!contracts/abi",
+      "!contracts/broadcast",
+      "!experiments/results",
+      "!packages/test-vectors/vectors",
+      "!packages/indexer/generated",
+      "!pnpm-lock.yaml"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        }
+      },
+      "style": {
+        "useImportType": "error",
+        "useExportType": "error",
+        "noNonNullAssertion": "error",
+        "useConst": "error",
+        "noParameterAssign": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "noUnusedFunctionParameters": "error"
+      },
+      "complexity": {
+        "noForEach": "off",
+        "useLiteralKeys": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/gateway/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@firsthand/crypto": "The serving path must never hold key material. apps/gateway is forbidden from importing @firsthand/crypto (ADR-0001)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "packages/test-vectors/src/gen/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "scripts/**",
+        "**/scripts/**",
+        "**/cli.ts",
+        "**/bin/**",
+        "experiments/**",
+        "apps/mcp/src/index.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ]
+}

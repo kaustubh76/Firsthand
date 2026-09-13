@@ -1,0 +1,37 @@
+{
+  "name": "firsthand",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIRSTHAND \u2014 a passkey-rooted data-provenance and consent-settlement protocol on Monad",
+  "license": "MIT",
+  "packageManager": "pnpm@10.18.2",
+  "engines": {
+    "node": ">=26",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test:unit",
+    "test:unit": "turbo run test:unit",
+    "test:testnet": "turbo run test:testnet",
+    "coverage": "turbo run coverage",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome ci .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "vectors:gen": "turbo run gen",
+    "vectors:check": "turbo run gen:check",
+    "check:deps": "node scripts/check-deps.mjs",
+    "forge:test": "cd contracts && forge test",
+    "forge:build": "cd contracts && forge build",
+    "abi:export": "node scripts/export-abi.mjs",
+    "check:all": "pnpm lint && pnpm check:deps && pnpm build && pnpm typecheck && pnpm coverage && pnpm vectors:check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -8,8 +8,16 @@ import { percentile, percentileOrNull } from "./stats.js";
 export interface RaceSample {
   readonly rescindBroadcastMs: number;
   readonly rescindEffectiveMs: number;
-  /** When the first extraction ordered before the effective point was observed mined; null when cut off. */
+  /**
+   * When the bot's first extraction that was ordered *before* the effective point landed; null when
+   * the bot was cut off. Non-null therefore means the extraction succeeded — on chain, ordering is
+   * decided by (block, index), so a same-block success carries the block's time.
+   */
   readonly extractionCompleteMs: number | null;
+  /** Extractions that landed before consent ended (the burst size the signal bought the bot). */
+  readonly extractions?: number;
+  /** Queries the bot paid for during the trial, successful or not (the price of extracting blind). */
+  readonly queriesPaid?: number;
   /** When the bot first saw the rescission in the mempool (public arms); null when it had no signal. */
   readonly detectionMs?: number | null;
   /** Settlements that landed after consent ended — post-consent receipts (commit-reveal accountability). */
@@ -35,14 +43,14 @@ export interface RaceSummary {
   readonly detectionLatencyP50: number | null;
   readonly inclusionDelayP50: number;
   readonly settlementsAfterConsentEnd: number;
+  readonly extractionsP50: number;
+  readonly queriesPaidP50: number;
 }
 
 export function summarise(samples: readonly RaceSample[]): RaceSummary {
   const deltas = samples.map(deltaRace);
   const finite = deltas.filter((d): d is number => d !== null);
-  const successes = samples.filter(
-    (s) => s.extractionCompleteMs !== null && s.extractionCompleteMs < s.rescindEffectiveMs,
-  ).length;
+  const successes = samples.filter((s) => s.extractionCompleteMs !== null).length;
   const detections = samples
     .map((s) => (s.detectionMs == null ? null : s.detectionMs - s.rescindBroadcastMs))
     .filter((d): d is number => d !== null);
@@ -62,6 +70,14 @@ export function summarise(samples: readonly RaceSample[]): RaceSummary {
     settlementsAfterConsentEnd: samples.reduce(
       (acc, s) => acc + (s.settlementsAfterConsentEnd ?? 0),
       0,
+    ),
+    extractionsP50: percentile(
+      samples.map((s) => s.extractions ?? (s.extractionCompleteMs === null ? 0 : 1)),
+      50,
+    ),
+    queriesPaidP50: percentile(
+      samples.map((s) => s.queriesPaid ?? 0),
+      50,
     ),
   };
 }

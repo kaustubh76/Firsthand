@@ -1,0 +1,433 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-15T09:38:12.633Z",
+  "trials": [
+    {
+      "scenario": "s3",
+      "arm": "memory",
+      "hypothesis": "H2",
+      "startedAt": "2026-09-15T09:32:13.570Z",
+      "durationMs": 14.610874999999396,
+      "metrics": {
+        "trials": {
+          "value": 50,
+          "unit": "count"
+        },
+        "extractionSuccessRate": {
+          "value": 1,
+          "unit": "ratio"
+        },
+        "deltaRaceP50Ms": {
+          "value": 300,
+          "unit": "ms"
+        },
+        "deltaRaceP95Ms": {
+          "value": 300,
+          "unit": "ms"
+        },
+        "deltaRaceMinMs": {
+          "value": 300,
+          "unit": "ms"
+        },
+        "deltaRaceMaxMs": {
+          "value": 300,
+          "unit": "ms"
+        },
+        "inclusionDelayP50Ms": {
+          "value": 400,
+          "unit": "ms"
+        },
+        "extractionsBeforeEndP50": {
+          "value": 1,
+          "unit": "count"
+        },
+        "queriesPaidP50": {
+          "value": 0,
+          "unit": "count"
+        }
+      },
+      "onChain": false,
+      "notes": [
+        "SIMULATED public mempool — the timing model only; H2 evidence is the on-chain arms below."
+      ],
+      "samples": {
+        "deltaRaceMs": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ]
+      }
+    },
+    {
+      "scenario": "s3",
+      "arm": "B2-public-mempool",
+      "hypothesis": "H2",
+      "startedAt": "2026-09-15T09:32:19.342Z",
+      "durationMs": 102128.023917,
+      "metrics": {
+        "trials": {
+          "value": 50,
+          "unit": "count"
+        },
+        "extractionSuccessRate": {
+          "value": 0.98,
+          "unit": "ratio"
+        },
+        "deltaRaceP50Ms": {
+          "value": 411.2014999999956,
+          "unit": "ms"
+        },
+        "deltaRaceP95Ms": {
+          "value": 603.0013340000005,
+          "unit": "ms"
+        },
+        "deltaRaceMinMs": {
+          "value": 294.58845799999835,
+          "unit": "ms"
+        },
+        "deltaRaceMaxMs": {
+          "value": 727.0455829999992,
+          "unit": "ms"
+        },
+        "detectionLatencyP50Ms": {
+          "value": 15.245082999994338,
+          "unit": "ms"
+        },
+        "inclusionDelayP50Ms": {
+          "value": 411.2014999999956,
+          "unit": "ms"
+        },
+        "extractionsBeforeEndP50": {
+          "value": 4,
+          "unit": "count"
+        },
+        "queriesPaidP50": {
+          "value": 4,
+          "unit": "count"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "Success = an extraction ordered before the effective point on chain ((block, index), not wall clock); blocks every 400 ms; Δ_race = block time of the first such extraction − broadcast.",
+        "B2: the bot decodes the pending rescind for this grant and fires a burst that outbids it."
+      ],
+      "samples": {
+        "deltaRaceMs": [
+          456.119917,
+          409.23120800000106,
+          396.0197499999995,
+          424.6507500000007,
+          369.0236669999995,
+          389.2248749999999,
+          339.5637089999982,
+          428.89237499999945,
+          477.7739580000016,
+          402.1402909999997,
+          456.8149169999997,
+          410.96537499999977,
+          441.7545420000024,
+          427.8039580000004,
+          430.2586669999946,
+          402.768333,
+          367.1736250000031,
+          376.9875000000029,
+          418.2989170000001,
+          348.0140420000025,
+          362.7254580000008,
+          503.0953329999975,
+          340.68170799999643,
+          371.37629200000083,
+          294.58845799999835,
+          null,
+          411.2014999999956,
+          372.6470000000045,
+          603.0013340000005,
+          469.4815830000007,
+          368.8548340000052,
+          413.811916000006,
+          727.0455829999992,
+          379.698166999995,
+          454.0408330000064,
+          465.46258300000045,
+          398.41766700000153,
+          479.10920800000895,
+          411.74345899999025,
+          423.7799159999995,
+          608.3710830000055,
+          330.0648329999967,
+          435.53904099999636,
+          368.35058300000674,
+          407.54424999999173,
+          377.0395830000052,
+          399.3908750000119,
+          439.4877090000082,
+          535.9658749999944,
+          432.0124169999908
+        ]
+      }
+    },
+    {
+      "scenario": "s3",
+      "arm": "commit-reveal",
+      "hypothesis": "H2",
+      "startedAt": "2026-09-15T09:34:14.508Z",
+      "durationMs": 119572.64716699999,
+      "metrics": {
+        "trials": {
+          "value": 50,
+          "unit": "count"
+        },
+        "extractionSuccessRate": {
+          "value": 1,
+          "unit": "ratio"
+        },
+        "deltaRaceP50Ms": {
+          "value": 430.28070899999875,
+          "unit": "ms"
+        },
+        "deltaRaceP95Ms": {
+          "value": 605.5349579999893,
+          "unit": "ms"
+        },
+        "deltaRaceMinMs": {
+          "value": 322.77841700000863,
+          "unit": "ms"
+        },
+        "deltaRaceMaxMs": {
+          "value": 865.7308340000018,
+          "unit": "ms"
+        },
+        "detectionLatencyP50Ms": {
+          "value": 9.84129200001189,
+          "unit": "ms"
+        },
+        "inclusionDelayP50Ms": {
+          "value": 430.28070899999875,
+          "unit": "ms"
+        },
+        "extractionsBeforeEndP50": {
+          "value": 4,
+          "unit": "count"
+        },
+        "queriesPaidP50": {
+          "value": 4,
+          "unit": "count"
+        },
+        "settlementsAfterCommit": {
+          "value": 2,
+          "unit": "count"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "Success = an extraction ordered before the effective point on chain ((block, index), not wall clock); blocks every 400 ms; Δ_race = block time of the first such extraction − broadcast.",
+        "commit-reveal: consent ends at the commit block; the bot cannot attribute the commitment, so it reacts to every commit it sees (paranoid). settlementsAfterCommit are post-consent receipts — accountability, not prevention."
+      ],
+      "samples": {
+        "deltaRaceMs": [
+          507.8329159999994,
+          651.4555,
+          412.49766699999964,
+          478.62024999999994,
+          459.2536659999969,
+          495.3299580000021,
+          430.11675000000105,
+          465.38874999999825,
+          405.97458400000323,
+          405.0118749999965,
+          447.24962499999674,
+          554.956124999997,
+          491.08733299999585,
+          404.60170800000196,
+          405.01958300000115,
+          431.9146250000049,
+          404.48758400000224,
+          452.8799169999984,
+          435.3858330000003,
+          406.4921250000043,
+          518.0473339999953,
+          865.7308340000018,
+          403.01141700000153,
+          404.11304100000416,
+          408.6971249999915,
+          435.76595799998904,
+          322.77841700000863,
+          605.5349579999893,
+          429.13770900000236,
+          409.1494170000078,
+          402.43320899999526,
+          447.7059169999993,
+          459.8026669999963,
+          419.9623339999962,
+          375.58474999999453,
+          386.97345800000767,
+          401.4963330000028,
+          426.32887499999197,
+          404.3404589999991,
+          430.28070899999875,
+          445.6213330000028,
+          404.2870830000029,
+          546.7063330000092,
+          501.48654199999874,
+          437.2176250000048,
+          403.974000000002,
+          417.1330409999937,
+          522.906999999992,
+          601.1665839999914,
+          424.3062079999945
+        ]
+      }
+    },
+    {
+      "scenario": "s3",
+      "arm": "btx-blind",
+      "hypothesis": "H2",
+      "startedAt": "2026-09-15T09:36:20.795Z",
+      "durationMs": 111826.8515,
+      "metrics": {
+        "trials": {
+          "value": 50,
+          "unit": "count"
+        },
+        "extractionSuccessRate": {
+          "value": 0.98,
+          "unit": "ratio"
+        },
+        "deltaRaceP50Ms": {
+          "value": 380.8530000000028,
+          "unit": "ms"
+        },
+        "deltaRaceP95Ms": {
+          "value": 521.2529580000046,
+          "unit": "ms"
+        },
+        "deltaRaceMinMs": {
+          "value": 184.92433399999936,
+          "unit": "ms"
+        },
+        "deltaRaceMaxMs": {
+          "value": 991.7934589999986,
+          "unit": "ms"
+        },
+        "inclusionDelayP50Ms": {
+          "value": 380.8530000000028,
+          "unit": "ms"
+        },
+        "extractionsBeforeEndP50": {
+          "value": 6,
+          "unit": "count"
+        },
+        "queriesPaidP50": {
+          "value": 13,
+          "unit": "count"
+        }
+      },
+      "samples": {
+        "deltaRaceMs": [
+          287.135166,
+          184.92433399999936,
+          991.7934589999986,
+          434.6324170000007,
+          274.1657500000001,
+          381.7488749999975,
+          330.6878749999996,
+          null,
+          323.67391599999974,
+          521.2529580000046,
+          366.4166669999977,
+          377.31262499999866,
+          503.70991700000013,
+          392.42470900000626,
+          361.42962499999703,
+          367.24637500000244,
+          396.1315409999952,
+          380.8530000000028,
+          397.12812499999563,
+          361.73858299999847,
+          350.7133329999997,
+          391.5137079999986,
+          293.3902089999974,
+          583.2209159999984,
+          371.76600000000326,
+          385.851250000007,
+          379.77058399999805,
+          355.9303749999963,
+          401.55650000000605,
+          381.31375000000116,
+          369.77195799999754,
+          390.3194999999978,
+          380.76854099999764,
+          396.7702500000014,
+          369.95733399999153,
+          384.78191599999263,
+          378.28041599999415,
+          362.8651249999966,
+          265.27249999999185,
+          353.22808300000906,
+          404.64862500000163,
+          403.6772079999937,
+          397.5532920000114,
+          415.9535420000029,
+          436.6982500000013,
+          371.07537500000035,
+          382.60674999999173,
+          313.1755419999972,
+          381.4915000000037,
+          404.44416600000113
+        ]
+      },
+      "onChain": true,
+      "notes": [
+        "Success = an extraction ordered before the effective point on chain ((block, index), not wall clock); blocks every 400 ms; Δ_race = block time of the first such extraction − broadcast.",
+        "btx-blind is NOT BTX: the rescind travels the public mempool but the bot gets no signal and extracts continuously, paying for every query. Only extractions *sent after* the broadcast count. This is the bound an encrypted mempool leaves: it removes the signal, not same-block fee competition."
+      ]
+    }
+  ]
+}

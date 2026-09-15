@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:testnet": "echo 'S1/S3 on-chain arms need MONAD_RPC_URL (Phase 2/4)'",
+    "test:testnet": "echo 'On-chain arms take ANVIL_RPC_URL=$MONAD_RPC_URL + DEPLOYMENTS_FILE + RELAYER_PRIVATE_KEY (docs/DEVELOPMENT.md); S3 needs a pending-tx feed the node exposes'",
     "coverage": "vitest run --coverage",
     "run": "tsx src/cli.ts",
     "s1": "tsx src/cli.ts s1",

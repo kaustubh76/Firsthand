@@ -3,6 +3,7 @@ import type { Address, Bytes32, Terms } from "@firsthand/core";
 import { BuyerSession, createBuyerKeys, type Locker, planGrant, sendGrant } from "@firsthand/sdk";
 import { type Chain, type PublicClient, parseAbi, type Transport, type WalletClient } from "viem";
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
+import { waitForReceipt } from "../chain/waitReceipt.js";
 
 /** The demand side every buyer scenario shares (S2, S3): one funded EVM key, cards, terms, grants. */
 export const BUYER_KEY =
@@ -28,7 +29,7 @@ export async function mintUsdc(
     functionName: "mint",
     args: [to, amount],
   });
-  await publicClient.waitForTransactionReceipt({ hash });
+  await waitForReceipt(publicClient, hash);
 }
 
 /** A buyer with a fresh X25519 key → a fresh card id even for the same owner (grantId depends on it). */

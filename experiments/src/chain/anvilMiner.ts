@@ -8,9 +8,13 @@ import { jsonRpc } from "./rpc.js";
  */
 export class AnvilMiner {
   readonly #rpcUrl: string;
+  readonly #now: () => number;
+  /** Wall-clock (ms) at which each block mined by this miner was sealed — the race's time base. */
+  readonly blockMinedAt = new Map<bigint, number>();
 
-  constructor(rpcUrl: string) {
+  constructor(rpcUrl: string, now: () => number = Date.now) {
     this.#rpcUrl = rpcUrl;
+    this.#now = now;
   }
 
   async automine(): Promise<boolean> {
@@ -25,6 +29,11 @@ export class AnvilMiner {
       // Never overlap two mines; a slow node just skips a tick.
       if (mining) return;
       mining = jsonRpc(this.#rpcUrl, "evm_mine")
+        .then(async () => {
+          const at = this.#now();
+          const head = await jsonRpc<string>(this.#rpcUrl, "eth_blockNumber");
+          this.blockMinedAt.set(BigInt(head), at);
+        })
         .catch(() => undefined)
         .finally(() => {
           mining = null;

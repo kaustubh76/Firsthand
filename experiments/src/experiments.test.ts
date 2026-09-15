@@ -41,12 +41,15 @@ describe("experiments harness", () => {
     const runner = new Runner({ resultsDir: dir, clock });
     await runner.run(s2, { dryRun: true, n: 1 });
     const s3Trials = await runner.run(s3, { dryRun: true, n: 3 });
-    const byArm = Object.fromEntries(
-      s3Trials.map((t) => [t.arm, t.metrics["extractionSuccessRate"]?.value]),
+    // Only the simulated memory arm runs without a chain; every race arm is recorded as skipped.
+    expect(s3Trials.map((t) => t.arm)).toEqual(["memory"]);
+    expect(s3Trials[0]?.metrics["extractionSuccessRate"]?.value).toBe(1); // sim: bot sees the mempool
+    expect(s3Trials[0]?.samples?.["deltaRaceMs"]).toHaveLength(3);
+    const skipped = runner.skipped.filter((s) => s.scenario === "s3");
+    expect(skipped.map((s) => s.arm).sort()).toEqual(
+      ["B2-public-mempool", "btx", "btx-blind", "commit-reveal"].sort(),
     );
-    expect(byArm["B2-public-mempool"]).toBe(1); // bot wins with mempool visibility (simulated)
-    expect(byArm["btx"]).toBe(0);
-    expect(byArm["commit-reveal"]).toBe(0);
+    expect(skipped.every((s) => s.reason.includes("ANVIL_RPC_URL"))).toBe(true);
     const report = renderReport(runner);
     expect(report).toContain("## S4");
     expect(report).toContain("| memory | sim |");

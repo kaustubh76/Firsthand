@@ -7,7 +7,7 @@ Harness for README §15. Arms are adapter selections (ADR-0006); results are raw
 |---|---|---|---|
 | S1 deposit at scale | H3 (memory arm), H1 (`anchors-baseline` / `anchors-paged` on a chain) | yes | `pnpm --filter @firsthand/experiments s1 -- --n 10000` · `… s1 -- --arm anchors-paged --n 2560` |
 | S2 buyer loop | H1 (settlement gas), H3 (manifest with receipts) | yes (memory, `anchors-baseline`) | `… s2 -- --n 100` · `… s2 -- --arm anchors-baseline --n 100` |
-| S3 rescission race | H2 | plumbing only (simulated mempool) | `… s3 -- --dry-run` |
+| S3 rescission race | H2 | yes (`B2-public-mempool`, `commit-reveal`, `btx-blind` on anvil; `btx` needs `BTX_RPC_URL`) | `… s3 -- --arm B2-public-mempool --n 50` · `… --arm commit-reveal` · `… --arm btx-blind` |
 | S4 refusal | refusal precision | yes | `… s4 -- --n 1000` |
 
 ## Findings so far (memory arm, this machine)
@@ -39,6 +39,37 @@ token movement) runs the same loop at p50 **4.5 ms** / p95 **8.0 ms** — the pr
 signing are not the bottleneck; the chain round-trip is. Per-query cost is dominated by the ERC-20
 storage writes (transfer in, transfer out, nonce) and the receipt slot; the split itself is a
 handful of `MULMOD`s (ADR-0003).
+
+**S3 on-chain (anvil --odyssey, blocks every 400 ms driven by the harness, fee-ordered, 50 trials per
+arm).** The observer bot is the grantee's own key submitting `RoyaltyRouter.settle` directly; an
+extraction "succeeds" when the chain ordered it before the effective point — `(block, index)`, not
+wall clock. Consent ends at the rescission's inclusion (the commit block for commit-reveal).
+
+| arm | extraction success | Δ_race p50 / p95 (ms) | detection p50 | extractions before end (p50) | queries paid / trial (p50) |
+|---|---|---|---|---|---|
+| B2-public-mempool | **0.98** (49/50) | 411 / 603 | 15 ms | 4 | 4 |
+| commit-reveal | **1.00** | 430 / 606 | 10 ms | 4 | 4 (+2 post-commit receipts across 50 trials) |
+| btx-blind (no signal, **not BTX**) | **0.98** (49/50) | 381 / 521 | — | 6 | 13 |
+| btx | skipped — BTX is not deployed on Monad testnet as of 2026-09 (Category Labs' batched threshold encryption; no RPC surface) | | | | |
+
+What the numbers say, without spin:
+
+- **The public-mempool race is real and cheap.** The bot sees the pending `rescind` in ~15 ms,
+  fires four settles that outbid it on priority fee, and all four are ordered before the
+  rescission in the same block. It pays only when signalled.
+- **Commit-reveal does not shorten the window; it removes attribution.** The bot cannot map a
+  commitment to a grant, so a paranoid bot reacts to every commit — and wins the same race. What
+  the fallback buys is a *dated end of consent at the commit block*: the two settlements that
+  landed after it are provably post-consent receipts (accountability, not prevention, README §14).
+- **An encrypted mempool removes the signal, not block-position competition.** With no signal the
+  bot must extract continuously, paying ~13 queries per trial to land ~6 in the rescission block —
+  the bound BTX would leave under fee ordering. **H2 as worded (~0 % extraction under BTX, Δ_race
+  median ≤ 0) is therefore not what a 400 ms fee-ordered block gives; it is not measurable until
+  BTX exists, and the no-signal bound suggests the honest claim is "no targeted burst at zero idle
+  cost", not "the race never starts".** The obvious mitigation — the principal bidding a high
+  priority fee on the rescission so it is ordered first in its block — is not yet measured
+  (`PreparedTx` carries no fee fields; follow-up).
+- One trial per public arm was cut off: the block sealed between broadcast and the bot's burst.
 
 **S4, 60 injected attacks × 3 classes (foreign lineage, forged content, replayed epoch) + 60
 genuine:** precision 1.0, recall 1.0 — the locker refused every unprovable deposit and no genuine one.

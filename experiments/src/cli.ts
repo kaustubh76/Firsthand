@@ -18,7 +18,11 @@ const flag = (name: string) => {
   return i === -1 ? undefined : args[i + 1];
 };
 const dryRun = args.includes("--dry-run");
-const logger = createLogger({ level: dryRun ? "warn" : "info" });
+const logger = createLogger({
+  level:
+    (process.env["LOG_LEVEL"] as "debug" | "info" | "warn" | undefined) ??
+    (dryRun ? "warn" : "info"),
+});
 const runner = new Runner({
   resultsDir: join(dirname(fileURLToPath(import.meta.url)), "..", "results"),
   logger,

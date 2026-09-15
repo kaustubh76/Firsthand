@@ -38,7 +38,8 @@ function distribution(values: readonly (number | null)[]): string {
   const finite = values.filter((v): v is number => v !== null);
   const cutOff = values.length - finite.length;
   if (finite.length === 0) return `n=${values.length}, all cut off`;
-  return `n=${values.length} (cut off ${cutOff}) min=${Math.min(...finite)} p50=${percentile(finite, 50)} p95=${percentile(finite, 95)} max=${Math.max(...finite)}`;
+  const f = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  return `n=${values.length} (cut off ${cutOff}) min=${f(Math.min(...finite))} p50=${f(percentile(finite, 50))} p95=${f(percentile(finite, 95))} max=${f(Math.max(...finite))}`;
 }
 
 function row(t: TrialResult, names: readonly string[]): string {

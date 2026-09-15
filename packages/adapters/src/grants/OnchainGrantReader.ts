@@ -5,6 +5,7 @@ import type {
   CardView,
   GrantReader,
   GrantView,
+  PrincipalLivenessView,
   RegisteredTermsView,
 } from "../ports/GrantReader.js";
 
@@ -97,14 +98,16 @@ export class OnchainGrantReader implements GrantReader {
     return { owner: c.owner.toLowerCase() as Address, encryptionPubKey: c.encryptionPubKey };
   }
 
-  async principalLastAttested(principalId: Bytes32): Promise<bigint | null> {
+  async principalLiveness(principalId: Bytes32): Promise<PrincipalLivenessView | null> {
     const p = await this.#c.readContract({
       address: this.#o.principalRegistry,
       abi: PrincipalRegistryAbi,
       functionName: "principal",
       args: [principalId],
     });
-    return p.p256KeyCommit === ZERO_HASH ? null : p.lastAttestedEpoch;
+    return p.p256KeyCommit === ZERO_HASH
+      ? null
+      : { lastAttestedEpoch: p.lastAttestedEpoch, thawEpoch: p.thawEpoch };
   }
 
   isPrincipalLive(principalId: Bytes32): Promise<boolean> {

@@ -7,12 +7,16 @@ import {
   grantIdOf,
   hashTerms,
   LIVENESS_GRACE_EPOCHS,
+  PrincipalStatus,
+  principalEffectiveStatus,
   type Terms,
+  thawEpochAfterGap,
 } from "@firsthand/core";
 import type {
   CardView,
   GrantReader,
   GrantView,
+  PrincipalLivenessView,
   RegisteredTermsView,
 } from "../ports/GrantReader.js";
 import { Recorder } from "./Recorder.js";
@@ -36,7 +40,7 @@ export class MemoryGrantReader extends Recorder implements GrantReader {
   readonly #terms = new Map<Bytes32, RegisteredTermsView>();
   readonly #accepted = new Set<string>();
   readonly #grants = new Map<Bytes32, GrantView>();
-  readonly #principals = new Map<Bytes32, bigint>();
+  readonly #principals = new Map<Bytes32, PrincipalLivenessView>();
   readonly #queries = new Map<string, number>();
   #epoch: bigint;
   readonly grace: bigint;
@@ -54,11 +58,17 @@ export class MemoryGrantReader extends Recorder implements GrantReader {
   }
 
   enroll(principalId: Bytes32, lastAttestedEpoch: bigint = this.#epoch): void {
-    this.#principals.set(principalId, lastAttestedEpoch);
+    this.#principals.set(principalId, { lastAttestedEpoch, thawEpoch: 0n });
   }
 
+  /** Mirrors `PrincipalRegistry.attest`: a gap attest schedules the thaw one boundary later (§7.6). */
   attest(principalId: Bytes32, epoch: bigint = this.#epoch): void {
-    this.#principals.set(principalId, epoch);
+    const p = this.#principals.get(principalId) ?? { lastAttestedEpoch: epoch, thawEpoch: 0n };
+    const thaw = thawEpochAfterGap(epoch, p.lastAttestedEpoch, this.grace);
+    this.#principals.set(principalId, {
+      lastAttestedEpoch: epoch,
+      thawEpoch: thaw ?? p.thawEpoch,
+    });
   }
 
   registerCard(owner: Address, encryptionPubKey: Bytes32): Bytes32 {
@@ -125,8 +135,8 @@ export class MemoryGrantReader extends Recorder implements GrantReader {
     this.record("effectiveStatus", grantId);
     const g = this.#grants.get(grantId);
     if (!g) return GrantStatus.NONE;
-    const last = this.#principals.get(g.principalId);
-    return effectiveGrantStatus(g, { lastAttestedEpoch: last ?? -1n }, this.#epoch, {
+    const p = this.#principals.get(g.principalId);
+    return effectiveGrantStatus(g, p ?? { lastAttestedEpoch: -1n }, this.#epoch, {
       grace: this.grace,
     });
   }
@@ -141,15 +151,18 @@ export class MemoryGrantReader extends Recorder implements GrantReader {
     return this.#cards.get(cardId) ?? null;
   }
 
-  async principalLastAttested(principalId: Bytes32): Promise<bigint | null> {
-    this.record("principalLastAttested", principalId);
+  async principalLiveness(principalId: Bytes32): Promise<PrincipalLivenessView | null> {
+    this.record("principalLiveness", principalId);
     return this.#principals.get(principalId) ?? null;
   }
 
   async isPrincipalLive(principalId: Bytes32): Promise<boolean> {
     this.record("isPrincipalLive", principalId);
-    const last = this.#principals.get(principalId);
-    return last !== undefined && this.#epoch <= last + this.grace;
+    const p = this.#principals.get(principalId);
+    return (
+      p !== undefined &&
+      principalEffectiveStatus(p, this.#epoch, { grace: this.grace }) === PrincipalStatus.ACTIVE
+    );
   }
 
   async currentEpoch(): Promise<bigint> {

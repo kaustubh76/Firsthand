@@ -201,10 +201,10 @@ export class Serving {
         passportId: passportId(sidecar.signed.passport),
       };
     }
-    const [rootAnchored, owner, lastAttested] = await Promise.all([
+    const [rootAnchored, owner, liveness] = await Promise.all([
       this.#d.anchors.isAnchored(sidecar.batchRoot),
       this.#d.anchors.anchorOf(sidecar.batchRoot),
-      this.#d.grants.principalLastAttested(g.principalId),
+      this.#d.grants.principalLiveness(g.principalId),
     ]);
     return verifyPredicate({
       passport: sidecar.signed.passport,
@@ -222,7 +222,7 @@ export class Serving {
         principalId: g.principalId,
         ns: g.ns,
       },
-      principal: { lastAttestedEpoch: lastAttested ?? -1n },
+      principal: liveness ?? { lastAttestedEpoch: -1n },
       epochNow,
     });
   }

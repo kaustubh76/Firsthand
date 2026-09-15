@@ -28,7 +28,13 @@ export type {
   ReceiptView,
 } from "./ports/ConsentLedger.js";
 export type { Erc8004Registry } from "./ports/Erc8004Registry.js";
-export type { CardView, GrantReader, GrantView, RegisteredTermsView } from "./ports/GrantReader.js";
+export type {
+  CardView,
+  GrantReader,
+  GrantView,
+  PrincipalLivenessView,
+  RegisteredTermsView,
+} from "./ports/GrantReader.js";
 export type { PassportCatalog } from "./ports/PassportCatalog.js";
 export type { Settlement, SettleRequest, SettleResult } from "./ports/Settlement.js";
 export { splitSignature } from "./ports/Settlement.js";

@@ -20,9 +20,12 @@ export class ContractReaders {
     this.addresses = addresses;
   }
 
-  async principal(
-    principalId: Bytes32,
-  ): Promise<{ p256KeyCommit: Bytes32; lastAttestedEpoch: bigint; status: PrincipalStatus }> {
+  async principal(principalId: Bytes32): Promise<{
+    p256KeyCommit: Bytes32;
+    lastAttestedEpoch: bigint;
+    status: PrincipalStatus;
+    thawEpoch: bigint;
+  }> {
     const p = await this.#client.readContract({
       address: this.addresses.principalRegistry,
       abi: PrincipalRegistryAbi,
@@ -33,6 +36,7 @@ export class ContractReaders {
       p256KeyCommit: p.p256KeyCommit,
       lastAttestedEpoch: p.lastAttestedEpoch,
       status: p.status as PrincipalStatus,
+      thawEpoch: p.thawEpoch,
     };
   }
 

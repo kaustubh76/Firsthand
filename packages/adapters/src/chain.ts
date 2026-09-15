@@ -33,6 +33,8 @@ export interface ChainClientsOptions {
   readonly chain?: Chain;
   /** Optional signer; omit for read-only clients (the gateway never signs with user keys). */
   readonly privateKey?: `0x${string}`;
+  /** Receipt/pending polling cadence in ms (viem default 4 000). Race harnesses need ~25. */
+  readonly pollingInterval?: number;
 }
 
 export interface ChainClients {
@@ -45,11 +47,13 @@ export interface ChainClients {
 export function createChainClients(options: ChainClientsOptions): ChainClients {
   const chain = options.chain ?? monadTestnet;
   const transport = http(options.rpcUrl);
-  const publicClient = createPublicClient({ chain, transport });
+  const clientOptions =
+    options.pollingInterval === undefined ? {} : { pollingInterval: options.pollingInterval };
+  const publicClient = createPublicClient({ chain, transport, ...clientOptions });
   if (options.privateKey === undefined) {
     return { chain, publicClient, walletClient: null, account: null };
   }
   const account = privateKeyToAccount(options.privateKey);
-  const walletClient = createWalletClient({ chain, transport, account });
+  const walletClient = createWalletClient({ chain, transport, account, ...clientOptions });
   return { chain, publicClient, walletClient, account };
 }

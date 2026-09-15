@@ -176,10 +176,10 @@ export const s2: Scenario = {
       const t0 = ctx.clock.nowMs();
       const g = await grants.grantState(grantId);
       if (!g) throw new Error("S2: grant vanished");
-      const [rootAnchored, owner, lastAttested, epochNow] = await Promise.all([
+      const [rootAnchored, owner, liveness, epochNow] = await Promise.all([
         adapters.anchors.isAnchored(sidecar.batchRoot),
         adapters.anchors.anchorOf(sidecar.batchRoot),
-        grants.principalLastAttested(g.principalId),
+        grants.principalLiveness(g.principalId),
         grants.currentEpoch(),
       ]);
       const verdict = verifyPredicate({
@@ -198,7 +198,7 @@ export const s2: Scenario = {
           principalId: g.principalId,
           ns: g.ns,
         },
-        principal: { lastAttestedEpoch: lastAttested ?? -1n },
+        principal: liveness ?? { lastAttestedEpoch: -1n },
         epochNow,
       });
       if (!verdict.ok) throw new Error(`S2: verify failed: ${verdict.reason}`);

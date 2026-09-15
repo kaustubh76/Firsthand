@@ -48,7 +48,7 @@ and `demand.test.ts`.
 | `TxTransport` | supply | `PublicMempoolTransport`; BTX in Phase 4 |
 | `BlobStore` | supply | memory / fs |
 | `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog` |
-| `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLastAttested`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |
+| `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLiveness`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |
 | `Settlement` (`settle(grantId, terms, payment) → receipt`) | demand | `OnchainSettlement` → `RoyaltyRouter.settle` |
 | `PaymentFacilitator` | demand | memory; Monad x402 facilitator in Phase 5 |
 | `ConsentLedger` | audit | `EnvioConsentLedger` (Phase 5) |

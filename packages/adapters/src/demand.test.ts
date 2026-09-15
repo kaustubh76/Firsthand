@@ -118,13 +118,22 @@ describe("MemoryGrantReader", () => {
     r.enroll(principal, 4n);
     expect(await r.effectiveStatus(grantId)).toBe(GrantStatus.FROZEN);
     expect(await r.isPrincipalLive(principal)).toBe(false);
+    // Re-attest after the gap (4 + grace 2 < 7): thaw is scheduled one boundary later (§7.6).
     r.attest(principal, 7n);
+    expect(await r.isPrincipalLive(principal)).toBe(false);
+    expect(await r.principalLiveness(principal)).toEqual({ lastAttestedEpoch: 7n, thawEpoch: 8n });
+    expect(await r.effectiveStatus(grantId)).toBe(GrantStatus.FROZEN);
+    r.setEpoch(8n);
     expect(await r.isPrincipalLive(principal)).toBe(true);
+    r.attest(principal, 8n); // within grace: thaw untouched, still live
+    expect(await r.principalLiveness(principal)).toEqual({ lastAttestedEpoch: 8n, thawEpoch: 8n });
+    expect(await r.isPrincipalLive(principal)).toBe(true);
+    r.setEpoch(7n);
     r.rescind(grantId);
     expect(await r.effectiveStatus(grantId)).toBe(GrantStatus.RESCINDED);
     expect(await r.effectiveStatus(b32(42))).toBe(GrantStatus.NONE);
     expect(await r.grantState(b32(42))).toBeNull();
-    expect(await r.principalLastAttested(b32(43))).toBeNull();
+    expect(await r.principalLiveness(b32(43))).toBeNull();
     expect(() => r.rescind(b32(42))).toThrow(/unknown grant/);
   });
 });

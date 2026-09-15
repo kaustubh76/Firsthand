@@ -18,6 +18,12 @@
 | `pnpm check:all` | everything CI runs, in order |
 | `pnpm --filter @firsthand/experiments s1 -- --n 10000` | run a scenario; `report` renders results |
 
+## Reading the system
+
+`docs/diagrams/firsthand-product.excalidraw` is the one-canvas map of the whole product — every
+component in the README's design with its build status as a badge, and the three verbs drawn as
+colour-coded flows. Open it at excalidraw.com before touching a lane you have not worked in.
+
 ## Test tiers
 
 - `test:unit` — pure, offline, memory adapters. Runs everywhere.

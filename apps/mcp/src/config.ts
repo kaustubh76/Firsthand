@@ -21,6 +21,13 @@ export const McpConfigSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{64}$/)
     .optional(),
+  /**
+   * BTX submission endpoint. When set (with RELAYER_PRIVATE_KEY) rescissions travel the encrypted
+   * mempool; `firsthand_rescind` refuses with FH_BTX_UNAVAILABLE if the node does not know the
+   * method. BTX is not deployed on Monad testnet as of 2026-09 — commit-reveal is the fallback.
+   */
+  BTX_RPC_URL: z.string().url().optional(),
+  BTX_METHOD: z.string().min(1).default("eth_sendEncryptedRawTransaction"),
   GRANT_MANAGER: z
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)

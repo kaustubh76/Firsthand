@@ -46,6 +46,13 @@ export type {
   RescindPlan,
   RescindResult,
 } from "./verbs/rescind.js";
-export { planCommit, planDirectRescind, planRevealRescind, sendRescind } from "./verbs/rescind.js";
+export {
+  assertPathTransport,
+  defaultRescindPath,
+  planCommit,
+  planDirectRescind,
+  planRevealRescind,
+  sendRescind,
+} from "./verbs/rescind.js";
 export type { VerifyContext } from "./verify/verify.js";
 export { verify } from "./verify/verify.js";

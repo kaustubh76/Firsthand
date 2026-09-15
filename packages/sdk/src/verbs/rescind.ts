@@ -1,4 +1,4 @@
-import type { TxTransport } from "@firsthand/adapters";
+import type { TransportKind, TxTransport } from "@firsthand/adapters";
 import { GrantManagerAbi, RescissionsAbi } from "@firsthand/contracts/abi";
 import {
   type Address,
@@ -8,6 +8,7 @@ import {
   rescindCommitStructHash,
   rescindStructHash,
   rescissionCommitment,
+  ValidationError,
 } from "@firsthand/core";
 import { randomBytes32, randomNonce, signAuthorityDigest } from "@firsthand/crypto";
 import { encodeFunctionData } from "viem";
@@ -21,9 +22,27 @@ import type { Locker } from "../locker/Locker.js";
  * - `commit-reveal` `Rescissions.commit(keccak(grantId ‖ salt))` now, `revealRescind` later (fallback)
  * - `public`        direct rescind over the public mempool (the B2 baseline arm — measurable, not recommended)
  *
- * The P-256 authority signature is produced here (Phase 3); Phase 4 adds the BTX transport and race harness.
+ * A direct plan only travels a transport of its own kind (`assertPathTransport`): a `btx` plan over
+ * the public mempool would silently forfeit the property it was chosen for. Commit-reveal plans carry
+ * no secret and may go over anything. ADR-0012.
  */
 export type RescindPath = "btx" | "commit-reveal" | "public";
+
+/** The direct path a transport naturally serves; the memory double stands in for BTX in tests. */
+export function defaultRescindPath(kind: TransportKind): Exclude<RescindPath, "commit-reveal"> {
+  return kind === "public" ? "public" : "btx";
+}
+
+/** Refuses a direct plan whose path the transport cannot honour — never a silent downgrade. */
+export function assertPathTransport(plan: RescindPlan, transport: TxTransport): void {
+  if (plan.path === "commit-reveal" || transport.kind === "memory") return;
+  if (plan.path !== transport.kind) {
+    throw new ValidationError(
+      `rescind path "${plan.path}" cannot travel a "${transport.kind}" transport`,
+      { context: { path: plan.path, transport: transport.kind } },
+    );
+  }
+}
 
 export interface RescindAddresses {
   readonly grantManager: Address;
@@ -131,6 +150,7 @@ export async function sendRescind(
   transport: TxTransport,
   plan: RescindPlan,
 ): Promise<RescindResult> {
+  assertPathTransport(plan, transport);
   const caps = await transport.capabilities();
   const ref = await transport.send({ to: plan.to, data: plan.data });
   locker.logger.info("rescind sent", { path: plan.path, transport: transport.kind, tx: ref.hash });

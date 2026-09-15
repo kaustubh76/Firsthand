@@ -151,7 +151,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     {
       title: "Rescind consent for a grant",
       description:
-        "Withdraw consent. `btx` uses Monad's encrypted mempool so no grantee can race the revocation; `public` is the measurable baseline; `commit-reveal` posts a commitment now (pass the returned salt back with the same path to reveal).",
+        "Withdraw consent. `btx` uses Monad's encrypted mempool so no grantee can race the revocation (refused with FH_BTX_UNAVAILABLE where BTX is not live); `public` is the measurable baseline; `commit-reveal` posts a commitment now and works everywhere (pass the returned salt back with the same path to reveal).",
       inputSchema: RescindInputSchema.shape,
     },
     async (input) => {

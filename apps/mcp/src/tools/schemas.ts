@@ -30,8 +30,10 @@ export const RescindInputSchema = z.object({
   grantId: hex32,
   path: z
     .enum(["btx", "commit-reveal", "public"])
-    .default("btx")
-    .describe("Transport path; btx is un-front-runnable, commit-reveal is the fallback"),
+    .optional()
+    .describe(
+      "Transport path; defaults to what the configured transport can honour (btx when BTX_RPC_URL is set, else public). btx is un-front-runnable, commit-reveal is the fallback that works everywhere",
+    ),
   salt: hex32.optional().describe("For commit-reveal step 2: the salt returned by the commit call"),
 });
 

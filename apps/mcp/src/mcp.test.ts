@@ -11,6 +11,7 @@ import { FirsthandClient } from "@firsthand/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
+import { loadConfig } from "./config.js";
 import { createMcpServer } from "./server.js";
 
 async function connect(canBroadcast = true) {
@@ -183,5 +184,29 @@ describe("enroll / attest tools", () => {
     expect(attest.tx.to).toBe(`0x${"b3".repeat(20)}`);
     const bad = await client.callTool({ name: "firsthand_enroll", arguments: { epoch: "x" } });
     expect(bad.isError).toBe(true);
+    // Explicit public path without a relayer: calldata for out-of-band submission, path preserved.
+    const pub = textOf(
+      (await client.callTool({
+        name: "firsthand_rescind",
+        arguments: { grantId: `0x${"dd".repeat(32)}`, path: "public" },
+      })) as { content: unknown },
+    );
+    expect(pub).toMatchObject({
+      broadcast: false,
+      path: "public",
+      tx: { to: `0x${"b1".repeat(20)}` },
+    });
+  });
+});
+
+describe("config", () => {
+  it("parses the BTX endpoint and method, defaulting the method name", () => {
+    const c = loadConfig({ BTX_RPC_URL: "http://btx.local:8545" });
+    expect(c.BTX_RPC_URL).toBe("http://btx.local:8545");
+    expect(c.BTX_METHOD).toBe("eth_sendEncryptedRawTransaction");
+    expect(loadConfig({ BTX_METHOD: "monad_sendSealedTransaction" }).BTX_METHOD).toBe(
+      "monad_sendSealedTransaction",
+    );
+    expect(() => loadConfig({ BTX_RPC_URL: "not a url" })).toThrow();
   });
 });

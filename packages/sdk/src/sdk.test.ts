@@ -62,7 +62,13 @@ import { planEnroll, sendEnroll } from "./verbs/enroll.js";
 import { planGrant } from "./verbs/grant.js";
 import { publishDeposit, sidecarFor } from "./verbs/publish.js";
 import { checkServed, openQueried, query } from "./verbs/query.js";
-import { planCommit, planDirectRescind, planRevealRescind, sendRescind } from "./verbs/rescind.js";
+import {
+  defaultRescindPath,
+  planCommit,
+  planDirectRescind,
+  planRevealRescind,
+  sendRescind,
+} from "./verbs/rescind.js";
 import { verify } from "./verify/verify.js";
 
 const domain = {
@@ -473,6 +479,54 @@ describe("rescind plans and client wiring", () => {
     expect(transport.sent[0]?.tx.to).toBe(addresses.rescissions);
   });
 
+  it("refuses a direct plan on a transport of another kind — never a silent downgrade (ADR-0012)", async () => {
+    const locker = makeLocker(1);
+    const grantId = `0x${"c1".repeat(32)}` as const;
+    const fake = (kind: "btx" | "public") => ({
+      kind,
+      sent: [] as { to: Address }[],
+      async send(tx: { to: Address }) {
+        this.sent.push(tx);
+        return { hash: ZERO_HASH, transport: kind, submittedAt: 1 };
+      },
+      async capabilities() {
+        return { encryptedMempool: kind === "btx" };
+      },
+    });
+    const btxPlan = planDirectRescind(locker, "btx", addresses, grantId, 5n);
+    const publicPlan = planDirectRescind(locker, "public", addresses, grantId, 5n);
+    const commit = planCommit(addresses, grantId);
+
+    const pub = fake("public");
+    await expect(sendRescind(locker, pub, btxPlan)).rejects.toMatchObject({
+      code: "FH_VALIDATION",
+      context: { path: "btx", transport: "public" },
+    });
+    expect(pub.sent).toHaveLength(0);
+    await expect(sendRescind(locker, pub, publicPlan)).resolves.toMatchObject({
+      encryptedMempool: false,
+    });
+    await expect(sendRescind(locker, pub, commit)).resolves.toBeDefined();
+
+    const btx = fake("btx");
+    await expect(sendRescind(locker, btx, publicPlan)).rejects.toMatchObject({
+      code: "FH_VALIDATION",
+    });
+    await expect(sendRescind(locker, btx, btxPlan)).resolves.toMatchObject({
+      encryptedMempool: true,
+    });
+    await expect(sendRescind(locker, btx, commit)).resolves.toBeDefined();
+
+    // The memory double stands in for either.
+    const mem = new MemoryTransport();
+    await expect(sendRescind(locker, mem, btxPlan)).resolves.toBeDefined();
+    await expect(sendRescind(locker, mem, publicPlan)).resolves.toBeDefined();
+
+    expect(defaultRescindPath("public")).toBe("public");
+    expect(defaultRescindPath("btx")).toBe("btx");
+    expect(defaultRescindPath("memory")).toBe("btx");
+  });
+
   it("FirsthandClient assembles sessions over injected adapters", async () => {
     StaticPrfSource.resetWarning();
     const client = new FirsthandClient({
@@ -505,7 +559,7 @@ describe("rescind plans and client wiring", () => {
       attestation,
     });
     await expect(session.acceptSigned(again, 0, new Uint8Array([2]))).resolves.toBeDefined();
-    expect(session.planRescind(ZERO_HASH).path).toBe("btx");
+    expect(session.planRescind(ZERO_HASH).path).toBe("btx"); // memory transport → btx default
     expect(session.planRescind(ZERO_HASH, "public").path).toBe("public");
     expect(session.planCommit(ZERO_HASH).path).toBe("commit-reveal");
     expect(session.planReveal(ZERO_HASH, ZERO_HASH).path).toBe("commit-reveal");

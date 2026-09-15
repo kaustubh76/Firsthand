@@ -11,6 +11,7 @@ import { type GrantInput, type GrantPlan, planGrant, sendGrant } from "../verbs/
 import { type PublishTarget, publishDeposit, publishWrap } from "../verbs/publish.js";
 import { type QueryDeps, type QueryRequest, query } from "../verbs/query.js";
 import {
+  defaultRescindPath,
   planCommit,
   planDirectRescind,
   planRevealRescind,
@@ -130,9 +131,12 @@ export class LockerSession {
     return { plan, sent };
   }
 
+  /** Direct rescission; the path defaults to what the configured transport can honour. */
   planRescind(
     grantId: Bytes32,
-    path: Exclude<RescindPath, "commit-reveal"> = "btx",
+    path: Exclude<RescindPath, "commit-reveal"> = defaultRescindPath(
+      this.#client.options.transport.kind,
+    ),
     epoch?: bigint,
   ): RescindPlan {
     return planDirectRescind(this.locker, path, this.#client.options.addresses, grantId, epoch);

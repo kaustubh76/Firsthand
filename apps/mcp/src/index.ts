@@ -1,5 +1,6 @@
 import {
   anvil,
+  BtxTransport,
   createChainClients,
   FsBlobStore,
   MemoryAnchorWriter,
@@ -7,6 +8,7 @@ import {
   MemoryTransport,
   monadTestnet,
   PublicMempoolTransport,
+  type TxTransport,
 } from "@firsthand/adapters";
 import { type Address, ConfigError, hexToBytes } from "@firsthand/core";
 import { StaticPrfSource } from "@firsthand/crypto";
@@ -33,9 +35,21 @@ const relayerClients =
         privateKey: config.RELAYER_PRIVATE_KEY as `0x${string}`,
       })
     : null;
-const transport = relayerClients?.walletClient
-  ? new PublicMempoolTransport(relayerClients.walletClient)
+// BTX when an endpoint is configured (probe-gated — a direct btx plan never degrades to the public
+// mempool, ADR-0012), else the public mempool, else the memory double (calldata only).
+const transport: TxTransport = relayerClients?.walletClient
+  ? config.BTX_RPC_URL
+    ? new BtxTransport({
+        rpcUrl: config.BTX_RPC_URL,
+        wallet: relayerClients.walletClient,
+        method: config.BTX_METHOD,
+      })
+    : new PublicMempoolTransport(relayerClients.walletClient)
   : new MemoryTransport();
+if (transport.kind === "btx") {
+  const caps = await transport.capabilities();
+  logger.info("btx transport", { encryptedMempool: caps.encryptedMempool, detail: caps.detail });
+}
 
 const client = new FirsthandClient({
   domain: {
@@ -100,7 +114,7 @@ const openBuyer = () => {
 const server = createMcpServer({
   session: openSession,
   logger,
-  canBroadcast: transport.kind === "public",
+  canBroadcast: transport.kind !== "memory",
   buyer: openBuyer,
   passportDomain: {
     chainId: config.CHAIN_ID,

@@ -33,6 +33,8 @@ export interface GrantRecord {
 
 export interface PrincipalRecord {
   readonly lastAttestedEpoch: bigint;
+  /** First epoch the principal counts as live again after a gap (README §7.6); absent/0 = none. */
+  readonly thawEpoch?: bigint;
 }
 
 export interface LivenessParams {
@@ -40,9 +42,25 @@ export interface LivenessParams {
 }
 
 /**
+ * Principal liveness at `epochNow` — twin of `PrincipalRegistry.effectiveStatus`: FROZEN while a
+ * scheduled thaw has not been reached, else the dead-man's-switch grace check (README §7.3, §7.6).
+ */
+export function principalEffectiveStatus(
+  principal: PrincipalRecord,
+  epochNow: bigint,
+  params: LivenessParams = {},
+): PrincipalStatus {
+  if (epochNow < (principal.thawEpoch ?? 0n)) return PrincipalStatus.FROZEN;
+  return isWithinGrace(epochNow, principal.lastAttestedEpoch, params.grace ?? LIVENESS_GRACE_EPOCHS)
+    ? PrincipalStatus.ACTIVE
+    : PrincipalStatus.FROZEN;
+}
+
+/**
  * Effective status at `epochNow`, evaluated lazily — no keepers (README §7.3/§7.5).
  * Precedence: RESCINDED (terminal) > EXPIRED (term elapsed) > FROZEN (principal liveness) > ACTIVE.
- * FROZEN is deliberately *not* terminal: a principal who re-attests thaws future epochs (§7.6).
+ * FROZEN is deliberately *not* terminal: a principal who re-attests thaws future epochs, one full
+ * boundary after the re-attest (§7.6, `principalEffectiveStatus`).
  */
 export function effectiveGrantStatus(
   grant: GrantRecord,
@@ -53,9 +71,7 @@ export function effectiveGrantStatus(
   if (grant.status === GrantStatus.NONE) return GrantStatus.NONE;
   if (grant.status === GrantStatus.RESCINDED) return GrantStatus.RESCINDED;
   if (epochNow >= grant.epochStart + grant.term) return GrantStatus.EXPIRED;
-  if (
-    !isWithinGrace(epochNow, principal.lastAttestedEpoch, params.grace ?? LIVENESS_GRACE_EPOCHS)
-  ) {
+  if (principalEffectiveStatus(principal, epochNow, params) !== PrincipalStatus.ACTIVE) {
     return GrantStatus.FROZEN;
   }
   return GrantStatus.ACTIVE;

@@ -6,7 +6,14 @@ import { buildTree, hashLeaf, proveIndex } from "../merkle/merkle.js";
 import { hashTerms, LICENSE_FH_1_0, passportDigest, passportId } from "../passport/typed.js";
 import type { Passport, Terms } from "../passport/types.js";
 import { addressOfPublicKey } from "../passport/verify.js";
-import { effectiveGrantStatus, GrantStatus, isGrantLive, nextGrantStatus } from "./state.js";
+import {
+  effectiveGrantStatus,
+  GrantStatus,
+  isGrantLive,
+  nextGrantStatus,
+  PrincipalStatus,
+  principalEffectiveStatus,
+} from "./state.js";
 import { VerifyFailure, type VerifyInput, verifyPredicate } from "./verify.js";
 
 describe("grant state machine", () => {
@@ -20,6 +27,16 @@ describe("grant state machine", () => {
     expect(effectiveGrantStatus(active, { lastAttestedEpoch: 10n }, 14n, { grace: 99n })).toBe(
       GrantStatus.EXPIRED,
     );
+    // A scheduled thaw keeps the grant FROZEN through the re-attest epoch, ACTIVE from the boundary (§7.6).
+    const thawing = { lastAttestedEpoch: 13n, thawEpoch: 14n };
+    expect(effectiveGrantStatus({ ...active, term: 6n }, thawing, 13n)).toBe(GrantStatus.FROZEN);
+    expect(effectiveGrantStatus({ ...active, term: 6n }, thawing, 14n)).toBe(GrantStatus.ACTIVE);
+    expect(principalEffectiveStatus(thawing, 13n)).toBe(PrincipalStatus.FROZEN);
+    expect(principalEffectiveStatus(thawing, 14n)).toBe(PrincipalStatus.ACTIVE);
+    expect(principalEffectiveStatus({ lastAttestedEpoch: 13n, thawEpoch: 0n }, 13n)).toBe(
+      PrincipalStatus.ACTIVE,
+    );
+    expect(principalEffectiveStatus({ lastAttestedEpoch: 5n }, 8n)).toBe(PrincipalStatus.FROZEN);
     // EXPIRED beats FROZEN.
     expect(effectiveGrantStatus(active, { lastAttestedEpoch: 0n }, 14n)).toBe(GrantStatus.EXPIRED);
     expect(
@@ -129,6 +146,10 @@ describe("verifyPredicate", () => {
       VerifyFailure.GRANT_EXPIRED,
     );
     expectFail({ ...good, principal: { lastAttestedEpoch: 5n } }, VerifyFailure.GRANT_FROZEN);
+    expectFail(
+      { ...good, principal: { lastAttestedEpoch: good.epochNow, thawEpoch: good.epochNow + 1n } },
+      VerifyFailure.GRANT_FROZEN,
+    );
     expectFail(
       { ...good, grant: { ...good.grant, status: GrantStatus.NONE } },
       VerifyFailure.GRANT_NOT_LIVE,

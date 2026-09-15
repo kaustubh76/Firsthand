@@ -1,7 +1,14 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "../errors.js";
-import { DEFAULT_EPOCH_LENGTH, epochAt, epochEnd, epochStart, isWithinGrace } from "./epoch.js";
+import {
+  DEFAULT_EPOCH_LENGTH,
+  epochAt,
+  epochEnd,
+  epochStart,
+  isWithinGrace,
+  thawEpochAfterGap,
+} from "./epoch.js";
 
 const params = { genesis: 1_000n, length: DEFAULT_EPOCH_LENGTH };
 
@@ -30,5 +37,11 @@ describe("epoch", () => {
     expect(isWithinGrace(10n, 8n)).toBe(true);
     expect(isWithinGrace(11n, 8n)).toBe(false);
     expect(isWithinGrace(11n, 8n, 3n)).toBe(true);
+  });
+  it("schedules a thaw one boundary after a gap attest, none within grace (§7.6)", () => {
+    expect(thawEpochAfterGap(7n, 5n)).toBeNull(); // 7 == 5 + grace
+    expect(thawEpochAfterGap(8n, 5n)).toBe(9n);
+    expect(thawEpochAfterGap(8n, 5n, 3n)).toBeNull();
+    expect(thawEpochAfterGap(20n, 5n)).toBe(21n);
   });
 });

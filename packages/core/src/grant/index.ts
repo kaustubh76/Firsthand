@@ -5,6 +5,7 @@ export {
   isGrantLive,
   nextGrantStatus,
   PrincipalStatus,
+  principalEffectiveStatus,
 } from "./state.js";
 export type { AnchorOwner, GrantForVerify, VerifyInput, VerifyResult } from "./verify.js";
 export { VerifyFailure, verifyPredicate } from "./verify.js";

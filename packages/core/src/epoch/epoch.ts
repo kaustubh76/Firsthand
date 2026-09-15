@@ -45,3 +45,16 @@ export function isWithinGrace(
 ): boolean {
   return epochNow <= epochAttested + grace;
 }
+
+/**
+ * README §7.6: an attest at `epoch` that arrives after the grace of the previous watermark lapsed
+ * (the principal was FROZEN) schedules the thaw one full boundary later — `epoch + 1`. Returns
+ * `null` when the attest is within grace (no thaw to schedule). Twin of `PrincipalRegistry.attest`.
+ */
+export function thawEpochAfterGap(
+  epoch: bigint,
+  lastAttestedEpoch: bigint,
+  grace: bigint = LIVENESS_GRACE_EPOCHS,
+): bigint | null {
+  return isWithinGrace(epoch, lastAttestedEpoch, grace) ? null : epoch + 1n;
+}

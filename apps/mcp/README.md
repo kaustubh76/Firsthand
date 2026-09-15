@@ -8,6 +8,8 @@ a hostile client can only pollute its own user's locker — deposits are valid o
 FIRSTHAND_STATIC_PRF_HEX=0x<64 hex> pnpm --filter firsthand-mcp dev   # demo/dev PRF only
 # add RPC_URL + RELAYER_PRIVATE_KEY (+ PRINCIPAL_REGISTRY) to broadcast enroll/attest/grant/rescind;
 # otherwise the tools return signed calldata for out-of-band submission.
+# BTX_RPC_URL (+ BTX_METHOD) routes rescissions over the encrypted mempool once Monad ships it;
+# until then firsthand_rescind defaults to `public` and `commit-reveal` is the un-front-runnable path.
 # firsthand_query is the buyer side: needs BUYER_PRIVATE_KEY (pays over x402) + GRANTEE_SEED_HEX
 # (X25519 key the grant wrap is sealed to); it opens the plaintext locally.
 ```

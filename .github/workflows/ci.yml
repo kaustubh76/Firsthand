@@ -99,13 +99,13 @@ jobs:
           DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           USDC_ADDRESS=0x0000000000000000000000000000000000000dc0 \
           forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
-      - name: SDK round-trips through the real contract path (Phase 1 + Phase 2 gates)
+      - name: SDK + gateway round-trips on the real contract path (Phase 1–4 gates)
         env:
           ANVIL_RPC_URL: http://127.0.0.1:8545
           DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
           RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
         run: pnpm test:anvil
-      - name: Experiments on-chain arms (S1 both layouts, S4) — dry run
+      - name: Experiments on-chain arms (S1 both layouts, S4, S2, S3 race arms) — dry run
         env:
           ANVIL_RPC_URL: http://127.0.0.1:8545
           DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
@@ -115,3 +115,7 @@ jobs:
           pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 300 --dry-run
           pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 30 --dry-run
           pnpm --filter @firsthand/experiments s2 -- --arm anchors-baseline --n 5 --dry-run
+          # S3 last: it drives anvil's mining for the race window and restores automine afterwards.
+          pnpm --filter @firsthand/experiments s3 -- --arm B2-public-mempool --n 3 --dry-run
+          pnpm --filter @firsthand/experiments s3 -- --arm commit-reveal --n 3 --dry-run
+          pnpm --filter @firsthand/experiments s3 -- --arm btx-blind --n 3 --dry-run

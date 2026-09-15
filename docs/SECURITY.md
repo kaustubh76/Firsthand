@@ -46,7 +46,9 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 - A stolen passkey is catastrophic for future epochs; platform-authenticator protections apply.
   Guardian-threshold recovery is documented as roadmap (README §13); the demo uses a single passkey.
 - Re-attestation each epoch is the liveness signal; a principal who stops re-attesting freezes their
-  grants lazily after 2 epochs (no keepers), and thaws only future epochs (README §7.6).
+  grants lazily after 2 epochs (no keepers). Re-attesting after a gap thaws one full epoch boundary
+  later (`thawEpoch`, README §7.6, ADR-0012) so flapping attestation cannot oscillate consent; gap
+  epochs can never be attested or anchored, so nothing from the frozen window is ever admitted.
 - Enroll and attest are **relayable**: authorisation is the P-256 signature under the registry's own
   EIP-712 domain (ADR-0009), never `msg.sender`, so the paying wallet is unlinkable to the principal.
   Nonces are scoped per principal; a stranger cannot burn them.
@@ -55,7 +57,7 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 
 | Threat | Code / test |
 |---|---|
-| Grantee front-runs rescission | `TxTransport` (btx vs public), `Rescissions` commit store, S3 harness (`experiments/src/scenarios/s3-rescission-race.ts`) |
+| Grantee front-runs rescission | `TxTransport` (btx vs public, path/transport consistency enforced), `Rescissions` commit store, S3 harness on chain (`experiments/src/scenarios/s3-rescission-race.ts`, findings in `experiments/README.md`) |
 | Synthetic laundering through a real passkey | `AttestationClass` + `sourceTag` in every passport; buyers filter; not prevented — see §6 |
 | Passport replay / re-mint | deterministic nonce (ADR-0005) → structural dedup; `Batcher`, `PassportAnchors.DuplicateRoot`; S4 (`s4-refusal.ts`) |
 | Stolen passkey | epoch rotation (§4) |
@@ -82,8 +84,15 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 
 ## 7. Rescission semantics
 
-- Direct path (`GrantManager.rescind`): effective at inclusion. Over BTX the payload is unreadable
-  before inclusion, so an observer's race never starts.
+- Direct path (`GrantManager.rescind`): effective at inclusion. Over BTX the payload would be
+  unreadable before inclusion. **BTX is not deployed on Monad testnet as of 2026-09**; the
+  transport ships probe-gated and refuses rather than degrading to the public mempool
+  (ADR-0006/0012). Commit-reveal is the un-front-runnable path available today.
+- Measured (S3, ADR-0012): on a fee-ordered 400 ms block, a public-mempool observer lands a
+  4-query burst before the rescission in 98 % of trials; a bot with **no signal** still lands ~6
+  continuously-paid queries in the rescission block. An encrypted mempool removes the signal, not
+  same-block fee competition — the honest guarantee is bounded loss (one block of queries at the
+  bot's own expense) plus a dated end of consent, not "the race never starts".
 - Commit-reveal fallback: `Rescissions.commit(keccak(grantId ‖ salt))` by anyone (relayable, sender
   unlinkable), reveal (`GrantManager.revealRescind`, authority-signed) within `revealWindowBlocks`;
   **the effective end of consent is the commit block**.

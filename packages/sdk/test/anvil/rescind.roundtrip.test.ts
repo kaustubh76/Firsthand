@@ -223,7 +223,7 @@ describe.skipIf(!enabled)(
         })
         .find((e) => e?.eventName === "GrantRescinded");
       expect(rescinded?.args).toMatchObject({ grantId, viaCommitReveal: false });
-      expect((rescinded?.args as { effectiveBlock: bigint }).effectiveBlock).toBe(
+      expect((rescinded?.args as { effectiveBlock?: bigint } | undefined)?.effectiveBlock).toBe(
         receipt.blockNumber,
       );
       expect(await reader.effectiveStatus(grantId)).toBe(GrantStatus.RESCINDED);
@@ -269,7 +269,7 @@ describe.skipIf(!enabled)(
         })
         .find((e) => e?.eventName === "GrantRescinded");
       expect(event?.args).toMatchObject({ grantId, viaCommitReveal: true });
-      expect((event?.args as { effectiveBlock: bigint }).effectiveBlock).toBe(
+      expect((event?.args as { effectiveBlock?: bigint } | undefined)?.effectiveBlock).toBe(
         commitReceipt.blockNumber,
       );
       expect(revealReceipt.blockNumber - commitReceipt.blockNumber).toBeLessThanOrEqual(

@@ -67,6 +67,24 @@ pnpm --filter @firsthand/experiments s2 -- --n 100                          # me
 pnpm --filter @firsthand/experiments s2 -- --arm anchors-baseline --n 100   # settle gas per query
 ```
 
+### Phase 4 gate locally (rescission paths, race harness)
+
+`pnpm test:anvil` also runs `packages/sdk/test/anvil/rescind.roundtrip.test.ts`: a `btx` plan
+through `BtxTransport` (method overridden to `eth_sendRawTransaction` so the plain node accepts the
+sealed bytes), the default method refused by the probe, a mismatched plan refused before sending,
+and commit-reveal with the commit block as effective end. S3 then races a real observer bot:
+
+```sh
+pnpm --filter @firsthand/experiments s3 -- --arm B2-public-mempool --n 50
+pnpm --filter @firsthand/experiments s3 -- --arm commit-reveal --n 50
+pnpm --filter @firsthand/experiments s3 -- --arm btx-blind --n 50        # no-signal bound, not BTX
+BTX_RPC_URL=… pnpm --filter @firsthand/experiments s3 -- --arm btx        # skipped without an endpoint
+```
+
+S3 turns automine off on the shared anvil and mines every 400 ms for the race window, restoring
+automine afterwards (and asserting it did); do not run it concurrently with the anvil test tier.
+`LOG_LEVEL=debug` prints one line per trial.
+
 To drive the gateway by hand: `DEPLOYMENTS_FILE=$PWD/deployments/31337.json SETTLEMENT_MODE=onchain
 RELAYER_PRIVATE_KEY=… pnpm --filter @firsthand/gateway dev`, then `firsthand_query` from the MCP
 server with `BUYER_PRIVATE_KEY` / `GRANTEE_SEED_HEX` set (`apps/mcp/.env.example`).

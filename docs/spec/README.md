@@ -20,6 +20,8 @@ Where the README and this file disagree, this file wins for encodings and the RE
 - **Envelope:** `"FH1E"‖0x01‖nonce24‖ct‖tag16`, XChaCha20-Poly1305; wrap = X25519 sealed box, 104 bytes. (ADR-0007)
 - **Royalty split:** floor per recipient, residual → dust pool; `1 ≤ n ≤ 16`, `Σw = 1e18`, `price ≤ 2^96−1`. (ADR-0003)
 - **Epochs:** `(t − genesis) / 604800`; `ns: uint32 ∈ [0,16)`. (ADR-0008)
+- **Liveness:** `ACTIVE ⇔ e_now ≤ e_attested + g ∧ e_now ≥ thawEpoch`; an attest after the grace
+  lapsed sets `thawEpoch = e + 1` (`PrincipalState.thawEpoch`, `PrincipalThawScheduled`). (ADR-0012)
 
 ## B. Error codes
 
@@ -28,7 +30,8 @@ FH_SIG_INVALID FH_GRANT_NOT_LIVE FH_GRANT_RESCINDED FH_GRANT_FROZEN FH_GRANT_EXP
 FH_PAYMENT_REQUIRED FH_PAYMENT_INVALID FH_NOT_FOUND FH_TRANSPORT FH_BTX_UNAVAILABLE FH_CIRCUIT_OPEN
 FH_CHAIN FH_CRYPTO`
 — `packages/core/src/errors.ts`; HTTP mapping via `toProblemDetails` (RFC 9457). Solidity custom
-errors share names (`RefusedOrigin`, `DuplicateRoot`, `GrantNotLive`, …).
+errors share names (`RefusedOrigin`, `DuplicateRoot`, `GrantNotLive`, …). A direct rescind plan
+sent over a transport of another kind is `FH_VALIDATION` with `{path, transport}` (ADR-0012).
 
 `verify()` reason codes: `SIG_INVALID MERKLE_INVALID ROOT_UNKNOWN TERMS_MISMATCH EPOCH_OUT_OF_GRANT
 GRANT_NOT_LIVE GRANT_RESCINDED GRANT_EXPIRED GRANT_FROZEN SCOPE_MISMATCH` — identical in
@@ -45,7 +48,7 @@ and `demand.test.ts`.
 | Port | Supply / demand | Live implementation |
 |---|---|---|
 | `AnchorWriter` (`anchor`, `isAnchored`, `isIncluded`, `anchorOf`) | supply | `OnchainAnchorWriter` (viem) |
-| `TxTransport` | supply | `PublicMempoolTransport`; BTX in Phase 4 |
+| `TxTransport` | supply | `PublicMempoolTransport`; `BtxTransport` (sign → seal → post, refuses `FH_BTX_UNAVAILABLE` until the node knows the method — BTX is not on Monad testnet 2026-09) |
 | `BlobStore` | supply | memory / fs |
 | `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog` |
 | `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLiveness`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |

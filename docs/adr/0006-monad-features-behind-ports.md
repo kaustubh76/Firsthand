@@ -21,7 +21,8 @@ in-memory double; experiment arms (README §15) are adapter selections, never co
 | ERC-8004 | `Erc8004Registry` | `OnchainErc8004Registry` (shell) | ECIES over card key if no X25519 field | `MemoryErc8004Registry` |
 | Envio | `ConsentLedger` | `EnvioConsentLedger` (shell) | — | `MemoryConsentLedger` |
 
-- `BtxTransport.send` fails with `FH_BTX_UNAVAILABLE` until the RPC surface is confirmed — callers must
-  choose commit-reveal explicitly; nothing degrades silently to the public mempool.
+- `BtxTransport.send` fails with `FH_BTX_UNAVAILABLE` until the node knows the method (probe-gated;
+  BTX is not on Monad testnet as of 2026-09, ADR-0012) — callers must choose commit-reveal
+  explicitly; nothing degrades silently to the public mempool.
 - On-chain, BTX is a transport property, not a contract API: `GrantManager.rescind` is the same call
   on both arms; `Rescissions` is a pure commit store anyone may post to (relayable, unlinkable sender).

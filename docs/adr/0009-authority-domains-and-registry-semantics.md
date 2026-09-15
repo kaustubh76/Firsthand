@@ -24,8 +24,8 @@ whose struct happened to collide, and would couple every contract's address into
 4. **Nonces are scoped per principal** (`_nonceUsed[principalId][nonce]`) and shared across both
    verbs; a stranger cannot burn them, and a failed call rolls the nonce back.
 5. **FROZEN is derived, never stored.** `effectiveStatus` / `isLive` compute it from
-   `lastAttestedEpoch + livenessGrace`; the stored `status` stays `ACTIVE`. Thaw-after-one-epoch for
-   grants (README §7.6) belongs to `GrantManager` (Phase 3).
+   `lastAttestedEpoch + livenessGrace`; the stored `status` stays `ACTIVE`. Thaw-after-one-epoch
+   (README §7.6) is the registry's `thawEpoch` (ADR-0012); `GrantManager` keeps delegating to `isLive`.
 
 ## Consequences
 

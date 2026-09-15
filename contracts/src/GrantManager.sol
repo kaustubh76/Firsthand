@@ -14,7 +14,7 @@ import {Card, GrantState, GrantStatus, RegisteredTerms, TermsInput} from "./type
 /// @notice Grant lifecycle (README §7.2, §7.5, §11): terms accepted by a grantee card, grants and rescissions
 ///         signed by the principal's passkey-derived P-256 authority key, status derived lazily — no keepers.
 /// @dev    Immutable; no admin. Nonces are scoped: card nonces under the card id, principal nonces under the
-///         principal id. FROZEN thaw-after-boundary (README §7.6) lands with Phase 4.
+///         principal id. FROZEN and its thaw boundary (README §7.6) are the registry's (`isLive`).
 contract GrantManager is IGrantManager {
     IPrincipalRegistry internal immutable _registry;
     IRescissions internal immutable _rescissions;

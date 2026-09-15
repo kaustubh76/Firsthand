@@ -49,8 +49,12 @@ contract PrincipalRegistry is IPrincipalRegistry {
         // The precompile rejects off-curve points, so key validity is checked here as well.
         if (!P256.verifySignature(digest, authoritySig, x, y)) revert InvalidAuthoritySignature();
 
-        _principals[principalId] =
-            PrincipalState({p256KeyCommit: principalId, lastAttestedEpoch: epoch, status: PrincipalStatus.ACTIVE});
+        _principals[principalId] = PrincipalState({
+            p256KeyCommit: principalId,
+            lastAttestedEpoch: epoch,
+            status: PrincipalStatus.ACTIVE,
+            thawEpoch: 0
+        });
         _keys[principalId] = [x, y];
         emit PrincipalEnrolled(principalId, x, y, epoch);
     }
@@ -74,6 +78,12 @@ contract PrincipalRegistry is IPrincipalRegistry {
         uint256[2] storage xy = _keys[principalId];
         if (!P256.verifySignature(digest, authoritySig, xy[0], xy[1])) revert InvalidAuthoritySignature();
 
+        // README §7.6: leaving FROZEN restores future epochs only after one full boundary. Gap epochs can
+        // never be attested (hence never anchored), so only the grant's return to ACTIVE is delayed.
+        if (!EpochLib.withinGrace(epoch, p.lastAttestedEpoch, livenessGrace)) {
+            p.thawEpoch = epoch + 1;
+            emit PrincipalThawScheduled(principalId, p.lastAttestedEpoch + livenessGrace + 1, epoch + 1);
+        }
         p.lastAttestedEpoch = epoch;
         _depositKeysRoot[principalId][epoch] = depositKeysRoot_;
         emit PrincipalAttested(principalId, epoch, depositKeysRoot_);
@@ -113,7 +123,9 @@ contract PrincipalRegistry is IPrincipalRegistry {
     ) public view returns (PrincipalStatus) {
         PrincipalState storage p = _principals[principalId];
         if (p.p256KeyCommit == bytes32(0)) return PrincipalStatus.NONE;
-        return EpochLib.withinGrace(currentEpoch(), p.lastAttestedEpoch, livenessGrace)
+        uint64 now_ = currentEpoch();
+        if (now_ < p.thawEpoch) return PrincipalStatus.FROZEN;
+        return EpochLib.withinGrace(now_, p.lastAttestedEpoch, livenessGrace)
             ? PrincipalStatus.ACTIVE
             : PrincipalStatus.FROZEN;
     }

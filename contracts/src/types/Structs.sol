@@ -49,6 +49,7 @@ struct PrincipalState {
     bytes32 p256KeyCommit; // keccak256(abi.encode(x, y)) of the enrolled authority key
     uint64 lastAttestedEpoch; // liveness
     PrincipalStatus status;
+    uint64 thawEpoch; // first epoch a re-attested principal counts as live again (README §7.6); 0 = none scheduled
 }
 
 /// @dev README §11 `GrantState`. `queriesThisEpoch` lives in ReceiptLedger (decision #3).

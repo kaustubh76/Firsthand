@@ -140,8 +140,39 @@ contract PrincipalRegistryFuzzTest is Test {
 
         bytes32 root = keccak256(abi.encode(later));
         attestFor(sk, id, later, root, bytes32(uint256(2)));
-        assertTrue(registry.isLive(id));
+        uint64 grace = registry.livenessGrace();
+        bool gap = later > e0 + grace;
+        assertEq(registry.isLive(id), !gap, "a gap attest stays frozen until the next boundary");
+        assertEq(registry.principal(id).thawEpoch, gap ? later + 1 : 0, "thaw scheduled only after a gap");
         assertEq(registry.principal(id).lastAttestedEpoch, later);
         assertEq(registry.depositKeysRoot(id, later), root);
+        warpTo(later + 1);
+        assertTrue(registry.isLive(id), "one boundary after any attest the principal is live");
+    }
+
+    /// @notice Liveness is exactly `withinGrace(now, lastAttested, grace) && now >= thawEpoch` across any sequence
+    ///         of attests with arbitrary gaps (the invariant both twins implement).
+    function testFuzz_thawInvariant(uint256 seed, uint16 e0Seed, uint8[4] memory skips, uint8 probe) public {
+        uint256 sk = boundKey(seed);
+        uint64 e0 = uint64(e0Seed);
+        warpTo(e0);
+        (Enrol memory e, bytes32 id) = enrolFor(sk, e0, bytes32(uint256(1)));
+        submit(e);
+        uint64 grace = registry.livenessGrace();
+        uint64 at = e0;
+        uint64 expectedThaw = 0;
+        for (uint256 i = 0; i < skips.length; i++) {
+            if (skips[i] == 0) continue; // AlreadyAttested otherwise
+            uint64 next = at + uint64(skips[i]);
+            if (next > at + grace) expectedThaw = next + 1;
+            warpTo(next);
+            attestFor(sk, id, next, keccak256(abi.encode(next)), bytes32(uint256(2 + i)));
+            at = next;
+        }
+        assertEq(registry.principal(id).thawEpoch, expectedThaw);
+        uint64 now_ = at + uint64(probe);
+        warpTo(now_);
+        bool expectLive = now_ <= at + grace && now_ >= expectedThaw;
+        assertEq(registry.isLive(id), expectLive, "isLive == withinGrace && now >= thawEpoch");
     }
 }

@@ -13,6 +13,7 @@ networks:
         events:
           - event: PrincipalEnrolled(bytes32 indexed principalId, uint256 x, uint256 y, uint64 epoch)
           - event: PrincipalAttested(bytes32 indexed principalId, uint64 indexed epoch, bytes32 depositKeysRoot)
+          - event: PrincipalThawScheduled(bytes32 indexed principalId, uint64 frozenFromEpoch, uint64 thawEpoch)
       - name: PassportAnchors
         address: "0x0000000000000000000000000000000000000000"
         handler: src/EventHandlers.ts

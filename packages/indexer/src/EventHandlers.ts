@@ -6,6 +6,7 @@
  *
  *   PrincipalRegistry.PrincipalEnrolled  → Principal + ConsentEvent(enrolled)
  *   PrincipalRegistry.PrincipalAttested  → Principal.lastAttestedEpoch + ConsentEvent(attested)
+ *   PrincipalRegistry.PrincipalThawScheduled → Principal.thawEpoch (grants FROZEN until then, README §7.6)
  *   PassportAnchors.BatchAnchored        → Anchor
  *   GrantManager.GrantCreated            → Grant(status=ACTIVE) + ConsentEvent(granted)
  *   GrantManager.GrantRescinded          → Grant.status=RESCINDED, effectiveBlock + ConsentEvent(rescinded)

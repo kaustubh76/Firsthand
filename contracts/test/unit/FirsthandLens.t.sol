@@ -118,8 +118,12 @@ contract FirsthandLensTest is GrantFixture {
         (, reason) = termsMismatchCase();
         assertEq(uint8(reason), uint8(VerifyFailure.TERMS_MISMATCH));
 
-        // Status: frozen (no re-attest by epoch 8), then expired (epoch 9), then rescinded.
+        // Status: frozen (no re-attest by epoch 8) — and still frozen after a same-epoch re-attest, since the
+        // thaw waits one boundary (README §7.6; the Lens only delegates) — then expired (epoch 9), then rescinded.
         warpToEpoch(8);
+        (, reason) = verifyWith(passport, passportSig, root, proof, grantId);
+        assertEq(uint8(reason), uint8(VerifyFailure.GRANT_FROZEN));
+        attestKeys(8, bytes32(uint256(80)));
         (, reason) = verifyWith(passport, passportSig, root, proof, grantId);
         assertEq(uint8(reason), uint8(VerifyFailure.GRANT_FROZEN));
         warpToEpoch(9);

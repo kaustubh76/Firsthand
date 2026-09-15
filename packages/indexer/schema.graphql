@@ -6,6 +6,7 @@ type Principal {
   keyY: BigInt!
   enrolledEpoch: BigInt!
   lastAttestedEpoch: BigInt!
+  thawEpoch: BigInt! # 0 = none scheduled; grants stay FROZEN while epochNow < thawEpoch (README §7.6)
   anchors: [Anchor!]! @derivedFrom(field: "principal")
   grants: [Grant!]! @derivedFrom(field: "principal")
   events: [ConsentEvent!]! @derivedFrom(field: "principal")

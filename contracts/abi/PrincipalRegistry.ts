@@ -298,6 +298,11 @@ export const PrincipalRegistryAbi = [
             "name": "status",
             "type": "uint8",
             "internalType": "enum PrincipalStatus"
+          },
+          {
+            "name": "thawEpoch",
+            "type": "uint64",
+            "internalType": "uint64"
           }
         ]
       }
@@ -353,6 +358,31 @@ export const PrincipalRegistryAbi = [
       },
       {
         "name": "epoch",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PrincipalThawScheduled",
+    "inputs": [
+      {
+        "name": "principalId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "frozenFromEpoch",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "thawEpoch",
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"

@@ -160,15 +160,19 @@ contract GrantManagerTest is GrantFixture {
     // ── status derivation ───────────────────────────────────────────────────────────────────────
 
     function test_statusPrecedence_expiredBeatsFrozen_frozenDerivedFromRegistry() public {
-        bytes32 grantId = doGrant(); // start 5, term 4 → expires at 9 ; principal attested 5, grace 2 → frozen at 8
+        GrantArgs memory g = defaultGrant();
+        g.term = 6; // start 5 → expires at 11 ; principal attested 5, grace 2 → frozen at 8
+        bytes32 grantId = submitGrant(g, grantSig(AUTHORITY_SK, g));
         warpToEpoch(7);
         assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.ACTIVE));
         warpToEpoch(8);
         assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.FROZEN));
-        // Re-attest → thaws (Phase 4 adds the one-epoch-boundary rule).
+        // Re-attest after the gap: still FROZEN this epoch, ACTIVE from the next boundary (README §7.6).
         attest(AUTHORITY_SK, principalId, 8, bytes32(uint256(50)));
-        assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.ACTIVE));
+        assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.FROZEN), "thaw waits one boundary");
         warpToEpoch(9);
+        assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.ACTIVE));
+        warpToEpoch(11);
         assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.EXPIRED));
         warpToEpoch(20); // both expired and frozen: EXPIRED wins
         assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.EXPIRED));

@@ -13,6 +13,9 @@ import {PrincipalState, PrincipalStatus} from "../types/Structs.sol";
 interface IPrincipalRegistry {
     event PrincipalEnrolled(bytes32 indexed principalId, uint256 x, uint256 y, uint64 epoch);
     event PrincipalAttested(bytes32 indexed principalId, uint64 indexed epoch, bytes32 depositKeysRoot);
+    /// @notice A principal re-attested after its liveness grace lapsed; grants stay FROZEN until `thawEpoch`
+    ///         (one full epoch boundary, README §7.6) so flapping attestation cannot oscillate consent.
+    event PrincipalThawScheduled(bytes32 indexed principalId, uint64 frozenFromEpoch, uint64 thawEpoch);
 
     error AlreadyEnrolled(bytes32 principalId);
     error UnknownPrincipal(bytes32 principalId);
@@ -50,7 +53,8 @@ interface IPrincipalRegistry {
     function isLive(
         bytes32 principalId
     ) external view returns (bool);
-    /// @notice ACTIVE, FROZEN (derived: past liveness grace) or NONE (not enrolled). Never stored as FROZEN.
+    /// @notice ACTIVE, FROZEN (derived: past liveness grace, or before a scheduled `thawEpoch`) or NONE
+    ///         (not enrolled). Never stored as FROZEN.
     function effectiveStatus(
         bytes32 principalId
     ) external view returns (PrincipalStatus);

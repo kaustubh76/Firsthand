@@ -200,9 +200,54 @@ contract PrincipalRegistryTest is Test {
         assertEq(uint8(registry.effectiveStatus(principalId)), uint8(PrincipalStatus.FROZEN));
         assertEq(uint8(registry.principal(principalId).status), uint8(PrincipalStatus.ACTIVE), "FROZEN is never stored");
 
-        doAttest(8, keccak256("back"), bytes32(uint256(2)));
-        assertTrue(registry.isLive(principalId));
+        // Re-attesting after a gap schedules the thaw one full boundary later (README §7.6): frozen from
+        // epoch 8 (= 5 + grace + 1), live again from epoch 9.
+        bytes memory sig =
+            P256Signer.sign(vm, scalar, attestDigest(principalId, 8, keccak256("back"), bytes32(uint256(2))));
+        vm.expectEmit(true, false, false, true);
+        emit IPrincipalRegistry.PrincipalThawScheduled(principalId, 8, 9);
+        registry.attest(principalId, 8, keccak256("back"), bytes32(uint256(2)), sig);
+        assertFalse(registry.isLive(principalId), "same epoch: still frozen");
+        assertEq(uint8(registry.effectiveStatus(principalId)), uint8(PrincipalStatus.FROZEN));
+        assertEq(registry.principal(principalId).thawEpoch, 9);
+        assertEq(registry.principal(principalId).lastAttestedEpoch, 8);
+
+        vm.warp(GENESIS + 9 * LEN);
+        assertTrue(registry.isLive(principalId), "one boundary later: live");
         assertEq(uint8(registry.effectiveStatus(principalId)), uint8(PrincipalStatus.ACTIVE));
+        vm.warp(GENESIS + 11 * LEN);
+        assertFalse(registry.isLive(principalId), "8 + grace + 1: frozen again without a new attest");
+    }
+
+    function test_attestWithinGraceDoesNotScheduleThaw() public {
+        doEnroll(bytes32(uint256(1))); // lastAttested = 5
+        vm.warp(GENESIS + 7 * LEN); // 7 == 5 + grace: still live
+        vm.recordLogs();
+        doAttest(7, keccak256("ok"), bytes32(uint256(2)));
+        assertEq(vm.getRecordedLogs().length, 1, "only PrincipalAttested");
+        assertEq(registry.principal(principalId).thawEpoch, 0);
+        assertTrue(registry.isLive(principalId));
+    }
+
+    function test_thawEpochSurvivesLaterAttests() public {
+        doEnroll(bytes32(uint256(1)));
+        vm.warp(GENESIS + 8 * LEN);
+        doAttest(8, keccak256("back"), bytes32(uint256(2))); // thaw at 9
+        vm.warp(GENESIS + 9 * LEN);
+        doAttest(9, keccak256("again"), bytes32(uint256(3)));
+        assertEq(registry.principal(principalId).thawEpoch, 9, "a passed thaw is never cleared");
+        assertTrue(registry.isLive(principalId));
+        // A second gap reschedules.
+        vm.warp(GENESIS + 15 * LEN);
+        doAttest(15, keccak256("late"), bytes32(uint256(4)));
+        assertEq(registry.principal(principalId).thawEpoch, 16);
+        assertFalse(registry.isLive(principalId));
+    }
+
+    function test_enrollHasNoThaw() public {
+        doEnroll(bytes32(uint256(1)));
+        assertEq(registry.principal(principalId).thawEpoch, 0);
+        assertTrue(registry.isLive(principalId));
     }
 
     function test_noncesAreScopedPerPrincipal() public {

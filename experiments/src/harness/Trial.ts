@@ -12,6 +12,8 @@ export const TrialResultSchema = z.object({
   /** True when the run exercised a real chain rather than memory doubles. */
   onChain: z.boolean(),
   notes: z.array(z.string()),
+  /** Raw per-trial samples behind a metric (README §15 asks for the Δ_race distribution); null = cut off. */
+  samples: z.record(z.string(), z.array(z.number().nullable())).optional(),
 });
 export type TrialResult = z.infer<typeof TrialResultSchema>;
 

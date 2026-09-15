@@ -1,5 +1,6 @@
 import type { Runner } from "./harness/Runner.js";
 import type { TrialResult } from "./harness/Trial.js";
+import { percentile } from "./metrics/stats.js";
 
 /** Renders results/*.json as the markdown tables README §15 promises. */
 export function renderReport(runner: Runner): string {
@@ -23,8 +24,21 @@ export function renderReport(runner: Runner): string {
     );
     for (const t of file.trials) lines.push(row(t, metricNames));
     lines.push("");
+    for (const t of file.trials) {
+      for (const [name, values] of Object.entries(t.samples ?? {})) {
+        lines.push(`- ${t.arm} · ${name}: ${distribution(values)}`);
+      }
+    }
+    if (file.trials.some((t) => t.samples)) lines.push("");
   }
   return lines.join("\n");
+}
+
+function distribution(values: readonly (number | null)[]): string {
+  const finite = values.filter((v): v is number => v !== null);
+  const cutOff = values.length - finite.length;
+  if (finite.length === 0) return `n=${values.length}, all cut off`;
+  return `n=${values.length} (cut off ${cutOff}) min=${Math.min(...finite)} p50=${percentile(finite, 50)} p95=${percentile(finite, 95)} max=${Math.max(...finite)}`;
 }
 
 function row(t: TrialResult, names: readonly string[]): string {

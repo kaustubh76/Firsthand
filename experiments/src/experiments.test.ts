@@ -51,12 +51,58 @@ describe("experiments harness", () => {
     expect(report).toContain("## S4");
     expect(report).toContain("| memory | sim |");
     expect(report).toContain("_no trials recorded_"); // s2/s3 were dry runs
-    expect(summarise([])).toEqual({ successRate: 0, medianDelta: null, n: 0 });
+    expect(summarise([])).toMatchObject({
+      successRate: 0,
+      medianDelta: null,
+      p50: null,
+      p95: null,
+      n: 0,
+      deltas: [],
+      settlementsAfterConsentEnd: 0,
+    });
     expect(
       summarise([
-        { rescindBroadcastMs: 0, rescindEffectiveMs: 10, extractionCompleteMs: 5 },
-        { rescindBroadcastMs: 0, rescindEffectiveMs: 10, extractionCompleteMs: null },
+        { rescindBroadcastMs: 0, rescindEffectiveMs: 10, extractionCompleteMs: 5, detectionMs: 2 },
+        {
+          rescindBroadcastMs: 0,
+          rescindEffectiveMs: 10,
+          extractionCompleteMs: null,
+          settlementsAfterConsentEnd: 3,
+        },
       ]),
-    ).toEqual({ successRate: 0.5, medianDelta: 5, n: 2 });
+    ).toMatchObject({
+      successRate: 0.5,
+      medianDelta: 5,
+      p50: 5,
+      p95: 5,
+      min: 5,
+      max: 5,
+      n: 2,
+      deltas: [5, null],
+      detectionLatencyP50: 2,
+      inclusionDelayP50: 10,
+      settlementsAfterConsentEnd: 3,
+    });
+  });
+
+  it("persists raw samples next to the metrics and renders their distribution", async () => {
+    const runner = new Runner({ resultsDir: dir, clock: fixedClock() });
+    const trial = {
+      scenario: "s3" as const,
+      arm: "B2-public-mempool",
+      hypothesis: "H2" as const,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      durationMs: 1,
+      metrics: { trials: { value: 3, unit: "count" } },
+      onChain: true,
+      notes: [],
+      samples: { deltaRaceMs: [12, null, 40] },
+    };
+    (runner as unknown as { append(t: typeof trial): void }).append(trial);
+    expect(runner.load("s3").trials[0]?.samples).toEqual({ deltaRaceMs: [12, null, 40] });
+    const report = renderReport(runner);
+    expect(report).toContain(
+      "B2-public-mempool · deltaRaceMs: n=3 (cut off 1) min=12 p50=40 p95=40 max=40",
+    );
   });
 });

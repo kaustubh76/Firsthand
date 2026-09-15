@@ -1,11 +1,19 @@
+import { percentile, percentileOrNull } from "./stats.js";
+
 /**
  * H2 metric: Δ_race = t_extraction_complete − t_rescind_broadcast (README §7.4).
  * Negative or zero means the rescission landed before the observer finished extracting.
+ * `rescindEffectiveMs` is when consent ended (inclusion; the commit block for commit-reveal).
  */
 export interface RaceSample {
   readonly rescindBroadcastMs: number;
   readonly rescindEffectiveMs: number;
-  readonly extractionCompleteMs: number | null; // null when the bot was cut off
+  /** When the first extraction ordered before the effective point was observed mined; null when cut off. */
+  readonly extractionCompleteMs: number | null;
+  /** When the bot first saw the rescission in the mempool (public arms); null when it had no signal. */
+  readonly detectionMs?: number | null;
+  /** Settlements that landed after consent ended — post-consent receipts (commit-reveal accountability). */
+  readonly settlementsAfterConsentEnd?: number;
 }
 
 export function deltaRace(sample: RaceSample): number | null {
@@ -14,23 +22,46 @@ export function deltaRace(sample: RaceSample): number | null {
     : sample.extractionCompleteMs - sample.rescindBroadcastMs;
 }
 
-export function summarise(samples: readonly RaceSample[]): {
-  successRate: number;
-  medianDelta: number | null;
-  n: number;
-} {
-  const deltas = samples
-    .map(deltaRace)
-    .filter((d): d is number => d !== null)
-    .sort((a, b) => a - b);
+export interface RaceSummary {
+  readonly n: number;
+  readonly successRate: number;
+  readonly deltas: readonly (number | null)[];
+  readonly p50: number | null;
+  readonly p95: number | null;
+  readonly min: number | null;
+  readonly max: number | null;
+  /** Alias of p50 (nearest-rank), kept for the original H2 wording. */
+  readonly medianDelta: number | null;
+  readonly detectionLatencyP50: number | null;
+  readonly inclusionDelayP50: number;
+  readonly settlementsAfterConsentEnd: number;
+}
+
+export function summarise(samples: readonly RaceSample[]): RaceSummary {
+  const deltas = samples.map(deltaRace);
+  const finite = deltas.filter((d): d is number => d !== null);
   const successes = samples.filter(
     (s) => s.extractionCompleteMs !== null && s.extractionCompleteMs < s.rescindEffectiveMs,
   ).length;
-  const median =
-    deltas.length === 0 ? null : (deltas[Math.floor((deltas.length - 1) / 2)] as number);
+  const detections = samples
+    .map((s) => (s.detectionMs == null ? null : s.detectionMs - s.rescindBroadcastMs))
+    .filter((d): d is number => d !== null);
+  const inclusion = samples.map((s) => s.rescindEffectiveMs - s.rescindBroadcastMs);
+  const p50 = percentileOrNull(finite, 50);
   return {
-    successRate: samples.length === 0 ? 0 : successes / samples.length,
-    medianDelta: median,
     n: samples.length,
+    successRate: samples.length === 0 ? 0 : successes / samples.length,
+    deltas,
+    p50,
+    p95: finite.length === 0 ? null : percentile(finite, 95),
+    min: finite.length === 0 ? null : Math.min(...finite),
+    max: finite.length === 0 ? null : Math.max(...finite),
+    medianDelta: p50,
+    detectionLatencyP50: percentileOrNull(detections, 50),
+    inclusionDelayP50: percentile(inclusion, 50),
+    settlementsAfterConsentEnd: samples.reduce(
+      (acc, s) => acc + (s.settlementsAfterConsentEnd ?? 0),
+      0,
+    ),
   };
 }

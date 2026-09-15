@@ -1,5 +1,5 @@
 import { Arms } from "../arms/index.js";
-import { ObserverBot } from "../bots/ObserverBot.js";
+import { SimObserverBot as ObserverBot } from "../bots/SimObserverBot.js";
 import type { Scenario } from "../harness/Runner.js";
 import { summarise } from "../metrics/raceWindow.js";
 

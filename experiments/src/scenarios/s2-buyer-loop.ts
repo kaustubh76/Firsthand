@@ -6,7 +6,6 @@ import {
   MemorySettlement,
   OnchainGrantReader,
   OnchainSettlement,
-  type PaymentRequirements,
   type Settlement,
 } from "@firsthand/adapters";
 import {
@@ -19,21 +18,24 @@ import {
   verifyPredicate,
 } from "@firsthand/core";
 import {
-  BuyerSession,
-  createBuyerKeys,
   deposit,
   exportManifest,
   planDirectRescind,
-  planGrant,
-  sendGrant,
   sendRescind,
   sidecarFor,
   verifyManifest,
 } from "@firsthand/sdk";
-import { parseAbi } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { Arms, resolveArm } from "../arms/index.js";
+import {
+  buyerAccount,
+  grantTo,
+  mintUsdc,
+  newBuyer,
+  registerAndAccept,
+  requirementsFor,
+} from "../demand/setup.js";
 import type { RunContext, Scenario } from "../harness/Runner.js";
+import { percentile } from "../metrics/stats.js";
 import { ATTESTATION, datumBytes, seededLocker, termsFor } from "./common.js";
 
 /**
@@ -42,14 +44,6 @@ import { ATTESTATION, datumBytes, seededLocker, termsFor } from "./common.js";
  * settlement gas and predicate latency; the HTTP surface is covered by the gateway's live-chain gate.
  * Memory arm uses the accounting double; `anchors-baseline` runs RoyaltyRouter.settle for real.
  */
-const BUYER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as const; // anvil #2
-const usdcAbi = parseAbi(["function mint(address to, uint256 value)"]);
-
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] as number;
-}
 
 export const s2: Scenario = {
   id: "s2",
@@ -73,51 +67,44 @@ export const s2: Scenario = {
     const sidecar = sidecarFor(locker, batcher, r, terms);
 
     // Buyer, grant reader and settlement per arm.
-    const buyerAccount = privateKeyToAccount(BUYER_KEY);
+    const buyer = buyerAccount();
     let grants: GrantReader;
     let settlement: Settlement;
     let grantId: Bytes32;
     let payTo: Address;
     let asset: Address;
-    const buyerKeys = createBuyerKeys(
-      new Uint8Array(Buffer.from(BUYER_KEY.slice(2), "hex")),
-      buyerAccount,
-      new Uint8Array(32).fill(7),
-    );
     const chainId = adapters.domain?.chainId ?? 10143n;
 
     if (adapters.chain) {
       const { clients, deployment } = adapters.chain;
       if (!clients.walletClient) throw new Error("relayer wallet");
       const grantManager = deployment.GrantManager.toLowerCase() as Address;
-      const buyer = new BuyerSession({
-        keys: buyerKeys,
+      const session = newBuyer({
         grantManager,
         chainId,
         transport: adapters.transport,
+        granteeSeed: new Uint8Array(32).fill(7),
       });
       const wait = (hash: Bytes32) => clients.publicClient.waitForTransactionReceipt({ hash });
-      await wait(
-        await clients.walletClient.writeContract({
-          address: deployment.USDC.toLowerCase() as Address,
-          abi: usdcAbi,
-          functionName: "mint",
-          args: [buyerAccount.address, BigInt(n) * 1_000n + 1_000n],
-        }),
+      await mintUsdc(
+        clients.walletClient,
+        clients.publicClient,
+        deployment.USDC.toLowerCase() as Address,
+        buyer.address,
+        BigInt(n) * 1_000n + 1_000n,
       );
       // The relayer submits the buyer-signed acceptance (relayable) so one account drives all txs.
-      await wait((await buyer.registerCard()).txHash);
-      const accept = buyer.acceptTerms(locker.principalId, terms);
-      await wait((await accept.send()).txHash);
-      const plan = planGrant(locker, grantManager, {
-        granteeCard: buyer.cardId,
-        granteeEncryptionPubKey: buyer.encryptionPubKey,
+      const termsHash = await registerAndAccept(session, locker.principalId, terms, wait);
+      grantId = await grantTo({
+        locker,
+        grantManager,
+        transport: adapters.transport,
+        buyer: session,
+        termsHash,
         ns: 0,
-        termsHash: hashTerms(terms),
         term: 4n,
+        wait,
       });
-      await wait((await sendGrant(locker, adapters.transport, plan)).txHash);
-      grantId = plan.grantId;
       grants = new OnchainGrantReader({
         publicClient: clients.publicClient,
         grantManager,
@@ -137,8 +124,13 @@ export const s2: Scenario = {
       const ledger = new MemoryConsentLedger();
       mg.enroll(locker.principalId);
       const cardId = mg.registerCard(
-        buyerAccount.address.toLowerCase() as Address,
-        buyerKeys.grantee.publicKey,
+        buyer.address.toLowerCase() as Address,
+        newBuyer({
+          grantManager: `0x${"b1".repeat(20)}`,
+          chainId,
+          transport: adapters.transport,
+          granteeSeed: new Uint8Array(32).fill(7),
+        }).encryptionPubKey,
       );
       const th = mg.acceptTerms(cardId, locker.principalId, terms);
       grantId = mg.grant({
@@ -154,18 +146,14 @@ export const s2: Scenario = {
       asset = `0x${"dc".repeat(20)}`;
     }
 
-    const requirements: PaymentRequirements = {
-      scheme: "exact",
-      network: "monad-testnet",
-      maxAmountRequired: terms.price.toString(),
-      resource: "firsthand://s2",
-      description: "S2",
-      mimeType: "application/json",
+    const requirements = requirementsFor({
       payTo,
-      maxTimeoutSeconds: 3600,
       asset,
-      extra: { chainId: chainId.toString(), chainTime: (await grants.chainTime()).toString() },
-    };
+      chainId,
+      price: terms.price,
+      chainTime: await grants.chainTime(),
+      resource: "firsthand://s2",
+    });
 
     // The loop: verify → pay → settle, timed.
     const latencies: number[] = [];
@@ -202,7 +190,7 @@ export const s2: Scenario = {
         epochNow,
       });
       if (!verdict.ok) throw new Error(`S2: verify failed: ${verdict.reason}`);
-      const payment = await buildPaymentPayload(buyerAccount, requirements);
+      const payment = await buildPaymentPayload(buyer, requirements);
       const settled = await settlement.settle({ grantId, terms, payment });
       latencies.push(ctx.clock.nowMs() - t0);
       if (settled.gasUsed !== null) gas.push(settled.gasUsed);
@@ -268,7 +256,7 @@ export const s2: Scenario = {
       await settlement.settle({
         grantId,
         terms,
-        payment: await buildPaymentPayload(buyerAccount, requirements),
+        payment: await buildPaymentPayload(buyer, requirements),
       });
     } catch (error) {
       refusedAfterRescind = error instanceof GrantError || error instanceof ChainError;

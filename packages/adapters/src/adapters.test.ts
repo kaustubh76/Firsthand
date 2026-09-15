@@ -5,6 +5,8 @@ import {
   type Address,
   type Bytes32,
   ChainError,
+  hexToBytes,
+  keccak256Hex,
   NotImplementedError,
   PaymentError,
   TransportError,
@@ -254,34 +256,103 @@ describe("MemoryErc8004Registry / MemoryConsentLedger", () => {
 describe("BtxTransport", () => {
   const rpc = (body: unknown): typeof fetch =>
     (async () => new Response(JSON.stringify(body))) as unknown as typeof fetch;
-  it("reports unavailable when the node does not know the method, and refuses to send", async () => {
-    const t = new BtxTransport({
-      rpcUrl: "http://node",
-      fetch: rpc({ error: { code: -32601, message: "method not found" } }),
-    });
+  /** Records what a viem wallet would be asked to do; signs by tagging the request. */
+  const fakeWallet = () => {
+    const calls: string[] = [];
+    const wallet = {
+      prepareTransactionRequest: async (req: Record<string, unknown>) => {
+        calls.push("prepare");
+        return { ...req, nonce: 7, gas: 21_000n };
+      },
+      signTransaction: async (req: { nonce: number }) => {
+        calls.push("sign");
+        return `0x02f8${req.nonce.toString(16).padStart(2, "0")}aa` as const;
+      },
+    };
+    return {
+      calls,
+      wallet: wallet as unknown as ConstructorParameters<typeof BtxTransport>[0]["wallet"],
+    };
+  };
+  /** Scripted JSON-RPC: first call is the probe, later calls are sends. */
+  const scripted = (probe: unknown, ...sends: unknown[]) => {
+    const bodies: { method: string; params: unknown[] }[] = [];
+    const answers = [probe, ...sends];
+    const fetchFn = (async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as { method: string; params: unknown[] });
+      return new Response(JSON.stringify(answers.shift() ?? { result: null }));
+    }) as unknown as typeof fetch;
+    return { bodies, fetchFn };
+  };
+  const available = { error: { code: -32602, message: "invalid params" } };
+  const unavailable = { error: { code: -32601, message: "method not found" } };
+
+  it("reports unavailable when the node does not know the method, refuses to send, never touches the wallet", async () => {
+    const { calls, wallet } = fakeWallet();
+    const t = new BtxTransport({ rpcUrl: "http://node", wallet, fetch: rpc(unavailable) });
     expect(t.kind).toBe("btx");
+    expect(t.method).toBe("eth_sendEncryptedRawTransaction");
     expect((await t.probe()).encryptedMempool).toBe(false);
     expect((await t.capabilities()).encryptedMempool).toBe(false);
     await expect(t.send({ to: addr(1), data: "0x" })).rejects.toMatchObject({
       code: "FH_BTX_UNAVAILABLE",
     });
+    expect(calls).toEqual([]);
   });
-  it("reports available when the method exists (send still gated until Phase 4)", async () => {
+  it("signs, seals and posts the raw transaction when the method exists", async () => {
+    const { calls, wallet } = fakeWallet();
+    const { bodies, fetchFn } = scripted(available, { result: `0x${"ab".repeat(32)}` });
+    const sealed: string[] = [];
     const t = new BtxTransport({
       rpcUrl: "http://node",
-      fetch: rpc({ error: { code: -32602, message: "invalid params" } }),
+      wallet,
+      method: "monad_sendSealedTransaction",
+      seal: async (raw) => {
+        sealed.push(raw);
+        return `0xsealed${raw.slice(2)}` as `0x${string}`;
+      },
+      fetch: fetchFn,
+      now: () => 4242,
     });
-    expect((await t.capabilities()).encryptedMempool).toBe(true);
-    await expect(t.send({ to: addr(1), data: "0x" })).rejects.toThrow(TransportError);
+    const ref = await t.send({ to: addr(1), data: "0xdead", gas: 50_000n });
+    expect(calls).toEqual(["prepare", "sign"]);
+    expect(sealed).toEqual(["0x02f807aa"]);
+    expect(bodies[1]).toMatchObject({
+      method: "monad_sendSealedTransaction",
+      params: ["0xsealed02f807aa"],
+    });
+    expect(ref).toEqual({ hash: `0x${"ab".repeat(32)}`, transport: "btx", submittedAt: 4242 });
+  });
+  it("falls back to the hash of the signed bytes when the node returns an opaque ticket", async () => {
+    const { wallet } = fakeWallet();
+    const { fetchFn } = scripted(available, { result: "ticket-1" });
+    const t = new BtxTransport({ rpcUrl: "http://node", wallet, fetch: fetchFn });
+    const ref = await t.send({ to: addr(1), data: "0x" });
+    expect(ref.hash).toBe(keccak256Hex(hexToBytes("0x02f807aa")));
+  });
+  it("maps a JSON-RPC error on submission to a retryable FH_TRANSPORT", async () => {
+    const { wallet } = fakeWallet();
+    const { fetchFn } = scripted(available, {
+      error: { code: -32000, message: "sealed pool full" },
+    });
+    const t = new BtxTransport({ rpcUrl: "http://node", wallet, fetch: fetchFn });
+    await expect(t.send({ to: addr(1), data: "0x" })).rejects.toMatchObject({
+      code: "FH_TRANSPORT",
+      retryable: true,
+      message: expect.stringContaining("sealed pool full"),
+    });
   });
   it("handles unreachable nodes", async () => {
+    const { wallet } = fakeWallet();
     const t = new BtxTransport({
       rpcUrl: "http://down",
+      wallet,
       fetch: (async () => {
         throw new Error("ECONNREFUSED");
       }) as unknown as typeof fetch,
     });
     expect((await t.probe()).detail).toContain("ECONNREFUSED");
+    await expect(t.send({ to: addr(1), data: "0x" })).rejects.toThrow(TransportError);
   });
 });
 

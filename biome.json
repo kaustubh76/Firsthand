@@ -21,7 +21,9 @@
       "!packages/test-vectors/vectors",
       "!packages/indexer/generated",
       "!pnpm-lock.yaml",
-      "!deploy/gateway/api"
+      "!deploy/gateway/api",
+      "!deploy/capture/assets",
+      "!deploy/capture/*.js"
     ]
   },
   "formatter": {

@@ -20,6 +20,7 @@ export default defineConfig({
       workbox: { globPatterns: ["**/*.{js,css,html,svg}"] },
     }),
   ],
-  build: { target: "es2022", sourcemap: true },
+  // The committed deploy tree (deploy/capture) is built without maps to keep the diff small.
+  build: { target: "es2022", sourcemap: process.env["FH_SOURCEMAP"] !== "false" },
   server: { port: 5173 },
 });

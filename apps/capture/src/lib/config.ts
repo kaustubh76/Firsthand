@@ -31,10 +31,34 @@ interface Discovery {
 
 const ZERO = `0x${"00".repeat(20)}` as Address;
 const env = (k: string): string | undefined => import.meta.env[k] as string | undefined;
+const GATEWAY_KEY = "firsthand.gateway";
+
+/**
+ * The gateway to talk to: `?gateway=https://…` in the URL wins and is remembered for the next
+ * visit (so one hosted build can be pointed at a local or a staging gateway), else the build-time
+ * `VITE_GATEWAY_URL`. `?gateway=` (empty) forgets the override.
+ */
+export function resolveGatewayUrl(
+  search: string = typeof location === "undefined" ? "" : location.search,
+): string | null {
+  const fromQuery = new URLSearchParams(search).get("gateway");
+  try {
+    if (fromQuery !== null) {
+      if (fromQuery === "") localStorage.removeItem(GATEWAY_KEY);
+      else localStorage.setItem(GATEWAY_KEY, fromQuery);
+    }
+    const stored = localStorage.getItem(GATEWAY_KEY);
+    if (stored) return stored;
+  } catch {
+    // Storage may be unavailable (private mode); the query override still applies for this load.
+    if (fromQuery) return fromQuery;
+  }
+  return env("VITE_GATEWAY_URL") ?? null;
+}
 
 function fallback(): AppConfig {
   return {
-    gatewayUrl: env("VITE_GATEWAY_URL") ?? null,
+    gatewayUrl: resolveGatewayUrl(),
     rpcUrl: env("VITE_RPC_URL") ?? null,
     chainId: BigInt(env("VITE_CHAIN_ID") ?? "10143"),
     passportAnchors: (env("VITE_PASSPORT_ANCHORS") ?? ZERO) as Address,

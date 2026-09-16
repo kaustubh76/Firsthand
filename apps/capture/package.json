@@ -2,7 +2,7 @@
   "name": "firsthand-capture",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture \u2192 passport, locker view, rescind",
+  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture → passport, locker view, rescind",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:testnet": "echo 'no testnet tests'",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "bundle:vercel": "node scripts/vercel-bundle.mjs"
   },
   "dependencies": {
     "@firsthand/adapters": "workspace:*",

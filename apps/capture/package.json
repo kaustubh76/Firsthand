@@ -14,7 +14,8 @@
     "test:unit": "vitest run",
     "test:testnet": "echo 'no testnet tests'",
     "coverage": "vitest run --coverage",
-    "bundle:vercel": "node scripts/vercel-bundle.mjs"
+    "bundle:vercel": "node scripts/vercel-bundle.mjs",
+    "e2e": "node scripts/vercel-bundle.mjs && tsx e2e/capture.e2e.ts"
   },
   "dependencies": {
     "@firsthand/adapters": "workspace:*",
@@ -29,6 +30,8 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "playwright": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",

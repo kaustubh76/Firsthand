@@ -71,6 +71,8 @@ export async function startGateway(
       MONAD_RPC_URL: env.rpcUrl,
       SETTLEMENT_MODE: "onchain",
       RELAYER_PRIVATE_KEY: env.relayerKey,
+      // Keyless browsers (the capture PWA's e2e rides this helper) write through the relay.
+      RELAY_ENABLED: "true",
       RATE_LIMIT_CAPACITY: "1000",
       PUBLIC_URL: url,
     },

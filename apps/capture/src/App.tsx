@@ -10,6 +10,14 @@ import { Rescind } from "./routes/Rescind.js";
 
 type Route = "capture" | "locker" | "rescind";
 
+const hostOf = (url: string | null): string => {
+  try {
+    return url ? new URL(url).host : "no gateway";
+  } catch {
+    return url ?? "no gateway";
+  }
+};
+
 export function App() {
   // Addresses come from the gateway's discovery document, so this is async — the browser has no
   // deployment file to read.
@@ -35,22 +43,36 @@ export function App() {
     }
   }
 
+  // The status strip is on every screen, so nobody mistakes the offline demo for the chain.
+  const status = (
+    <p className="status" data-live={config?.live ?? "loading"}>
+      {config === null
+        ? "connecting to gateway…"
+        : config.live
+          ? `live · chain ${config.chainId} · ${hostOf(config.gatewayUrl)}`
+          : `offline · ${config.reason}`}
+    </p>
+  );
   if (!config || !client) {
     return (
       <section>
         <h1>FIRSTHAND</h1>
         <p>Loading…</p>
+        {status}
       </section>
     );
   }
   if (credentialId === null) {
     return (
-      <Enroll
-        onEnrolled={(id) => {
-          setCredentialId(id);
-          void unlock(id);
-        }}
-      />
+      <>
+        <Enroll
+          onEnrolled={(id) => {
+            setCredentialId(id);
+            void unlock(id);
+          }}
+        />
+        {status}
+      </>
     );
   }
   if (session === null) {
@@ -61,11 +83,13 @@ export function App() {
           Tap passkey
         </button>
         {error && <p className="error">{error}</p>}
+        {status}
       </section>
     );
   }
   return (
     <main>
+      {status}
       <nav>
         {(["capture", "locker", "rescind"] as const).map((r) => (
           <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>

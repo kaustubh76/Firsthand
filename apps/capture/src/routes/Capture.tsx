@@ -76,8 +76,8 @@ export function Capture({ session, config }: { session: LockerSession; config: A
       {!config.live && (
         <p className="error">
           Offline: passports are minted and sealed locally but never anchored, so no buyer can fetch
-          them. Point <code>VITE_GATEWAY_URL</code> at a gateway with{" "}
-          <code>RELAY_ENABLED=true</code>.
+          them ({config.reason}). Open the app with <code>?gateway=https://…</code> to use another
+          gateway.
         </p>
       )}
       {error && <p className="error">{error}</p>}

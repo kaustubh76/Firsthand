@@ -18,7 +18,12 @@ export interface AppConfig {
   readonly relayEnabled: boolean;
   /** True when the app can actually reach a chain; false means memory doubles (offline dev). */
   readonly live: boolean;
+  /** Why `live` is false, in words a judge can act on. `null` when live. */
+  readonly reason: string | null;
 }
+
+/** A dead gateway must degrade to offline mode within seconds, not leave "Loading…" on screen. */
+const DISCOVERY_TIMEOUT_MS = 8_000;
 
 interface Discovery {
   chainId?: string;
@@ -72,6 +77,7 @@ function fallback(): AppConfig {
     anchorsLayout: "baseline",
     relayEnabled: false,
     live: false,
+    reason: "no gateway configured — set VITE_GATEWAY_URL or open with ?gateway=https://…",
   };
 }
 
@@ -80,12 +86,19 @@ export async function loadConfig(): Promise<AppConfig> {
   const base = fallback();
   const gatewayUrl = base.gatewayUrl;
   if (!gatewayUrl) return base;
+  const host = gatewayUrl.replace(/\/+$/, "");
   try {
-    const res = await fetch(`${gatewayUrl.replace(/\/+$/, "")}/.well-known/firsthand.json`);
-    if (!res.ok) return base;
+    const res = await fetch(`${host}/.well-known/firsthand.json`, {
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    });
+    if (!res.ok) return { ...base, reason: `gateway ${host} answered ${res.status} to discovery` };
     const d = (await res.json()) as Discovery;
     const c = d.contracts;
-    if (!c || !d.epochs) return { ...base, gatewayUrl };
+    if (!c || !d.epochs) {
+      return { ...base, gatewayUrl, reason: `gateway ${host} runs in memory mode (no deployment)` };
+    }
+    const relay = d.relay?.enabled === true;
+    const rpcUrl = d.rpcUrl ?? base.rpcUrl;
     return {
       gatewayUrl,
       rpcUrl: d.rpcUrl ?? base.rpcUrl,
@@ -96,11 +109,18 @@ export async function loadConfig(): Promise<AppConfig> {
       principalRegistry: c["PrincipalRegistry"] as Address,
       epochs: { genesis: BigInt(d.epochs.genesis), length: BigInt(d.epochs.length) },
       anchorsLayout: d.anchorsLayout ?? "baseline",
-      relayEnabled: d.relay?.enabled === true,
+      relayEnabled: relay,
       // Anchoring needs both a relay to write through and an RPC to read receipts from.
-      live: d.relay?.enabled === true && Boolean(d.rpcUrl ?? base.rpcUrl),
+      live: relay && Boolean(rpcUrl),
+      reason: relay
+        ? rpcUrl
+          ? null
+          : `gateway ${host} publishes no rpcUrl`
+        : `gateway ${host} has RELAY_ENABLED=false — nothing can reach the chain`,
     };
-  } catch {
-    return base;
+  } catch (error) {
+    const why =
+      (error as Error).name === "TimeoutError" ? "did not answer in 8 s" : "is unreachable";
+    return { ...base, reason: `gateway ${host} ${why}` };
   }
 }

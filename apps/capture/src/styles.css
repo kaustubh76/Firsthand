@@ -51,3 +51,15 @@ code {
   opacity: 0.7;
   font-size: 0.9em;
 }
+.status {
+  font-size: 0.8em;
+  opacity: 0.75;
+  border-left: 3px solid #3a3a48;
+  padding-left: 0.5rem;
+}
+.status[data-live="true"] {
+  border-color: #6fdc8c;
+}
+.status[data-live="false"] {
+  border-color: #ff7b7b;
+}

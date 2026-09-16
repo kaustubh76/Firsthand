@@ -46,8 +46,8 @@ export function LockerView({
       </p>
       {!config.live && (
         <p className="error">
-          Offline: no gateway relay configured, so nothing here reaches a chain. Set
-          <code> VITE_GATEWAY_URL</code> and run the gateway with <code>RELAY_ENABLED=true</code>.
+          Offline: nothing here reaches a chain ({config.reason}). Open the app with
+          <code> ?gateway=https://…</code> to use another gateway.
         </p>
       )}
 

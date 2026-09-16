@@ -23,7 +23,8 @@
       "!pnpm-lock.yaml",
       "!deploy/gateway/api",
       "!deploy/capture/assets",
-      "!deploy/capture/*.js"
+      "!deploy/capture/*.js",
+      "!deploy/capture/*.webmanifest"
     ]
   },
   "formatter": {
@@ -120,6 +121,7 @@
         "**/bin/**",
         "experiments/**",
         "apps/demo/src/**",
+        "apps/capture/e2e/**",
         "apps/mcp/src/index.ts"
       ],
       "linter": {

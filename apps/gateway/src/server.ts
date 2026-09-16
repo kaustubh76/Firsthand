@@ -114,10 +114,12 @@ export function createGateway(
   let usdc = config.USDC_ADDRESS.toLowerCase() as Address;
   let passportAnchors = config.PASSPORT_ANCHORS.toLowerCase() as Address;
   let relay: Relay | null = null;
+  let deployment: Deployment | null = null;
   let ledger: ConsentLedger | null = null;
 
   if (config.DEPLOYMENTS_FILE) {
     const d = readDeployment(config);
+    deployment = d;
     const chain = d.chainId === 31337 ? anvil : monadTestnet;
     const clients = createChainClients({
       rpcUrl: config.MONAD_RPC_URL,
@@ -217,6 +219,42 @@ export function createGateway(
     }),
   );
 
+  // A JSON-only service that 404s at the root looks broken to anyone who boots it and opens the URL.
+  app.get("/", (c) =>
+    c.html(`<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FIRSTHAND gateway</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 ui-sans-serif, system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  .sub { opacity: .7; margin-top: 0; }
+  li { margin: .15rem 0; }
+  a { color: inherit; }
+</style>
+<h1>FIRSTHAND gateway</h1>
+<p class="sub">Serving path for passkey-rooted data passports — chain ${config.CHAIN_ID}, settlement
+<code>${config.SETTLEMENT_MODE}</code>, x402 <code>${config.X402_MODE}</code>.</p>
+<p>This host serves <strong>ciphertext and public proofs only</strong>. It holds no key material: it
+cannot read what it serves, and it re-runs <code>verify()</code> against the chain on every request.</p>
+<h2>Start here</h2>
+<ul>
+  <li><a href="/.well-known/firsthand.json">/.well-known/firsthand.json</a> — discovery: addresses, epochs, payment terms</li>
+  <li><a href="/healthz">/healthz</a> — liveness</li>
+</ul>
+<h2>Endpoints</h2>
+<ul>
+  <li><code>GET /v1/query/:grantId/:passportId</code> — priced per query over x402; returns data only while consent is live</li>
+  <li><code>GET /v1/passports/:id</code> · <code>/v1/blobs/:id</code> · <code>/v1/grants/:id/wrap</code> · <code>/v1/anchors/:root</code></li>
+  <li><code>GET /v1/principals/:id/timeline</code> — the Consent Ledger: when consent began and ended</li>
+  <li><code>POST /v1/passports</code> · <code>/v1/blobs</code> · <code>/v1/grants/:id/wrap</code> — verified ingest</li>
+  <li><code>POST /v1/relay</code> — ${relay ? "enabled" : "disabled"}: submits signature-authorised calls for clients holding no key</li>
+</ul>
+<p>Source and a 15-second end-to-end demo:
+<a href="https://github.com/kaustubh76/Firsthand">github.com/kaustubh76/Firsthand</a></p>`),
+  );
+
   /** Discovery document for buyers, agents and other Metropolis teams (README §4 "open-spec"). */
   app.get("/.well-known/firsthand.json", (c) =>
     c.json({
@@ -235,8 +273,29 @@ export function createGateway(
           version: config.USDC_VERSION,
         },
       },
+      // A browser has no DEPLOYMENTS_FILE; this document is its substitute, so it carries every
+      // address and epoch parameter a client needs to build the same EIP-712 domain we verify under.
+      contracts: deployment
+        ? {
+            PrincipalRegistry: deployment.PrincipalRegistry,
+            PassportAnchors: deployment.PassportAnchors,
+            GrantManager: deployment.GrantManager,
+            Rescissions: deployment.Rescissions,
+            ReceiptLedger: deployment.ReceiptLedger,
+            RoyaltyRouter: deployment.RoyaltyRouter,
+          }
+        : null,
+      epochs: deployment
+        ? { genesis: String(deployment.genesis), length: String(deployment.epochLength) }
+        : null,
+      anchorsLayout: deployment?.anchorsLayout ?? null,
+      rpcUrl: deployment ? config.MONAD_RPC_URL : null,
+      relay: relay
+        ? { enabled: true, endpoint: "POST /v1/relay", allow: relay.allowList }
+        : { enabled: false },
       endpoints: {
         query: "/v1/query/:grantId/:passportId",
+        relay: "POST /v1/relay",
         passport: "/v1/passports/:id",
         blob: "/v1/blobs/:id",
         wrap: "/v1/grants/:grantId/wrap",

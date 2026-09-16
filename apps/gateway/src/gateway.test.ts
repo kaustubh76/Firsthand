@@ -126,6 +126,30 @@ describe("gateway", () => {
       }),
     ).toThrow(/chain 31337/);
 
+    // The discovery document is the browser's DEPLOYMENTS_FILE: it must carry every address and
+    // epoch parameter, or the PWA cannot build the domain the gateway verifies under.
+    const disco = (await (await gw.app.request("/.well-known/firsthand.json")).json()) as {
+      contracts: Record<string, string> | null;
+      epochs: { genesis: string; length: string } | null;
+      anchorsLayout: string | null;
+      relay: { enabled: boolean };
+    };
+    expect(disco.contracts).toMatchObject({
+      PrincipalRegistry: `0x${"ac".repeat(20)}`,
+      PassportAnchors: `0x${"ab".repeat(20)}`,
+      GrantManager: `0x${"ad".repeat(20)}`,
+      Rescissions: `0x${"bc".repeat(20)}`,
+    });
+    expect(disco.epochs).toEqual({ genesis: "1700000000", length: "604800" });
+    expect(disco.anchorsLayout).toBe("baseline");
+    expect(disco.relay.enabled).toBe(false);
+
+    // A JSON API that 404s at the root looks broken; the landing page is how a human checks it works.
+    const landing = await gw.app.request("/");
+    expect(landing.status).toBe(200);
+    expect(landing.headers.get("content-type")).toContain("text/html");
+    expect(await landing.text()).toContain("/.well-known/firsthand.json");
+
     // Relay is off unless asked for, and refuses anything outside the deployment's authority
     // contracts — an open relay would be a free-gas faucet.
     expect(relayed.relay).toBeNull();

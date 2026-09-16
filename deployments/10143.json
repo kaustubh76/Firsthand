@@ -1,0 +1,17 @@
+{
+  "FirsthandLens": "0x06B2Ae48a954e3fbEB00cA165b53a83Ce127c960",
+  "GrantManager": "0xD6684e07F4A18390B4A48dcbC357E5108A1fd521",
+  "PassportAnchors": "0x86c955BA48DD65f2FAbc20525D707bE157FC928B",
+  "PassportAnchorsBaseline": "0x86c955BA48DD65f2FAbc20525D707bE157FC928B",
+  "PassportAnchorsPaged": "0x8Ff1e510636744CC7226f9E77E1DE9E3516feB1C",
+  "PrincipalRegistry": "0x71912cBa992909B883Ab8D4C86d0a6805e8457B7",
+  "ReceiptLedger": "0x353FCb60862a95458F54603d7b84433906736E42",
+  "Rescissions": "0x7F4F2Df90605bFCaF6BE09B31A324E5fa9eD89E5",
+  "RoyaltyRouter": "0x6f35aF16B75586057e941874E36E463c6B6299a6",
+  "USDC": "0xD27582210629348ED8eaCfd5796ee4Ecdb4ED4f5",
+  "anchorsLayout": "baseline",
+  "chainId": 10143,
+  "epochLength": 604800,
+  "genesis": 1789257600,
+  "revealWindowBlocks": 1512000
+}

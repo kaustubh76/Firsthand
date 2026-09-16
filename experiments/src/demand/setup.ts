@@ -5,9 +5,13 @@ import { type Chain, type PublicClient, parseAbi, type Transport, type WalletCli
 import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import { waitForReceipt } from "../chain/waitReceipt.js";
 
-/** The demand side every buyer scenario shares (S2, S3): one funded EVM key, cards, terms, grants. */
-export const BUYER_KEY =
-  "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as const; // anvil #2
+/**
+ * The demand side every buyer scenario shares (S2, S3): one buyer EVM key, cards, terms, grants.
+ * `BUYER_PRIVATE_KEY` on a live chain; anvil #2 locally. On testnet the buyer only ever *signs*
+ * (card, terms, EIP-3009) and the relayer submits, so it needs no native balance.
+ */
+export const BUYER_KEY = (process.env["BUYER_PRIVATE_KEY"] ??
+  "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a") as `0x${string}`; // anvil #2
 export const usdcAbi = parseAbi([
   "function mint(address to, uint256 value)",
   "function balanceOf(address) view returns (uint256)",

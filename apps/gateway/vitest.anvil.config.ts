@@ -5,8 +5,8 @@ export default defineConfig({
   test: {
     name: "gateway:anvil",
     include: ["test/anvil/**/*.test.ts"],
-    testTimeout: 180_000,
-    hookTimeout: 120_000,
+    testTimeout: 900_000,
+    hookTimeout: 300_000,
     fileParallelism: false,
   },
 });

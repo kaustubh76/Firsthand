@@ -39,7 +39,7 @@
     "test:anvil": {
       "dependsOn": ["^build"],
       "cache": false,
-      "env": ["ANVIL_RPC_URL", "DEPLOYMENTS_FILE", "RELAYER_PRIVATE_KEY"]
+      "env": ["ANVIL_RPC_URL", "DEPLOYMENTS_FILE", "RELAYER_PRIVATE_KEY", "BUYER_PRIVATE_KEY"]
     }
   }
 }

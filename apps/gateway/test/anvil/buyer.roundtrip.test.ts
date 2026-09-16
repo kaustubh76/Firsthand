@@ -109,6 +109,10 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
       privateKey: RELAYER as `0x${string}`,
     });
     if (!relayer.walletClient) throw new Error("relayer wallet");
+    const live = await relayer.publicClient.getChainId();
+    if (live !== d.chainId) {
+      throw new Error(`RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${d.chainId}`);
+    }
     const transport = new PublicMempoolTransport(relayer.walletClient);
     const anchors = new OnchainAnchorWriter({
       address: d.PassportAnchors.toLowerCase() as Address,
@@ -162,13 +166,8 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
     expect(r.anchored?.anchor.txHash).toBeTruthy();
     await publishDeposit({ gatewayUrl: "http://gw", fetch: fetchApp }, locker, batcher, r, terms);
 
-    // Buyer side: its own funded EVM account signs terms and pays; MockUSDC minted to it.
-    const buyerClients = createChainClients({
-      rpcUrl: RPC as string,
-      chain,
-      privateKey: BUYER_KEY,
-    });
-    if (!buyerClients.walletClient) throw new Error("buyer wallet");
+    // Buyer side: it signs (card, terms, EIP-3009) and the relayer submits, since registerCard and
+    // acceptTerms are relayable — so the buyer key holds no native balance. Only MockUSDC is minted to it.
     const buyerAccount = privateKeyToAccount(BUYER_KEY);
     const buyer = new BuyerSession({
       keys: createBuyerKeys(
@@ -178,7 +177,7 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
       ),
       grantManager,
       chainId: BigInt(d.chainId),
-      transport: new PublicMempoolTransport(buyerClients.walletClient),
+      transport,
       fetch: fetchApp,
     });
     const balanceOf = (who: Address) =>

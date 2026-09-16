@@ -8,8 +8,8 @@ export default defineConfig({
   test: {
     name: "sdk:anvil",
     include: ["test/anvil/**/*.test.ts"],
-    testTimeout: 120_000,
-    hookTimeout: 60_000,
+    testTimeout: 600_000,
+    hookTimeout: 300_000,
     // One relayer account: files must not race each other's nonces.
     fileParallelism: false,
   },

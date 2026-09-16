@@ -12,7 +12,8 @@ export async function waitForReceipt(
   hash: Bytes32,
   options: { pollMs?: number; timeoutMs?: number } = {},
 ): Promise<TransactionReceipt> {
-  const pollMs = options.pollMs ?? 25;
+  // 250 ms keeps a public RPC happy and is still sub-block on Monad (~400 ms); anvil tests override.
+  const pollMs = options.pollMs ?? 250;
   const deadline = Date.now() + (options.timeoutMs ?? 60_000);
   while (Date.now() < deadline) {
     const receipt = await publicClient.getTransactionReceipt({ hash }).catch(() => null);

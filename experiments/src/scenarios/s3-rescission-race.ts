@@ -10,15 +10,22 @@ import {
   sendRescind,
 } from "@firsthand/sdk";
 import { decodeEventLog } from "viem";
-import { type ArmAdapters, Arms, BTX_STATUS, resolveArm } from "../arms/index.js";
+import {
+  type ArmAdapters,
+  ArmUnavailableError,
+  Arms,
+  BTX_STATUS,
+  resolveArm,
+} from "../arms/index.js";
 import { Extractor } from "../bots/Extractor.js";
 import { BlindFeed, TxpoolPollingFeed } from "../bots/MempoolFeed.js";
 import { commitTrigger, ObserverBot, rescindTrigger } from "../bots/ObserverBot.js";
 import { SimObserverBot } from "../bots/SimObserverBot.js";
 import { AnvilMiner } from "../chain/anvilMiner.js";
-import { isAnvil } from "../chain/rpc.js";
+import { hasMempoolFeed, isAnvil } from "../chain/rpc.js";
 import { waitForReceipt } from "../chain/waitReceipt.js";
 import {
+  BUYER_KEY,
   buyerAccount,
   grantTo,
   mintUsdc,
@@ -101,6 +108,18 @@ async function onChain(arm: string, adapters: ArmAdapters, trials: number, ctx: 
   const miner = (await isAnvil(env.rpcUrl))
     ? new AnvilMiner(env.rpcUrl, () => ctx.clock.nowMs())
     : null;
+  // S3 needs two things a public RPC does not give: a block clock we control (Δ_race is measured
+  // against the block that sealed the rescission) and a readable pending pool for the observer.
+  // On Monad both are absent — there is no global mempool (RPC nodes forward straight to the next
+  // leaders, so `txpool_content` is unsupported), and we cannot drive mining. Refuse with the reason
+  // rather than publish 50 silently-blind trials timed off the harness's own sleeps.
+  if (miner === null) {
+    throw new ArmUnavailableError(
+      arm,
+      `needs a node whose mining the harness can drive and whose pending pool it can read; ${env.rpcUrl} is not anvil` +
+        ((await hasMempoolFeed(env.rpcUrl)) ? "" : " and does not support txpool_content (no global mempool)"),
+    );
+  }
 
   // Supply side once per arm: an enrolled, attested principal with one anchored passport.
   const { locker, batcher } = seededLocker(3, adapters, ctx.clock, 1);
@@ -123,7 +142,7 @@ async function onChain(arm: string, adapters: ArmAdapters, trials: number, ctx: 
   const botClients = createChainClients({
     rpcUrl: env.rpcUrl,
     chain: clients.chain,
-    privateKey: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+    privateKey: BUYER_KEY,
     pollingInterval: 25,
   });
   if (!botClients.walletClient) throw new Error("bot wallet");

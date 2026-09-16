@@ -31,6 +31,16 @@ export async function jsonRpc<T = unknown>(
   return body.result as T;
 }
 
+/** True when the node exposes a readable pending pool — what an observer bot needs to see a rescind. */
+export async function hasMempoolFeed(url: string, fetchFn: typeof fetch = fetch): Promise<boolean> {
+  try {
+    await jsonRpc(url, "txpool_content", [], fetchFn);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** True when the endpoint is an anvil node (the only one whose mining the harness may drive). */
 export async function isAnvil(url: string, fetchFn: typeof fetch = fetch): Promise<boolean> {
   try {

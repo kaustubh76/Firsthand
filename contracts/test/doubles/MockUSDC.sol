@@ -4,7 +4,9 @@ pragma solidity 0.8.30;
 /// @title MockUSDC
 /// @notice Minimal ERC-20 with EIP-3009 `transferWithAuthorization` / `receiveWithAuthorization`, using USDC's
 ///         EIP-712 domain ("USD Coin", version "2") so x402 payloads signed for real USDC verify here unchanged.
-/// @dev    Test/anvil double only — never deploy to a public network.
+/// @dev    A faucet double, not a stablecoin: `mint` is permissionless and there is no issuer. Deployed
+///         on local chains and, deliberately, on Monad testnet (`DEPLOY_MOCK_USDC=true`) so settlement can
+///         be exercised end to end where no EIP-3009 USDC exists. NEVER deploy it to a mainnet.
 contract MockUSDC {
     string public constant name = "USD Coin";
     string public constant symbol = "USDC";

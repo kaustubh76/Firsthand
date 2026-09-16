@@ -153,7 +153,7 @@ export class Extractor {
   }
 
   /** Polls receipts for every attempt until all are mined or `timeoutMs` elapses. */
-  async collect(timeoutMs = 10_000, pollMs = 25): Promise<void> {
+  async collect(timeoutMs = 10_000, pollMs = 100): Promise<void> {
     const deadline = this.#o.clock.nowMs() + timeoutMs;
     while (this.#o.clock.nowMs() < deadline) {
       const pending = this.attempts.filter((a) => a.status === "pending");

@@ -46,7 +46,8 @@ const RPC = process.env["ANVIL_RPC_URL"];
 const DEPLOYMENTS = process.env["DEPLOYMENTS_FILE"];
 const RELAYER = process.env["RELAYER_PRIVATE_KEY"] as `0x${string}` | undefined;
 const enabled = Boolean(RPC && DEPLOYMENTS && RELAYER);
-const BUYER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as const; // anvil #2
+const BUYER_KEY = (process.env["BUYER_PRIVATE_KEY"] ??
+  "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a") as `0x${string}`; // anvil #2
 
 interface Deployment {
   chainId: number;
@@ -84,6 +85,10 @@ describe.skipIf(!enabled)(
         privateKey: RELAYER as `0x${string}`,
       });
       if (!clients.walletClient) throw new Error("relayer wallet missing");
+      const live = await clients.publicClient.getChainId();
+      if (live !== d.chainId) {
+        throw new Error(`RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${d.chainId}`);
+      }
       publicTransport = new PublicMempoolTransport(clients.walletClient);
       addresses = {
         grantManager: d.GrantManager.toLowerCase() as Address,
@@ -139,12 +144,8 @@ describe.skipIf(!enabled)(
         payees: [locker.depositKey(0).address],
         weights: [WAD],
       };
-      const buyerClients = createChainClients({
-        rpcUrl: RPC as string,
-        chain,
-        privateKey: BUYER_KEY,
-      });
-      if (!buyerClients.walletClient) throw new Error("buyer wallet");
+      // The buyer signs; the relayer submits (registerCard and acceptTerms are relayable), so the
+      // buyer key needs no native balance — on testnet it is funded with nothing at all.
       buyer = new BuyerSession({
         keys: createBuyerKeys(
           new Uint8Array(Buffer.from(BUYER_KEY.slice(2), "hex")),
@@ -153,7 +154,7 @@ describe.skipIf(!enabled)(
         ),
         grantManager: addresses.grantManager,
         chainId: BigInt(d.chainId),
-        transport: new PublicMempoolTransport(buyerClients.walletClient),
+        transport: publicTransport,
       });
       await wait((await buyer.registerCard()).txHash);
       const accept = buyer.acceptTerms(locker.principalId, terms);

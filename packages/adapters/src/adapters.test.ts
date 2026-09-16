@@ -490,6 +490,25 @@ describe("OnchainAnchorWriter via a relay (the browser's write path)", () => {
 });
 
 describe("HttpRelayTransport", () => {
+  it("calls the global fetch the way browsers require (unbound or bound to the global)", async () => {
+    // Found by the browser e2e: `this.#fetch(...)` invoked window.fetch with `this` = the transport,
+    // which Chrome refuses with "Illegal invocation" — reported to the user as "relay unreachable".
+    const original = globalThis.fetch;
+    const receivers: unknown[] = [];
+    globalThis.fetch = function (this: unknown) {
+      receivers.push(this);
+      return Promise.resolve(new Response(JSON.stringify({ relayer: "0xr" }), { status: 200 }));
+    } as unknown as typeof fetch;
+    try {
+      const caps = await new HttpRelayTransport({ baseUrl: "http://gw" }).capabilities();
+      expect(caps.detail).toBe("relayed by 0xr");
+      expect(receivers).toHaveLength(1);
+      expect(receivers[0] === undefined || receivers[0] === globalThis).toBe(true);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   const relay = (
     status: number,
     body: unknown,

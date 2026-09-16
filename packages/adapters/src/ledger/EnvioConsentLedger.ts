@@ -19,7 +19,9 @@ export class EnvioConsentLedger implements ConsentLedger {
 
   constructor(options: EnvioConsentLedgerOptions) {
     this.#url = options.graphqlUrl;
-    this.#fetch = options.fetch ?? fetch;
+    // Stored on the instance, so the global must be bound: `this.#fetch(...)` would otherwise call
+    // `window.fetch` with `this` = the transport, which browsers refuse ("Illegal invocation").
+    this.#fetch = options.fetch ?? fetch.bind(globalThis);
   }
 
   get url(): string {

@@ -47,7 +47,9 @@ export class BtxTransport implements TxTransport {
     this.#wallet = options.wallet;
     this.#method = options.method ?? "eth_sendEncryptedRawTransaction";
     this.#seal = options.seal ?? (async (raw) => raw);
-    this.#fetch = options.fetch ?? fetch;
+    // Stored on the instance, so the global must be bound: `this.#fetch(...)` would otherwise call
+    // `window.fetch` with `this` = the transport, which browsers refuse ("Illegal invocation").
+    this.#fetch = options.fetch ?? fetch.bind(globalThis);
     this.#now = options.now ?? Date.now;
   }
 

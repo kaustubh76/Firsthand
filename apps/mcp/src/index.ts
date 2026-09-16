@@ -12,13 +12,21 @@ import {
 } from "@firsthand/adapters";
 import { type Address, ConfigError, hexToBytes } from "@firsthand/core";
 import { StaticPrfSource } from "@firsthand/crypto";
-import { createLogger } from "@firsthand/runtime";
+import { createLogger, loadDotenv } from "@firsthand/runtime";
 import { BuyerSession, createBuyerKeys, FirsthandClient, type LockerSession } from "@firsthand/sdk";
+import {
+  assertChain,
+  clientOptionsFromDeployment,
+  type Deployment,
+  loadDeployment,
+} from "@firsthand/sdk/deployment";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { loadConfig } from "./config.js";
 import { createMcpServer } from "./server.js";
 
+// Before config: otherwise every value in .env is silently ignored (the same trap as the gateway).
+const envFile = loadDotenv();
 const config = loadConfig();
 // stdout is the MCP channel; logs must go to stderr.
 const logger = createLogger({
@@ -51,23 +59,55 @@ if (transport.kind === "btx") {
   logger.info("btx transport", { encryptedMempool: caps.encryptedMempool, detail: caps.detail });
 }
 
-const client = new FirsthandClient({
-  domain: {
-    chainId: config.CHAIN_ID,
-    verifyingContract: config.PASSPORT_ANCHORS.toLowerCase() as Address,
-  },
-  epochs: { genesis: config.EPOCH_GENESIS, length: config.EPOCH_LENGTH },
-  // Phase 2/4 swap these for OnchainAnchorWriter / BtxTransport built from the deployment file.
-  anchors: new MemoryAnchorWriter(),
-  blobs: new FsBlobStore(config.BLOB_DIR),
-  transport,
-  facilitator: new MemoryFacilitator(),
-  addresses: {
-    grantManager: config.GRANT_MANAGER.toLowerCase() as Address,
-    rescissions: config.RESCISSIONS.toLowerCase() as Address,
-    principalRegistry: config.PRINCIPAL_REGISTRY.toLowerCase() as Address,
-  },
-  logger,
+// A deployment file is what makes deposits *recallable*: without it the anchors adapter is an
+// in-process double, nothing reaches the chain, and the gateway refuses the sidecar as unanchored.
+const deployment: Deployment | null = config.DEPLOYMENTS_FILE
+  ? loadDeployment(config.DEPLOYMENTS_FILE)
+  : null;
+if (deployment && BigInt(deployment.chainId) !== config.CHAIN_ID) {
+  throw new ConfigError(
+    `DEPLOYMENTS_FILE is for chain ${deployment.chainId}, CHAIN_ID is ${config.CHAIN_ID}`,
+  );
+}
+if (deployment && relayerClients)
+  await assertChain(relayerClients.publicClient, deployment, "DEPLOYMENTS_FILE");
+
+const blobs = new FsBlobStore(config.BLOB_DIR);
+const client = new FirsthandClient(
+  deployment && relayerClients
+    ? clientOptionsFromDeployment({
+        deployment,
+        publicClient: relayerClients.publicClient,
+        ...(relayerClients.walletClient ? { walletClient: relayerClients.walletClient } : {}),
+        blobs,
+        transport,
+        logger,
+      })
+    : {
+        domain: {
+          chainId: config.CHAIN_ID,
+          verifyingContract: config.PASSPORT_ANCHORS.toLowerCase() as Address,
+        },
+        epochs: { genesis: config.EPOCH_GENESIS, length: config.EPOCH_LENGTH },
+        // No deployment file: keys and calldata still work, but anchoring is a local double.
+        anchors: new MemoryAnchorWriter(),
+        blobs,
+        transport,
+        facilitator: new MemoryFacilitator(),
+        addresses: {
+          grantManager: config.GRANT_MANAGER.toLowerCase() as Address,
+          rescissions: config.RESCISSIONS.toLowerCase() as Address,
+          principalRegistry: config.PRINCIPAL_REGISTRY.toLowerCase() as Address,
+        },
+        logger,
+      },
+);
+logger.info("firsthand-mcp", {
+  envFile: envFile.path ?? `none (${envFile.reason})`,
+  chainId: String(config.CHAIN_ID),
+  anchors: deployment && relayerClients ? "onchain" : "memory (deposits stay local)",
+  gateway: config.GATEWAY_URL ?? "none",
+  transport: transport.kind,
 });
 
 let session: Promise<LockerSession> | null = null;
@@ -115,6 +155,8 @@ const server = createMcpServer({
   session: openSession,
   logger,
   canBroadcast: transport.kind !== "memory",
+  canAnchor: deployment !== null && relayerClients?.walletClient !== undefined,
+  ...(config.GATEWAY_URL ? { gatewayUrl: config.GATEWAY_URL } : {}),
   buyer: openBuyer,
   passportDomain: {
     chainId: config.CHAIN_ID,

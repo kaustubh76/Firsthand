@@ -18,6 +18,22 @@ export const DepositInputSchema = z.object({
   payee: address.describe("Address that receives royalties"),
   attestationClass: z.enum(["unattested", "import", "device_capture"]).default("unattested"),
   sourceTag: z.string().optional().describe("Import source label, e.g. chatgpt-export-v1"),
+  publish: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Anchor the batch on chain and publish ciphertext + sidecar to the gateway, so a buyer can query it. Requires DEPLOYMENTS_FILE and GATEWAY_URL; without them the deposit stays local.",
+    ),
+});
+
+export const RegisterCardInputSchema = z.object({});
+
+export const AcceptTermsInputSchema = z.object({
+  principalId: hex32.describe("Principal whose terms are being accepted"),
+  ns: z.number().int().min(0).max(15).default(0),
+  priceUnits: z.string().regex(/^\d+$/).default("1"),
+  payee: address.describe("Address the principal's terms pay out to"),
+  rateLimit: z.number().int().min(0).default(100),
 });
 
 export const QueryInputSchema = z.object({

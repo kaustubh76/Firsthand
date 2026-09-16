@@ -22,6 +22,14 @@ export const McpConfigSchema = z.object({
     .regex(/^0x[0-9a-fA-F]{64}$/)
     .optional(),
   /**
+   * Deployment file written by `contracts/script/Deploy.s.sol`. When set, every contract address
+   * and the epoch parameters come from it and the six address vars below are ignored — one source
+   * of truth, no transcription. Required for deposits that anchor on chain.
+   */
+  DEPLOYMENTS_FILE: z.string().optional(),
+  /** Gateway that hosts published ciphertext + sidecars, so a buyer can actually recall a deposit. */
+  GATEWAY_URL: z.string().url().optional(),
+  /**
    * BTX submission endpoint. When set (with RELAYER_PRIVATE_KEY) rescissions travel the encrypted
    * mempool; `firsthand_rescind` refuses with FH_BTX_UNAVAILABLE if the node does not know the
    * method. BTX is not deployed on Monad testnet as of 2026-09 — commit-reveal is the fallback.

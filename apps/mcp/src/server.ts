@@ -5,7 +5,9 @@ import {
   type Eip712Domain,
   isFirsthandError,
   LICENSE_FH_1_0,
+  passportId,
   Scope,
+  type Terms,
   tag,
   WAD,
   ZERO_HASH,
@@ -14,11 +16,13 @@ import type { Logger } from "@firsthand/runtime";
 import type { BuyerSession, LockerSession } from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  AcceptTermsInputSchema,
   AttestInputSchema,
   DepositInputSchema,
   EnrollInputSchema,
   GrantInputSchema,
   QueryInputSchema,
+  RegisterCardInputSchema,
   RescindInputSchema,
   StatusInputSchema,
 } from "./tools/schemas.js";
@@ -32,6 +36,10 @@ export interface McpDeps {
   /** Buyer-side session, when BUYER_PRIVATE_KEY / GRANTEE_SEED_HEX are configured. */
   readonly buyer?: () => Promise<BuyerSession>;
   readonly passportDomain: Eip712Domain;
+  /** Gateway that hosts ciphertext + sidecars; without it a deposit cannot be recalled by a buyer. */
+  readonly gatewayUrl?: string;
+  /** True when the anchors adapter reaches a chain — i.e. a deposit can actually be anchored. */
+  readonly canAnchor: boolean;
 }
 
 const CLASS = {
@@ -73,18 +81,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
     async (input) => {
       try {
         const session = await deps.session();
+        const terms: Terms = {
+          price: BigInt(input.priceUnits),
+          licenseId: LICENSE_FH_1_0,
+          scope: Scope.TRAIN | Scope.INFER | Scope.EVAL,
+          ns: input.ns,
+          rateLimit: 100,
+          payees: [input.payee as Address],
+          weights: [WAD],
+        };
         const result = await session.deposit({
           ns: input.ns,
           datum: { kind: "bytes", bytes: new TextEncoder().encode(input.text) },
-          terms: {
-            price: BigInt(input.priceUnits),
-            licenseId: LICENSE_FH_1_0,
-            scope: Scope.TRAIN | Scope.INFER | Scope.EVAL,
-            ns: input.ns,
-            rateLimit: 100,
-            payees: [input.payee as Address],
-            weights: [WAD],
-          },
+          terms,
           attestation: {
             class: CLASS[input.attestationClass],
             capturedAt: BigInt(Math.floor(Date.now() / 1000)),
@@ -93,11 +102,33 @@ export function createMcpServer(deps: McpDeps): McpServer {
             metaHash: ZERO_HASH,
           },
         });
+        // A deposit nobody can fetch is not a deposit: anchor the batch and hand the gateway the
+        // ciphertext + sidecar, so `firsthand_query` against that gateway can actually serve it.
+        let published: string | null = null;
+        let anchored = result.anchored?.root ?? null;
+        const wantsPublish = input.publish && deps.canAnchor && deps.gatewayUrl !== undefined;
+        if (wantsPublish) {
+          const flushed = await session.flush();
+          anchored =
+            flushed.find((b) =>
+              b.passports.some((p) => passportId(p.passport) === result.passportId),
+            )?.root ?? anchored;
+          await session.publish({ gatewayUrl: deps.gatewayUrl as string }, result, terms);
+          published = deps.gatewayUrl as string;
+        }
         return text({
           passportId: result.passportId,
           passport: result.signed.passport,
           blob: result.blob.id,
-          anchored: result.anchored?.root ?? null,
+          anchored,
+          published,
+          ...(input.publish && !wantsPublish
+            ? {
+                warning: deps.canAnchor
+                  ? "GATEWAY_URL is not configured — the deposit is anchored but no buyer can fetch it"
+                  : "DEPLOYMENTS_FILE / relayer not configured — the deposit is local only and cannot be recalled",
+              }
+            : {}),
         });
       } catch (error) {
         deps.logger.warn("deposit failed", { error });
@@ -325,6 +356,70 @@ export function createMcpServer(deps: McpDeps): McpServer {
             .map((b) => ({ ns: b.ns, epoch: b.epoch, root: b.root, size: b.passports.length })),
         });
       } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_register_card",
+    {
+      title: "Register the buyer's grantee card",
+      description:
+        "Buyer side: publish this agent's card (owner address + X25519 encryption key) so a principal can grant to it. Permissionless and idempotent; the grant's wrapped vault key is sealed to this card.",
+      inputSchema: RegisterCardInputSchema.shape,
+    },
+    async () => {
+      try {
+        if (!deps.buyer)
+          throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
+        const buyer = await deps.buyer();
+        const sent = await buyer.registerCard();
+        return text({
+          cardId: buyer.cardId,
+          owner: buyer.owner,
+          encryptionPubKey: buyer.encryptionPubKey,
+          txHash: sent.txHash,
+        });
+      } catch (error) {
+        deps.logger.warn("registerCard failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_accept_terms",
+    {
+      title: "Accept a principal's terms",
+      description:
+        "Buyer side: sign and register acceptance of the price and licence for a namespace. Relayable — the signature authorises it, not the sender. Returns the termsHash the principal needs to grant.",
+      inputSchema: AcceptTermsInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.buyer)
+          throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
+        const buyer = await deps.buyer();
+        const terms: Terms = {
+          price: BigInt(input.priceUnits),
+          licenseId: LICENSE_FH_1_0,
+          scope: Scope.TRAIN | Scope.INFER | Scope.EVAL,
+          ns: input.ns,
+          rateLimit: input.rateLimit,
+          payees: [input.payee as Address],
+          weights: [WAD],
+        };
+        const accept = buyer.acceptTerms(input.principalId as Bytes32, terms);
+        const sent = await accept.send();
+        return text({
+          termsHash: accept.plan.termsHash,
+          cardId: buyer.cardId,
+          granteeEncryptionPubKey: buyer.encryptionPubKey,
+          txHash: sent.txHash,
+        });
+      } catch (error) {
+        deps.logger.warn("acceptTerms failed", { error });
         return failure(error);
       }
     },

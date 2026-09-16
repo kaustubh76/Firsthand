@@ -41,6 +41,7 @@ async function connect(canBroadcast = true) {
       )),
     logger: noopLogger,
     canBroadcast,
+    canAnchor: false, // memory anchors: deposits stay local, the tool says so in its warning
     passportDomain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -58,11 +59,13 @@ describe("firsthand-mcp", () => {
     const client = await connect();
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(tools).toEqual([
+      "firsthand_accept_terms",
       "firsthand_attest",
       "firsthand_deposit",
       "firsthand_enroll",
       "firsthand_grant",
       "firsthand_query",
+      "firsthand_register_card",
       "firsthand_rescind",
       "firsthand_status",
     ]);
@@ -77,6 +80,9 @@ describe("firsthand-mcp", () => {
     const body = textOf(deposited as { content: unknown });
     expect(body.passportId).toMatch(/^0x[0-9a-f]{64}$/);
     expect(body.anchored).toBeNull();
+    // Honest about the dead end: without a deployment a deposit can never be recalled by a buyer.
+    expect(body.published).toBeNull();
+    expect(body.warning).toMatch(/cannot be recalled/);
 
     const status = textOf(
       (await client.callTool({ name: "firsthand_status", arguments: {} })) as { content: unknown },

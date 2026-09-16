@@ -30,7 +30,7 @@ project's own calendar.
 | 2 · Passports & anchors | passports, batching, `PassportAnchors` (two storage layouts), deposit refusal | **done** — S1 + S4 pass on chain |
 | 3 · Grants, payment, verify | `GrantManager`, x402 settlement, `RoyaltyRouter`, `ReceiptLedger`, `FirsthandLens` | **done** — S2 end-to-end paid query |
 | 4 · Rescind | BTX transport, commit-reveal fallback, race harness, freeze/thaw hysteresis | **done** — S3 run, H2 data collected |
-| 5 · Surfaces | quickstart + `pnpm demo`, MCP on the live deployment, gateway relay, Consent Ledger | **in progress** — first recall runs in ~15 s locally and against testnet; capture PWA and docs site remain |
+| 5 · Surfaces | quickstart + `pnpm demo`, MCP and capture PWA on the live deployment, gateway relay, Consent Ledger | **done** except Envio and the docs site |
 | 6 · Traction & freeze | two external integration PRs, testnet deploy, demo, videos | next |
 
 Shipped so far: 7 immutable contracts (no proxies, no admin keys) with **121 Foundry tests, 100 %
@@ -193,3 +193,34 @@ requests/second**, so this is a recent-window view, not an archive.
 
 Still open in Phase 5: the capture PWA on live contracts (the relay unblocks it), the docs site, and
 Envio's handlers.
+
+### Update — the capture PWA is live (16 Sep 2026)
+
+**Every user-facing surface now reaches the chain.** The PWA was the last one on memory doubles:
+nothing it captured was anchored or published, and its rescission screen printed a transaction hash
+that the memory transport had invented. It now discovers every address from the gateway's
+`/.well-known/firsthand.json` — the browser's substitute for the deployment file it cannot read —
+reads through a key-less viem client, and **writes through the gateway's relay**. Verified against
+Monad testnet: enrol → attest → capture → anchor → publish, after which `GET /v1/passports/:id`
+serves the sidecar, so a buyer can query what a phone captured.
+
+The browser holding no key is not a workaround; it is the architecture. Every authority-signed entry
+point authorises by the signature inside the calldata rather than `msg.sender`, so relaying cannot
+change what a call means — the relay is allow-listed to the deployment's contracts, rejects non-zero
+value, and simulates before spending gas.
+
+Two things running it for real surfaced:
+
+- **Relaying returns when the gateway accepts a transaction, not when it lands.** `attest` was being
+  simulated against a principal that `enroll` had not yet written, and was refused. Dependent calls
+  now wait for inclusion — the kind of bug that only appears against a real chain.
+- **Anchoring requires enrol + attest first**, because `PassportAnchors.anchor` checks the deposit-key
+  signature against the attested root. The PWA now has an explicit "Activate on chain" step rather
+  than failing at the first anchor.
+
+Also: `firsthand_import` turns a ChatGPT or Claude export into one passport per conversation (the
+`--from-export` the docs had promised and nothing implemented); the gateway serves a landing page at
+`/` instead of a 404; and README §10 now describes the repository that actually exists.
+
+**Still not built:** Envio handlers (deferred — the logs-backed Consent Ledger covers the demo, see
+ADR-0013), the docs site, media/clip capture in the PWA, and the MCP↔PWA WebAuthn PRF handoff.

@@ -30,6 +30,7 @@ import {
 } from "./memory/index.js";
 import type { AnchorRequest } from "./ports/AnchorWriter.js";
 import type { BlobStore } from "./ports/BlobStore.js";
+import type { PreparedTx, TxTransport } from "./ports/TxTransport.js";
 import {
   decodePaymentHeader,
   encodePaymentHeader,
@@ -383,12 +384,16 @@ describe("OnchainAnchorWriter via a relay (the browser's write path)", () => {
   });
 
   it("relays the write and recovers block and batch index by reading the chain", async () => {
-    const sent: { to: string; data: string }[] = [];
-    const transport = {
-      kind: "public" as const,
-      async send(tx: { to: string; data: string }) {
+    const sent: PreparedTx[] = [];
+    const transport: TxTransport = {
+      kind: "public",
+      async send(tx) {
         sent.push(tx);
-        return { hash: `0x${"ab".repeat(32)}`, transport: "public" as const, submittedAt: 1 };
+        return {
+          hash: `0x${"ab".repeat(32)}`,
+          transport: "public",
+          submittedAt: 1,
+        };
       },
       async capabilities() {
         return { encryptedMempool: false };
@@ -425,8 +430,8 @@ describe("OnchainAnchorWriter via a relay (the browser's write path)", () => {
   });
 
   it("simulates first, so a refusal never costs the relayer a transaction", async () => {
-    const transport = {
-      kind: "public" as const,
+    const transport: TxTransport = {
+      kind: "public",
       send: async () => {
         throw new Error("should not be reached");
       },

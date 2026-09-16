@@ -1,4 +1,3 @@
-import { handle } from "hono/vercel";
 import monadTestnet from "../../../deployments/10143.json" with { type: "json" };
 import { loadConfig } from "./config.js";
 import { createGateway } from "./server.js";
@@ -35,4 +34,8 @@ const missing = [
 ];
 if (missing.length > 0) gateway.logger.warn("hosted gateway is degraded", { missing });
 
-export default handle(gateway.app);
+// Vercel's web-standard `fetch` export: one function, every method, the original request URL —
+// the documented shape for Hono-style apps (functions-api-reference, "fetch Web Standard").
+export default {
+  fetch: (request: Request): Response | Promise<Response> => gateway.app.fetch(request),
+};

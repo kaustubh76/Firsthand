@@ -116,6 +116,7 @@
         "**/cli.ts",
         "**/bin/**",
         "experiments/**",
+        "apps/demo/src/**",
         "apps/mcp/src/index.ts"
       ],
       "linter": {

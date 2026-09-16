@@ -12,7 +12,8 @@ import {
 } from "@firsthand/adapters";
 import { type Address, ConfigError, hexToBytes } from "@firsthand/core";
 import { StaticPrfSource } from "@firsthand/crypto";
-import { createLogger, loadDotenv } from "@firsthand/runtime";
+import { createLogger } from "@firsthand/runtime";
+import { loadDotenv } from "@firsthand/runtime/node";
 import { BuyerSession, createBuyerKeys, FirsthandClient, type LockerSession } from "@firsthand/sdk";
 import {
   assertChain,

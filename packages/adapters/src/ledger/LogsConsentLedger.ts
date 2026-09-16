@@ -35,8 +35,21 @@ export interface LogsConsentLedgerOptions {
   readonly passportAnchors: Address;
   readonly grantManager: Address;
   readonly receiptLedger: Address;
-  /** Deployment block — scanning from 0 on a long-lived chain is pointless and slow. */
+  /** Where to start scanning. Defaults to `head - lookbackBlocks`. */
   readonly fromBlock?: bigint;
+  /**
+   * How far back to look when `fromBlock` is absent. Monad's public RPC caps `eth_getLogs` at a
+   * **100-block range** (measured 2026-09-16), so history costs one request per 100 blocks: this is
+   * a recent-activity view, not an archive. Full history is what the Envio indexer is for (ADR-0013).
+   */
+  readonly lookbackBlocks?: bigint;
+  /** Max blocks per `eth_getLogs` call. 100 is Monad's public limit; anvil and archives allow more. */
+  readonly maxRange?: bigint;
+  /**
+   * Minimum gap between RPC calls, in ms. Monad's public endpoint caps throughput at 25 requests/s
+   * (measured 2026-09-16) across *all* in-flight scans, so this is paced instance-wide, not per call.
+   */
+  readonly minRequestIntervalMs?: number;
 }
 
 /**
@@ -50,22 +63,75 @@ export interface LogsConsentLedgerOptions {
  */
 export class LogsConsentLedger implements ConsentLedger {
   readonly #o: LogsConsentLedgerOptions;
+  #queue: Promise<void> = Promise.resolve();
 
   constructor(options: LogsConsentLedgerOptions) {
     this.#o = options;
   }
 
-  get #range() {
-    return { fromBlock: this.#o.fromBlock ?? 0n, toBlock: "latest" as const };
+  /**
+   * Splits a scan into windows the RPC will accept. Both limits are real on Monad's public endpoint:
+   * 100 blocks per `eth_getLogs` and 25 requests/second (measured 2026-09-16), and the second is
+   * global, so requests are paced instance-wide — `consentTimeline` fans out four scans at once.
+   */
+  async #scan<T>(
+    query: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>,
+  ): Promise<T[]> {
+    // cacheTime 0: viem caches block numbers for ~4 s, which would hide a rescission that just landed.
+    const head = await this.#paced(() => this.#o.publicClient.getBlockNumber({ cacheTime: 0 }));
+    const lookback = this.#o.lookbackBlocks ?? 500n;
+    const from = this.#o.fromBlock ?? (head > lookback ? head - lookback : 0n);
+    const max = this.#o.maxRange ?? 100n;
+    const windows: [bigint, bigint][] = [];
+    for (let start = from; start <= head; start += max) {
+      const end = start + max - 1n > head ? head : start + max - 1n;
+      windows.push([start, end]);
+    }
+    const chunks = await Promise.all(
+      windows.map(([a, b]) => this.#paced(() => this.#withRetry(() => query(a, b)))),
+    );
+    return chunks.flat();
+  }
+
+  /** Throughput caps are transient; a range or argument error is not. */
+  async #withRetry<T>(fn: () => Promise<readonly T[]>): Promise<readonly T[]> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        if (!/limited|rate|429|timeout/i.test((error as Error).message ?? "")) throw error;
+        await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
+      }
+    }
+    throw lastError;
+  }
+
+  /** One queue for the whole instance: pacing each scan separately still blows a global cap. */
+  #paced<T>(fn: () => Promise<T>): Promise<T> {
+    const gap = this.#o.minRequestIntervalMs ?? 50;
+    const run = this.#queue.then(async () => {
+      if (gap > 0) await new Promise((r) => setTimeout(r, gap));
+      return fn();
+    });
+    this.#queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   async receiptsForGrant(grantId: Bytes32): Promise<readonly ReceiptView[]> {
-    const logs = await this.#o.publicClient.getLogs({
-      address: this.#o.receiptLedger,
-      event: EVENTS.receipt,
-      args: { grantId },
-      ...this.#range,
-    });
+    const logs = await this.#scan((fromBlock, toBlock) =>
+      this.#o.publicClient.getLogs({
+        address: this.#o.receiptLedger,
+        event: EVENTS.receipt,
+        args: { grantId },
+        fromBlock,
+        toBlock,
+      }),
+    );
     return logs.map((l) => ({
       receiptId: l.args.receiptId as Bytes32,
       grantId: l.args.grantId as Bytes32,
@@ -79,12 +145,15 @@ export class LogsConsentLedger implements ConsentLedger {
   }
 
   async anchorsFor(principalId: Bytes32, ns: number): Promise<readonly AnchorView[]> {
-    const logs = await this.#o.publicClient.getLogs({
-      address: this.#o.passportAnchors,
-      event: EVENTS.anchored,
-      args: { principalId, ns },
-      ...this.#range,
-    });
+    const logs = await this.#scan((fromBlock, toBlock) =>
+      this.#o.publicClient.getLogs({
+        address: this.#o.passportAnchors,
+        event: EVENTS.anchored,
+        args: { principalId, ns },
+        fromBlock,
+        toBlock,
+      }),
+    );
     return logs.map((l) => ({
       batchRoot: l.args.batchRoot as Bytes32,
       ns: Number(l.args.ns),
@@ -103,33 +172,45 @@ export class LogsConsentLedger implements ConsentLedger {
    */
   async consentTimeline(principalId: Bytes32): Promise<readonly ConsentEvent[]> {
     const [enrolled, attested, granted] = await Promise.all([
-      this.#o.publicClient.getLogs({
-        address: this.#o.principalRegistry,
-        event: EVENTS.enrolled,
-        args: { principalId },
-        ...this.#range,
-      }),
-      this.#o.publicClient.getLogs({
-        address: this.#o.principalRegistry,
-        event: EVENTS.attested,
-        args: { principalId },
-        ...this.#range,
-      }),
-      this.#o.publicClient.getLogs({
-        address: this.#o.grantManager,
-        event: EVENTS.granted,
-        args: { principalId },
-        ...this.#range,
-      }),
+      this.#scan((fromBlock, toBlock) =>
+        this.#o.publicClient.getLogs({
+          address: this.#o.principalRegistry,
+          event: EVENTS.enrolled,
+          args: { principalId },
+          fromBlock,
+          toBlock,
+        }),
+      ),
+      this.#scan((fromBlock, toBlock) =>
+        this.#o.publicClient.getLogs({
+          address: this.#o.principalRegistry,
+          event: EVENTS.attested,
+          args: { principalId },
+          fromBlock,
+          toBlock,
+        }),
+      ),
+      this.#scan((fromBlock, toBlock) =>
+        this.#o.publicClient.getLogs({
+          address: this.#o.grantManager,
+          event: EVENTS.granted,
+          args: { principalId },
+          fromBlock,
+          toBlock,
+        }),
+      ),
     ]);
     const grantIds = granted.map((l) => l.args.grantId as Bytes32);
     const rescinded = grantIds.length
-      ? await this.#o.publicClient.getLogs({
-          address: this.#o.grantManager,
-          event: EVENTS.rescinded,
-          args: { grantId: grantIds },
-          ...this.#range,
-        })
+      ? await this.#scan((fromBlock, toBlock) =>
+          this.#o.publicClient.getLogs({
+            address: this.#o.grantManager,
+            event: EVENTS.rescinded,
+            args: { grantId: grantIds },
+            fromBlock,
+            toBlock,
+          }),
+        )
       : [];
 
     const events: ConsentEvent[] = [

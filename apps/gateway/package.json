@@ -35,5 +35,12 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "viem": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "require": "./dist/server.cjs"
+    }
   }
 }

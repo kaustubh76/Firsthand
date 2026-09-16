@@ -6,7 +6,7 @@ import {
   type TxTransport,
   type X402Facilitator,
 } from "@firsthand/adapters";
-import { type Deployment, loadDeployment } from "@firsthand/contracts/deployments";
+import type { Deployment } from "@firsthand/contracts/deployments";
 import type { Address } from "@firsthand/core";
 import { ConfigError } from "@firsthand/core";
 import type { Chain, PublicClient, Transport, WalletClient } from "viem";

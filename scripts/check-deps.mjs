@@ -78,6 +78,17 @@ const GRAPH = {
     // Hard rule: the serving path never holds key material (ADR-0001, README §4/§12).
     forbidden: ["@firsthand/crypto"],
   },
+  "firsthand-demo": {
+    internal: [
+      "@firsthand/core",
+      "@firsthand/crypto",
+      "@firsthand/adapters",
+      "@firsthand/sdk",
+      "@firsthand/runtime",
+      "@firsthand/contracts",
+    ],
+    external: ["viem"],
+  },
   "firsthand-mcp": {
     internal: [
       "@firsthand/sdk",

@@ -44,6 +44,9 @@ import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { type X402Vars, x402 } from "./middleware/x402.js";
 import { Relay } from "./services/Relay.js";
+
+export { type GatewayConfig, loadConfig } from "./config.js";
+
 import { Serving } from "./services/Serving.js";
 
 export interface GatewayApp {
@@ -146,6 +149,9 @@ export function createGateway(
       grantManager: d.GrantManager.toLowerCase() as Address,
       receiptLedger: d.ReceiptLedger.toLowerCase() as Address,
       ...(config.LEDGER_FROM_BLOCK === undefined ? {} : { fromBlock: config.LEDGER_FROM_BLOCK }),
+      lookbackBlocks: config.LEDGER_LOOKBACK_BLOCKS,
+      maxRange: config.LEDGER_MAX_RANGE,
+      minRequestIntervalMs: config.LEDGER_MIN_REQUEST_INTERVAL_MS,
     });
     if (clients.walletClient && config.RELAY_ENABLED) {
       // Only the four contracts whose entry points authorise by signature rather than msg.sender.
@@ -367,21 +373,30 @@ export function createGateway(
   // ── audit (Consent Ledger) ──────────────────────────────────────────────────────────────────
   // The evidence surface: what was licensed, what was paid for, and when consent ended.
 
+  // Epochs, block numbers and timestamps are bigints; JSON has no such thing. Serialise them as
+  // decimal strings rather than letting JSON.stringify throw a 500 on the audit surface.
+  const jsonSafe = <T>(value: T): unknown =>
+    JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+
   app.get("/v1/grants/:grantId/receipts", async (c) => {
     const grantId = parseId(c.req.param("grantId"), "grantId");
-    return c.json({ grantId, receipts: await requireLedger().receiptsForGrant(grantId) });
+    return c.json(jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId) }));
   });
 
   app.get("/v1/principals/:principalId/anchors", async (c) => {
     const principalId = parseId(c.req.param("principalId"), "principalId");
     const ns = Number(c.req.query("ns") ?? "0");
     if (!Number.isInteger(ns) || ns < 0 || ns > 15) throw new ValidationError("ns must be 0..15");
-    return c.json({ principalId, ns, anchors: await requireLedger().anchorsFor(principalId, ns) });
+    return c.json(
+      jsonSafe({ principalId, ns, anchors: await requireLedger().anchorsFor(principalId, ns) }),
+    );
   });
 
   app.get("/v1/principals/:principalId/timeline", async (c) => {
     const principalId = parseId(c.req.param("principalId"), "principalId");
-    return c.json({ principalId, events: await requireLedger().consentTimeline(principalId) });
+    return c.json(
+      jsonSafe({ principalId, events: await requireLedger().consentTimeline(principalId) }),
+    );
   });
 
   // ── relay ───────────────────────────────────────────────────────────────────────────────────

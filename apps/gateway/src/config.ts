@@ -29,6 +29,12 @@ export const GatewayConfigSchema = z.object({
   RELAY_ENABLED: z.coerce.boolean().default(false),
   /** Deployment block: where the Consent Ledger starts scanning logs. Scanning from 0 is slow. */
   LEDGER_FROM_BLOCK: z.coerce.bigint().optional(),
+  /** How far back the log-backed ledger scans when LEDGER_FROM_BLOCK is unset. */
+  LEDGER_LOOKBACK_BLOCKS: z.coerce.bigint().default(500n),
+  /** Max blocks per eth_getLogs call — Monad's public RPC caps this at 100. */
+  LEDGER_MAX_RANGE: z.coerce.bigint().default(100n),
+  /** Minimum ms between log requests; Monad's public RPC caps throughput at 25/s. */
+  LEDGER_MIN_REQUEST_INTERVAL_MS: z.coerce.number().int().min(0).default(50),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
 

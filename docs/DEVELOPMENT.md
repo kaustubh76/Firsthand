@@ -18,6 +18,12 @@
 | `pnpm check:all` | everything CI runs, in order |
 | `pnpm --filter @firsthand/experiments s1 -- --n 10000` | run a scenario; `report` renders results |
 
+## Start here
+
+New to the repo? [`QUICKSTART.md`](../QUICKSTART.md) — `pnpm demo` runs a complete first recall
+(deposit → paid query → rescission → refusal) on a local chain in about 15 seconds, no keys needed.
+`pnpm demo -- --testnet` does the same against the live Monad deployment.
+
 ## Reading the system
 
 `docs/diagrams/firsthand-product.excalidraw` is the one-canvas map of the whole product — every

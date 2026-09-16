@@ -1,4 +1,4 @@
-import { loadDotenv } from "@firsthand/runtime";
+import { loadDotenv } from "@firsthand/runtime/node";
 import { serve } from "@hono/node-server";
 import { loadConfig } from "./config.js";
 import { createGateway } from "./server.js";

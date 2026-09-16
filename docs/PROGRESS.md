@@ -30,7 +30,7 @@ project's own calendar.
 | 2 · Passports & anchors | passports, batching, `PassportAnchors` (two storage layouts), deposit refusal | **done** — S1 + S4 pass on chain |
 | 3 · Grants, payment, verify | `GrantManager`, x402 settlement, `RoyaltyRouter`, `ReceiptLedger`, `FirsthandLens` | **done** — S2 end-to-end paid query |
 | 4 · Rescind | BTX transport, commit-reveal fallback, race harness, freeze/thaw hysteresis | **done** — S3 run, H2 data collected |
-| 5 · Surfaces | capture PWA on live contracts, Envio consent ledger, docs site | next |
+| 5 · Surfaces | quickstart + `pnpm demo`, MCP on the live deployment, gateway relay, Consent Ledger | **in progress** — first recall runs in ~15 s locally and against testnet; capture PWA and docs site remain |
 | 6 · Traction & freeze | two external integration PRs, testnet deploy, demo, videos | next |
 
 Shipped so far: 7 immutable contracts (no proxies, no admin keys) with **121 Foundry tests, 100 %
@@ -162,3 +162,34 @@ it gives accountability, not prevention, and the README says so in those words.
 > receipt trail, integration is an SDK call and an endpoint, and I'll write the PR.
 >
 > Repo: https://github.com/kaustubh76/Firsthand
+
+---
+
+## Update — Phase 5 in progress (16 Sep 2026)
+
+**A stranger can now get to a first recall.** `QUICKSTART.md` → `pnpm demo` spawns a local chain,
+deploys, starts the real gateway process and runs the whole loop — deposit, grant, two paid queries,
+Lineage Manifest, rescission, and the refusal that follows it — in **about 15 seconds**, with no
+keys, no faucet and no accounts. `pnpm demo -- --testnet` runs the identical script against the live
+Monad deployment; transaction hashes print as explorer links.
+
+Three things that were quietly broken and are now fixed:
+
+- **The MCP server could never produce a recallable deposit.** It hardcoded an in-memory anchor
+  writer regardless of configuration, so nothing it deposited was anchored, and the gateway refused
+  the sidecar as unanchored. It now reads one `DEPLOYMENTS_FILE`, anchors for real and publishes to
+  a gateway — and when it is *not* configured for that, the tool says so instead of looking fine.
+- **`.env` files were decorative.** Nothing loaded them; a gateway started per its own README ran on
+  defaults while the operator believed otherwise. Both apps now load `.env` and log which file.
+- **A browser could not submit a transaction at all.** The gateway has an opt-in relay
+  (`POST /v1/relay`), allow-listed to the deployment's authority contracts, zero value, simulated
+  first — safe because authorisation lives in the calldata, never in `msg.sender`.
+
+**The Consent Ledger is real and reads from chain logs** (ADR-0013), exposed at
+`/v1/principals/:id/timeline` — the demo's last step prints enrolled → attested → granted →
+rescinded with block numbers. Envio remains the indexed path; two measured limits made the log path
+worth pinning down: Monad's public RPC caps `eth_getLogs` at **100 blocks per call** and **25
+requests/second**, so this is a recent-window view, not an archive.
+
+Still open in Phase 5: the capture PWA on live contracts (the relay unblocks it), the docs site, and
+Envio's handlers.

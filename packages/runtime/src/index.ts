@@ -1,7 +1,5 @@
 export type { CircuitBreakerOptions, CircuitState } from "./circuitBreaker.js";
 export { CircuitBreaker } from "./circuitBreaker.js";
-export type { LoadedEnv } from "./dotenv.js";
-export { loadDotenv } from "./dotenv.js";
 export { loadEnv } from "./env.js";
 export type { LogFields, Logger, LoggerOptions, LogLevel } from "./logger.js";
 export { createLogger, noopLogger, REDACT_KEYS, REDACTED, redact } from "./logger.js";

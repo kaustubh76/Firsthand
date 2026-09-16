@@ -59,7 +59,9 @@ describe.skipIf(!enabled)("Phase 1 gate: enroll → attest round-trip on a live 
     if (!clients.walletClient) throw new Error("relayer wallet missing");
     const live = await clients.publicClient.getChainId();
     if (live !== deployment.chainId) {
-      throw new Error(`RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${deployment.chainId}`);
+      throw new Error(
+        `RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${deployment.chainId}`,
+      );
     }
     transport = new PublicMempoolTransport(clients.walletClient);
     registry = deployment.PrincipalRegistry.toLowerCase() as Address;

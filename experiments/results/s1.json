@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-13T16:38:52.337Z",
+  "generatedAt": "2026-09-16T06:16:52.915Z",
   "trials": [
     {
       "scenario": "s1",
@@ -173,6 +173,132 @@
         },
         "anchorGasPerBatch": {
           "value": 171358,
+          "unit": "gas"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "H3 target: ≤ 8 hashes/asset and a 10k-asset corpus verifies in < 2 s (verifyMerkleMs) in the reference verifier.",
+        "verifyFullMs additionally re-proves every origin signature; pure-JS ECDSA recovery costs ~ms/asset (native path is roadmap).",
+        "H1 gas observed."
+      ]
+    },
+    {
+      "scenario": "s1",
+      "arm": "anchors-baseline",
+      "hypothesis": "H3",
+      "startedAt": "2026-09-16T06:14:19.377Z",
+      "durationMs": 67069.528417,
+      "metrics": {
+        "passports": {
+          "value": 2560,
+          "unit": "count"
+        },
+        "batches": {
+          "value": 10,
+          "unit": "count"
+        },
+        "depositMs": {
+          "value": 36828.884834,
+          "unit": "ms"
+        },
+        "verifyMerkleMs": {
+          "value": 9041.601917,
+          "unit": "ms"
+        },
+        "verifyMerklePerAssetUs": {
+          "value": 3531.875748828125,
+          "unit": "us"
+        },
+        "verifyFullMs": {
+          "value": 16404.255708000004,
+          "unit": "ms"
+        },
+        "verifySignaturePerAssetUs": {
+          "value": 3523.733897656234,
+          "unit": "us"
+        },
+        "hashesPerAsset": {
+          "value": 8,
+          "unit": "hashes"
+        },
+        "proofBytesPerAsset": {
+          "value": 257,
+          "unit": "bytes"
+        },
+        "manifestBytes": {
+          "value": 3176113,
+          "unit": "bytes"
+        },
+        "anchorGasPer1k": {
+          "value": 784601.953125,
+          "unit": "gas"
+        },
+        "anchorGasPerBatch": {
+          "value": 200858.1,
+          "unit": "gas"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "H3 target: ≤ 8 hashes/asset and a 10k-asset corpus verifies in < 2 s (verifyMerkleMs) in the reference verifier.",
+        "verifyFullMs additionally re-proves every origin signature; pure-JS ECDSA recovery costs ~ms/asset (native path is roadmap).",
+        "H1 gas observed."
+      ]
+    },
+    {
+      "scenario": "s1",
+      "arm": "anchors-paged",
+      "hypothesis": "H3",
+      "startedAt": "2026-09-16T06:15:46.641Z",
+      "durationMs": 66259.01599999999,
+      "metrics": {
+        "passports": {
+          "value": 2560,
+          "unit": "count"
+        },
+        "batches": {
+          "value": 10,
+          "unit": "count"
+        },
+        "depositMs": {
+          "value": 36841.042208,
+          "unit": "ms"
+        },
+        "verifyMerkleMs": {
+          "value": 7258.572832999998,
+          "unit": "ms"
+        },
+        "verifyMerklePerAssetUs": {
+          "value": 2835.3800128906246,
+          "unit": "us"
+        },
+        "verifyFullMs": {
+          "value": 16228.84220800001,
+          "unit": "ms"
+        },
+        "verifySignaturePerAssetUs": {
+          "value": 3468.797365234408,
+          "unit": "us"
+        },
+        "hashesPerAsset": {
+          "value": 8,
+          "unit": "hashes"
+        },
+        "proofBytesPerAsset": {
+          "value": 257,
+          "unit": "bytes"
+        },
+        "manifestBytes": {
+          "value": 3176113,
+          "unit": "bytes"
+        },
+        "anchorGasPer1k": {
+          "value": 751758.984375,
+          "unit": "gas"
+        },
+        "anchorGasPerBatch": {
+          "value": 192450.3,
           "unit": "gas"
         }
       },

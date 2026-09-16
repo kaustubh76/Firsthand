@@ -2,6 +2,7 @@
 
 **Monad Metropolis 2026 · Track 04 (Trust, Identity & AI Infrastructure) · solo build**
 Repo: <https://github.com/kaustubh76/Firsthand> · as of 16 Sep 2026
+**Live on Monad testnet (chainId 10143)** — addresses and costs in `deployments/NOTES.md`
 
 ---
 
@@ -38,8 +39,10 @@ packages with **309 tests** and coverage gates; an MCP server with all seven too
 gateway that holds no key material; a capture PWA; ChatGPT/Claude importers; and an experiments
 harness whose raw traces are committed as JSON.
 
-Every phase gate also runs against a live chain in CI (`anvil --odyssey`, which ships the RIP-7212
-P-256 precompile), not just against mocks.
+Every phase gate runs against a live chain in CI (`anvil --odyssey`, which ships the RIP-7212 P-256
+precompile), not just against mocks — **and all four now also pass against the real deployment on
+Monad testnet**, where the P-256 precompile is native rather than emulated. Deploy plus the full
+gate-and-experiment run cost 3.18 MON.
 
 ## What the experiments actually measured
 
@@ -50,17 +53,32 @@ manifest verification: **1.93 s** (≈ 193 µs/asset, 8 hashes each) — at the 
 every origin signature as well costs 31.4 s in pure JS; that needs a native verifier or sampling,
 and it is written down as such.
 
-**H1 — clustered storage is cheaper (not supported on a vanilla EVM).** Baseline anchoring costs
-**168 109 gas/batch (657 gas/passport)**; the clustered "page" layout costs **171 358 (+1.9 %)**.
-The claim depends entirely on Monad's MIP-8 page pricing and is honestly recorded as unproven until
-re-measured on testnet. Both layouts ship so the comparison can be re-run in one command.
+**H1 — clustered storage is cheaper: false on a vanilla EVM, true on Monad.** The same harness, the
+same 10 × 256 batches, two pricings:
+
+| layout | anvil (vanilla EVM) | Monad testnet |
+|---|---|---|
+| baseline | 168 109 gas/batch | 200 858 |
+| paged (clustered) | 171 358 (**+1.9 %**) | 192 450 (**−4.2 %**) |
+
+The sign flips. Clustering costs 1.9 % extra under uniform SSTORE pricing and saves 4.2 % under
+Monad's — which is precisely why both layouts were built and kept. Monad also charges more in
+absolute terms for the same anchor, so the layout choice matters more there, not less.
 
 **Paid query path.** `RoyaltyRouter.settle` — EIP-3009 pull, integer-exact royalty split, receipt —
-costs **241 741 gas** per query; 100 paid queries, receipts on chain, manifest with receipts
-verifies, and the first query after a rescission reverts.
+costs **241 741 gas** on a vanilla EVM and **348 087 gas on Monad testnet** (+44 %). End-to-end
+query latency is p50 **3.5 s** on testnet against 102 ms on instant-mining anvil — real blocks and
+confirmation, not predicate cost. Receipts land on chain, the manifest carrying them verifies, and
+the first settlement after a rescission reverts.
 
-**H2 — an encrypted mempool stops the extraction race (the interesting one).** BTX is not deployed
-on Monad testnet, so I built the race harness anyway and measured the bound. 50 trials per arm,
+**H2 — an encrypted mempool stops the extraction race (the interesting one).** Two things get in the
+way of measuring this on Monad, and both are worth stating plainly. BTX is not deployed. And Monad
+has **no global mempool** — RPC nodes forward straight to the next leaders, so `txpool_content` does
+not exist and an RPC-level observer has nothing to watch at all; the harness refuses the arm with
+that reason rather than reporting blind trials as a result. The realistic adversary on Monad is a
+leader or builder with privileged visibility, not a bot on a public endpoint, which narrows H2's
+threat model considerably. What follows is therefore the anvil measurement of the bound: 50 trials
+per arm,
 400 ms fee-ordered blocks, with the observer bot submitting settlements directly:
 
 | arm | extraction success | detection | queries paid |
@@ -87,8 +105,11 @@ forged anchors were refused by the contract itself.
    mempool? The transport is written and probe-gated — it signs, seals through a hook, and posts via
    a configurable RPC method; it refuses rather than silently falling back to the public mempool. I
    need the method name and whether the seal step is client-side. Happy to be an early tester.
-2. **MIP-8 storage pages.** Is there a spec or pricing note for clustered storage? My paged layout
-   is a best guess at what the discount rewards (contiguity), and H1 rests on it.
+   Related: with no global mempool on Monad, is the intended threat model for BTX *leader*
+   visibility rather than mempool visibility? That changes what H2 should even be claiming.
+2. **MIP-8 storage pages.** My clustered layout measures 4.2 % cheaper than the flat one on testnet,
+   which is the right direction but smaller than the ~98 % headline. Is there a spec or pricing note
+   so I can tell whether the layout is actually hitting the page discount, or only partly?
 3. **Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
    so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?
 4. **Native x402 facilitator.** The client is built against the standard `exact` scheme; I'd like a
@@ -123,19 +144,21 @@ it gives accountability, not prevention, and the README says so in those words.
 ## Short version (for a DM or a Discord mentor channel)
 
 > **FIRSTHAND** (Metropolis Track 04, solo): passkey-signed data passports + per-query x402 payment
-> + withdrawable consent, on Monad. Phases 0–4 of 6 are done and pushed — 7 immutable contracts
-> (121 tests, 100 % line coverage), gateway, MCP server, SDK, capture PWA, and an experiments
-> harness whose traces are committed. Measured so far: anchoring 657 gas/passport, a paid query
-> settles in 241 741 gas, 10 k passports verify in 1.93 s, and the refusal gate turns away 100 % of
-> unprovable deposits. Two findings I report as prominently as the wins: the clustered-storage gas
-> claim is **not** supported on a vanilla EVM (+1.9 %, needs MIP-8 pricing), and my rescission-race
-> harness says an encrypted mempool removes the attacker's *signal* but not same-block fee
-> competition — so the honest guarantee is bounded loss plus a dated end of consent, not "the race
-> never starts".
+> + withdrawable consent. **Live on Monad testnet** — all ten contracts deployed and all four phase
+> gates passing against the real chain, P-256 enrolment running on the native RIP-7212 precompile.
+> Phases 0–4 of 6 done: 121 Foundry tests at 100 % line coverage, gateway, MCP server, SDK, capture
+> PWA, and an experiments harness whose raw traces are committed.
+>
+> The headline result: I shipped two storage layouts specifically to test whether clustering pays on
+> Monad. On a vanilla EVM the clustered one is **1.9 % worse**; on Monad testnet it is **4.2 %
+> better** — the sign flips, so that claim is true on Monad and false generically. A paid query
+> settles in 348 k gas on testnet (242 k on a vanilla EVM). Refusal holds at precision/recall 1.0.
 >
 > Two things I'd love help with: (1) **BTX** — any testnet endpoint or timeline? My transport is
-> written and probe-gated, I just need the RPC surface. (2) **Integration partners** for Phase 6 —
-> if you're building an agent or marketplace that wants provenance-checked data with a receipt
-> trail, integration is an SDK call and an endpoint, and I'll write the PR.
+> written and probe-gated. And since Monad has no global mempool (`txpool_content` doesn't exist, so
+> my RPC-level observer bot has nothing to watch), is BTX's threat model *leader* visibility rather
+> than mempool visibility? That changes what my H2 should claim. (2) **Integration partners** for
+> Phase 6 — if you're building an agent or marketplace that wants provenance-checked data with a
+> receipt trail, integration is an SDK call and an endpoint, and I'll write the PR.
 >
 > Repo: https://github.com/kaustubh76/Firsthand

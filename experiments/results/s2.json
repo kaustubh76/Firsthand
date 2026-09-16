@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-13T18:37:47.604Z",
+  "generatedAt": "2026-09-16T06:19:12.066Z",
   "trials": [
     {
       "scenario": "s2",
@@ -73,6 +73,48 @@
         },
         "settleGasPerQuery": {
           "value": 241741,
+          "unit": "gas"
+        }
+      },
+      "onChain": true,
+      "notes": [
+        "settleGasPerQuery = RoyaltyRouter.settle (EIP-3009 pull + split + receipt) on a vanilla EVM; Monad pricing applies on testnet.",
+        "Each query is one receipt; the last receipt rides in the exported manifest (H3 audit file)."
+      ]
+    },
+    {
+      "scenario": "s2",
+      "arm": "anchors-baseline",
+      "hypothesis": "H1",
+      "startedAt": "2026-09-16T06:17:33.272Z",
+      "durationMs": 98782.1605,
+      "metrics": {
+        "queries": {
+          "value": 25,
+          "unit": "count"
+        },
+        "receiptsRecorded": {
+          "value": 25,
+          "unit": "count"
+        },
+        "queryLatencyP50Ms": {
+          "value": 3466.3757079999996,
+          "unit": "ms"
+        },
+        "queryLatencyP95Ms": {
+          "value": 3566.671040999994,
+          "unit": "ms"
+        },
+        "manifestWithReceiptsVerified": {
+          "value": 1,
+          "unit": "bool"
+        },
+        "refusedAfterRescind": {
+          "value": 1,
+          "unit": "bool"
+        },
+        "settleGasPerQuery": {
+          "value": 348087,
           "unit": "gas"
         }
       },

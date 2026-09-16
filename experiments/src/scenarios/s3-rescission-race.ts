@@ -12,8 +12,8 @@ import {
 import { decodeEventLog } from "viem";
 import {
   type ArmAdapters,
-  ArmUnavailableError,
   Arms,
+  ArmUnavailableError,
   BTX_STATUS,
   resolveArm,
 } from "../arms/index.js";
@@ -117,7 +117,9 @@ async function onChain(arm: string, adapters: ArmAdapters, trials: number, ctx: 
     throw new ArmUnavailableError(
       arm,
       `needs a node whose mining the harness can drive and whose pending pool it can read; ${env.rpcUrl} is not anvil` +
-        ((await hasMempoolFeed(env.rpcUrl)) ? "" : " and does not support txpool_content (no global mempool)"),
+        ((await hasMempoolFeed(env.rpcUrl))
+          ? ""
+          : " and does not support txpool_content (no global mempool)"),
     );
   }
 

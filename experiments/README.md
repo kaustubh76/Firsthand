@@ -7,7 +7,7 @@ Harness for README §15. Arms are adapter selections (ADR-0006); results are raw
 |---|---|---|---|
 | S1 deposit at scale | H3 (memory arm), H1 (`anchors-baseline` / `anchors-paged` on a chain) | yes | `pnpm --filter @firsthand/experiments s1 -- --n 10000` · `… s1 -- --arm anchors-paged --n 2560` |
 | S2 buyer loop | H1 (settlement gas), H3 (manifest with receipts) | yes (memory, `anchors-baseline`) | `… s2 -- --n 100` · `… s2 -- --arm anchors-baseline --n 100` |
-| S3 rescission race | H2 | yes (`B2-public-mempool`, `commit-reveal`, `btx-blind` on anvil; `btx` needs `BTX_RPC_URL`) | `… s3 -- --arm B2-public-mempool --n 50` · `… --arm commit-reveal` · `… --arm btx-blind` |
+| S3 rescission race | H2 | anvil only — see the Monad note below | `… s3 -- --arm B2-public-mempool --n 50` · `… --arm commit-reveal` · `… --arm btx-blind` |
 | S4 refusal | refusal precision | yes | `… s4 -- --n 1000` |
 
 ## Findings so far (memory arm, this machine)
@@ -20,14 +20,36 @@ inclusion proofs; per-asset signature re-proof needs a native verifier (roadmap)
 (`signatures: N`), and the manifest format should stream. Regressions are reported here as
 prominently as wins.
 
-**S1 on-chain (anvil --odyssey, vanilla EVM pricing), 2 560 passports = 10 batches per layout:**
-baseline **168,109 gas/batch = 657 gas/passport**; paged **171,358 gas/batch = 669 gas/passport**
-(+1.9 %). The clustered "page" layout is slightly *more* expensive without MIP-8's page discount —
-H1 is not supported on a vanilla EVM and must be re-measured on Monad testnet (ADR-0010).
+**S1 on-chain, 2 560 passports = 10 batches per layout — H1 measured on both pricings.**
+
+| layout | anvil (vanilla EVM) | **Monad testnet (10143)** |
+|---|---|---|
+| baseline | 168,109 gas/batch · 657 /passport | **200,858 gas/batch · 785 /passport** |
+| paged (clustered) | 171,358 gas/batch · 669 /passport | **192,450 gas/batch · 752 /passport** |
+| paged vs baseline | **+1.9 % (worse)** | **−4.2 % (better)** |
+
+**H1 is not supported on a vanilla EVM and is supported on Monad.** The clustering that costs 1.9 %
+extra under uniform SSTORE pricing earns 4.2 % back under Monad's storage pricing — the sign of the
+effect flips, which is exactly what the two-layout design was built to detect. Note also that Monad
+charges *more* in absolute terms for the same anchor (+19 % baseline, +12 % paged), so the layout
+choice matters more there, not less. Measured 2026-09-16 against the live deployment in
+`deployments/10143.json`; ADR-0010 carries the verdict.
+
+Caveat on the same run: `verifyMerkleMs` for on-chain arms (9.0 s / 7.3 s for 2 560 assets) is
+**not** comparable to the H3 figure below — on a live chain the verifier makes one `isAnchored` RPC
+round-trip per batch root, so that number is dominated by network latency, not hashing.
 
 **S4 on-chain half (`anchors-baseline`), 20 forged anchors signed by a foreign deposit key against
 an enrolled principal:** 20 refused by the contract (`InvalidDepositSignature`), 0 accepted; a
-never-enrolled principal is refused with `EpochNotAttested`.
+never-enrolled principal is refused with `EpochNotAttested`. **Re-run on Monad testnet 2026-09-16:
+identical — 200/200 client-side refusals (precision 1.0, recall 1.0) and 20/20 forged anchors
+refused on chain.**
+
+**S2 on Monad testnet, 1 grant → 25 paid queries:** **348,087 gas per `RoyaltyRouter.settle`**
+(vs 241,741 on a vanilla EVM, +44 %), query latency p50 **3.47 s** / p95 3.57 s end to end — real
+0.4 s blocks plus confirmation, against 102 ms on instant-mining anvil. 25/25 receipts recorded, the
+manifest with receipts verifies, and the settlement after rescission is refused. The anvil numbers
+below remain the like-for-like comparison against the other arms.
 
 **S2 on-chain (`anchors-baseline`, anvil --odyssey), 1 grant → 100 paid queries → manifest:**
 100 receipts recorded, **241,741 gas per `RoyaltyRouter.settle`** (EIP-3009 pull + floor split to one
@@ -70,6 +92,14 @@ What the numbers say, without spin:
   priority fee on the rescission so it is ordered first in its block — is not yet measured
   (`PreparedTx` carries no fee fields; follow-up).
 - One trial per public arm was cut off: the block sealed between broadcast and the bot's burst.
+
+**S3 on Monad testnet: not reproducible, and that is the finding.** The observer model needs a
+readable pending pool; Monad has **no global mempool** — RPC nodes forward straight to the next
+leaders — so `txpool_content` is unsupported and an RPC-level watcher has nothing to see. The
+harness refuses the arm with that reason rather than reporting 50 blind trials as a result. So on
+Monad the public-mempool baseline cannot even be *staged* from a public endpoint: the realistic
+adversary is a leader or builder with privileged visibility, not a bot on an RPC. That narrows H2's
+threat model considerably and should be stated that way rather than as a win.
 
 **S4, 60 injected attacks × 3 classes (foreign lineage, forged content, replayed epoch) + 60
 genuine:** precision 1.0, recall 1.0 — the locker refused every unprovable deposit and no genuine one.

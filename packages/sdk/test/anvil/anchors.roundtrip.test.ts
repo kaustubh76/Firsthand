@@ -64,7 +64,9 @@ describe.skipIf(!enabled)("Phase 2 gate: deposit → anchor → on-chain inclusi
     if (!clients.walletClient) throw new Error("relayer wallet missing");
     const live = await clients.publicClient.getChainId();
     if (live !== deployment.chainId) {
-      throw new Error(`RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${deployment.chainId}`);
+      throw new Error(
+        `RPC is chain ${live} but {DEPLOYMENTS_FILE} describes ${deployment.chainId}`,
+      );
     }
     transport = new PublicMempoolTransport(clients.walletClient);
   });

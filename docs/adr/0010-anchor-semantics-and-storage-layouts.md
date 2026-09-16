@@ -37,5 +37,20 @@ naive SSTORE baseline. The MIP-8 page layout is unconfirmed at Phase 0 (README �
 | paged | 171,358 | 669 | 246,163 |
 
 Without MIP-8 pricing the clustered layout costs +1.9 % per batch (and +22 % for the first anchor
-on a page, which writes the page header). H1 is therefore **not** supported on a vanilla EVM; the
-claim depends on Monad's page discount and is re-measured on testnet with the same harness.
+on a page, which writes the page header). H1 is therefore **not** supported on a vanilla EVM.
+
+## Measured (Monad testnet 10143, 2026-09-16, same harness, same 10 × 256 batches)
+
+| layout | gas / batch | gas / passport | vs baseline |
+|---|---|---|---|
+| baseline | 200,858 | 785 | — |
+| paged | 192,450 | 752 | **−4.2 %** |
+
+**Verdict: H1 holds on Monad and not on a vanilla EVM.** The sign of the effect flips — clustering
+costs 1.9 % extra under uniform SSTORE pricing and saves 4.2 % under Monad's — which is what the
+two-layout design existed to detect. Monad also charges more in absolute terms for the same anchor
+(+19 % baseline, +12 % paged), so the layout choice matters more there, not less.
+
+The deployment binds `PassportAnchorsBaseline` as the canonical `PassportAnchors` (decision 5) since
+that is what the gates ran against; switching the demo to the paged layout is one env var
+(`ANCHORS_LAYOUT=paged`) and a redeploy, and on these numbers it is the better default on Monad.

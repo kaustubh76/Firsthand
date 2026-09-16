@@ -99,7 +99,11 @@ server with `BUYER_PRIVATE_KEY` / `GRANTEE_SEED_HEX` set (`apps/mcp/.env.example
 
 1. Fund a deployer and a relayer with testnet MON; put `MONAD_RPC_URL`, `DEPLOYER_PRIVATE_KEY`,
    `USDC_ADDRESS` (testnet USDC with EIP-3009) in `.env` — never in chat or commits.
-2. `pnpm --filter @firsthand/contracts deploy:testnet` → writes `deployments/10143.json`; commit it.
+2. Deploy: `set -a; source .env; set +a` then
+   `(cd contracts && forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast)`.
+   Writes `deployments/10143.json` — commit it, along with `contracts/broadcast/**/10143/`.
+   Do **not** use the `deploy:testnet` script as-is: it appends `--verify` and no verifier is
+   configured in `foundry.toml` (which also sets `bytecode_hash = "none"`).
 3. `pnpm --filter @firsthand/contracts test:testnet` — fork test enrolls a throw-away key through the
    native precompile.
 4. `ANVIL_RPC_URL=$MONAD_RPC_URL DEPLOYMENTS_FILE=$PWD/deployments/10143.json RELAYER_PRIVATE_KEY=… pnpm test:anvil`

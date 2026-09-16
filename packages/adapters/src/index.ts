@@ -63,6 +63,8 @@ export type { OnchainSettlementOptions } from "./settlement/OnchainSettlement.js
 export { OnchainSettlement, toSettlementError } from "./settlement/OnchainSettlement.js";
 export type { BtxTransportOptions } from "./tx/BtxTransport.js";
 export { BtxTransport } from "./tx/BtxTransport.js";
+export type { HttpRelayTransportOptions } from "./tx/HttpRelayTransport.js";
+export { HttpRelayTransport } from "./tx/HttpRelayTransport.js";
 export { PublicMempoolTransport } from "./tx/PublicMempoolTransport.js";
 export type { MonadFacilitatorClientOptions } from "./x402/MonadFacilitatorClient.js";
 export { MonadFacilitatorClient } from "./x402/MonadFacilitatorClient.js";

@@ -36,6 +36,7 @@ import {
   type PaymentRequirements,
 } from "./ports/X402Facilitator.js";
 import { BtxTransport } from "./tx/BtxTransport.js";
+import { HttpRelayTransport } from "./tx/HttpRelayTransport.js";
 import { MonadFacilitatorClient } from "./x402/MonadFacilitatorClient.js";
 
 const b32 = (n: number): Bytes32 => `0x${n.toString(16).padStart(64, "0")}`;
@@ -353,6 +354,70 @@ describe("BtxTransport", () => {
     });
     expect((await t.probe()).detail).toContain("ECONNREFUSED");
     await expect(t.send({ to: addr(1), data: "0x" })).rejects.toThrow(TransportError);
+  });
+});
+
+describe("HttpRelayTransport", () => {
+  const relay = (status: number, body: unknown, seen?: { url?: string; init?: RequestInit }) =>
+    (async (url: string, init?: RequestInit) => {
+      if (seen) {
+        seen.url = url;
+        seen.init = init;
+      }
+      return new Response(JSON.stringify(body), { status });
+    }) as unknown as typeof fetch;
+
+  it("posts a prepared tx and returns the relay's TxRef", async () => {
+    const seen: { url?: string; init?: RequestInit } = {};
+    const t = new HttpRelayTransport({
+      baseUrl: "http://gw/",
+      fetch: relay(201, { hash: `0x${"ab".repeat(32)}`, transport: "public", submittedAt: 7 }),
+    });
+    const ref = await t.send({ to: addr(1), data: "0xdead", gas: 90_000n });
+    expect(ref).toEqual({ hash: `0x${"ab".repeat(32)}`, transport: "public", submittedAt: 7 });
+    const t2 = new HttpRelayTransport({
+      baseUrl: "http://gw",
+      fetch: relay(201, { hash: `0x${"ab".repeat(32)}` }, seen),
+    });
+    await t2.send({ to: addr(1), data: "0xdead", value: 0n });
+    expect(seen.url).toBe("http://gw/v1/relay");
+    expect(JSON.parse(String(seen.init?.body))).toEqual({
+      to: addr(1),
+      data: "0xdead",
+      value: "0",
+    });
+  });
+
+  it("never claims to be BTX — a relay cannot satisfy a btx rescission plan", async () => {
+    const t = new HttpRelayTransport({
+      baseUrl: "http://gw",
+      fetch: relay(200, { relayer: addr(9) }),
+    });
+    expect(t.kind).toBe("public");
+    expect(await t.capabilities()).toEqual({
+      encryptedMempool: false,
+      detail: `relayed by ${addr(9)}`,
+    });
+  });
+
+  it("maps refusals by status: 400/404 validation, 4xx chain, 5xx retryable transport", async () => {
+    const mk = (status: number, body: unknown) =>
+      new HttpRelayTransport({ baseUrl: "http://gw", fetch: relay(status, body) });
+    await expect(
+      mk(400, { error: "relay: value must be zero" }).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({ code: "FH_VALIDATION" });
+    await expect(
+      mk(404, { error: "relay is not enabled" }).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({ code: "FH_VALIDATION" });
+    await expect(
+      mk(422, { error: "would revert" }).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({ code: "FH_CHAIN" });
+    await expect(
+      mk(503, { error: "relayer down" }).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({ code: "FH_TRANSPORT", retryable: true });
+    await expect(mk(201, { ok: true }).send({ to: addr(1), data: "0x" })).rejects.toMatchObject({
+      code: "FH_CHAIN",
+    });
   });
 });
 

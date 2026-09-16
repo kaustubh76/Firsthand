@@ -22,6 +22,11 @@ export const GatewayConfigSchema = z.object({
   PASSPORT_ANCHORS: address.default("0x0000000000000000000000000000000000000000"),
 
   SETTLEMENT_MODE: z.enum(["memory", "onchain"]).default("memory"),
+  /**
+   * Relay signature-authorised calls (enroll/attest/anchor/grant/rescind) for clients that hold no
+   * key — the capture PWA. Off by default: it spends the relayer's gas on request.
+   */
+  RELAY_ENABLED: z.coerce.boolean().default(false),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
 

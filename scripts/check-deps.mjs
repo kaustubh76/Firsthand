@@ -67,7 +67,13 @@ const GRAPH = {
     external: ["envio"],
   },
   "firsthand-gateway": {
-    internal: ["@firsthand/core", "@firsthand/runtime", "@firsthand/adapters", "@firsthand/sdk"],
+    internal: [
+      "@firsthand/core",
+      "@firsthand/runtime",
+      "@firsthand/adapters",
+      "@firsthand/sdk",
+      "@firsthand/contracts",
+    ],
     external: ["hono", "@hono/node-server", "viem", "zod"],
     // Hard rule: the serving path never holds key material (ADR-0001, README §4/§12).
     forbidden: ["@firsthand/crypto"],

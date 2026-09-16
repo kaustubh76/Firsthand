@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@firsthand/adapters": "workspace:*",
+    "@firsthand/contracts": "workspace:*",
     "@firsthand/core": "workspace:*",
     "@firsthand/runtime": "workspace:*",
     "@firsthand/sdk": "workspace:*",

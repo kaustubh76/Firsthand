@@ -70,12 +70,19 @@ describe("gateway", () => {
       JSON.stringify({
         chainId: 31337,
         PassportAnchors: `0x${"ab".repeat(20)}`,
+        PassportAnchorsBaseline: `0x${"ab".repeat(20)}`,
+        PassportAnchorsPaged: `0x${"bb".repeat(20)}`,
         PrincipalRegistry: `0x${"ac".repeat(20)}`,
+        Rescissions: `0x${"bc".repeat(20)}`,
         GrantManager: `0x${"ad".repeat(20)}`,
         ReceiptLedger: `0x${"ae".repeat(20)}`,
         RoyaltyRouter: `0x${"af".repeat(20)}`,
+        FirsthandLens: `0x${"bf".repeat(20)}`,
         USDC: `0x${"b0".repeat(20)}`,
         anchorsLayout: "baseline",
+        genesis: 1_700_000_000,
+        epochLength: 604_800,
+        revealWindowBlocks: 1000,
       }),
     );
     const gw = createGateway(
@@ -118,6 +125,44 @@ describe("gateway", () => {
         logger: noopLogger,
       }),
     ).toThrow(/chain 31337/);
+
+    // Relay is off unless asked for, and refuses anything outside the deployment's authority
+    // contracts — an open relay would be a free-gas faucet.
+    expect(relayed.relay).toBeNull();
+    const withRelay = createGateway(
+      loadConfig({
+        DEPLOYMENTS_FILE: file,
+        CHAIN_ID: "31337",
+        MONAD_RPC_URL: "http://127.0.0.1:1",
+        RELAYER_PRIVATE_KEY: `0x${"01".repeat(32)}`,
+        RELAY_ENABLED: "true",
+      }),
+      { logger: noopLogger },
+    );
+    expect(withRelay.relay?.allowList.sort()).toEqual(
+      [
+        `0x${"ab".repeat(20)}`, // PassportAnchors
+        `0x${"ac".repeat(20)}`, // PrincipalRegistry
+        `0x${"ad".repeat(20)}`, // GrantManager
+        `0x${"bc".repeat(20)}`, // Rescissions
+      ].sort(),
+    );
+    expect((await withRelay.app.request("/v1/relay/capabilities")).status).toBe(200);
+    const offTarget = await withRelay.app.request("/v1/relay", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: `0x${"99".repeat(20)}`, data: "0x1234" }),
+    });
+    expect(offTarget.status).toBe(400);
+    expect(((await offTarget.json()) as { code: string }).code).toBe("FH_VALIDATION");
+    const withValue = await withRelay.app.request("/v1/relay", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: `0x${"ad".repeat(20)}`, data: "0x1234", value: "1" }),
+    });
+    expect(withValue.status).toBe(400);
+    // Relay disabled → the route says so rather than 404ing like an unknown path.
+    expect((await relayed.app.request("/v1/relay/capabilities")).status).toBe(404);
   });
 
   it("refuses to boot in monad mode without a facilitator URL", () => {

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import {
   type AnchorWriter,
   anvil,
@@ -22,6 +21,7 @@ import {
   type Settlement,
   type X402Facilitator,
 } from "@firsthand/adapters";
+import { type Deployment, loadDeployment } from "@firsthand/contracts/deployments";
 import {
   type Address,
   Bytes32Schema,
@@ -41,6 +41,7 @@ import type { GatewayConfig } from "./config.js";
 import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { type X402Vars, x402 } from "./middleware/x402.js";
+import { Relay } from "./services/Relay.js";
 import { Serving } from "./services/Serving.js";
 
 export interface GatewayApp {
@@ -49,6 +50,8 @@ export interface GatewayApp {
   readonly shutdown: ShutdownRegistry;
   readonly serving: Serving;
   readonly domain: Eip712Domain;
+  /** Present in chain mode with a relayer: submits signature-authorised calls for keyless clients. */
+  readonly relay: Relay | null;
   /** Present in memory mode so tests and demos can seed grants and inspect receipts. */
   readonly memory: {
     grants: MemoryGrantReader;
@@ -57,19 +60,8 @@ export interface GatewayApp {
   } | null;
 }
 
-interface Deployment {
-  chainId: number;
-  PassportAnchors: string;
-  PrincipalRegistry: string;
-  GrantManager: string;
-  ReceiptLedger: string;
-  RoyaltyRouter: string;
-  USDC: string;
-  anchorsLayout: "baseline" | "paged";
-}
-
 function readDeployment(config: GatewayConfig): Deployment {
-  const d = JSON.parse(readFileSync(config.DEPLOYMENTS_FILE as string, "utf8")) as Deployment;
+  const d = loadDeployment(config.DEPLOYMENTS_FILE as string);
   if (BigInt(d.chainId) !== config.CHAIN_ID) {
     throw new ConfigError(
       `DEPLOYMENTS_FILE is for chain ${d.chainId}, CHAIN_ID is ${config.CHAIN_ID}`,
@@ -114,6 +106,7 @@ export function createGateway(
   let payTo = config.PAY_TO.toLowerCase() as Address;
   let usdc = config.USDC_ADDRESS.toLowerCase() as Address;
   let passportAnchors = config.PASSPORT_ANCHORS.toLowerCase() as Address;
+  let relay: Relay | null = null;
 
   if (config.DEPLOYMENTS_FILE) {
     const d = readDeployment(config);
@@ -139,6 +132,20 @@ export function createGateway(
       principalRegistry: d.PrincipalRegistry.toLowerCase() as Address,
       receiptLedger: d.ReceiptLedger.toLowerCase() as Address,
     });
+    if (clients.walletClient && config.RELAY_ENABLED) {
+      // Only the four contracts whose entry points authorise by signature rather than msg.sender.
+      relay = new Relay({
+        publicClient: clients.publicClient,
+        walletClient: clients.walletClient,
+        allow: [
+          d.PrincipalRegistry.toLowerCase() as Address,
+          passportAnchors,
+          d.GrantManager.toLowerCase() as Address,
+          d.Rescissions.toLowerCase() as Address,
+        ],
+        logger,
+      });
+    }
     if (config.SETTLEMENT_MODE === "onchain") {
       if (!clients.walletClient)
         throw new ConfigError("RELAYER_PRIVATE_KEY is required when SETTLEMENT_MODE=onchain");
@@ -225,6 +232,12 @@ export function createGateway(
     const parsed = Bytes32Schema.safeParse(value);
     if (!parsed.success) throw new ValidationError(`${label} must be 32-byte hex`);
     return parsed.data;
+  };
+
+  const parseAddress = (value: string): Address => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(value))
+      throw new ValidationError("to must be a 20-byte address");
+    return value.toLowerCase() as Address;
   };
 
   const requirementsFor = async (
@@ -329,5 +342,33 @@ export function createGateway(
     return c.json({ grantId, wrapRef }, 201);
   });
 
-  return { app, logger, shutdown, serving, domain, memory };
+  // ── relay ───────────────────────────────────────────────────────────────────────────────────
+  // For clients that hold no key (the capture PWA). Authorisation is inside the calldata — a P-256
+  // signature under the contract's own EIP-712 domain — so relaying cannot change what a call means.
+
+  app.get("/v1/relay/capabilities", (c) =>
+    relay
+      ? c.json(relay.capabilities())
+      : c.json({ error: "relay is not enabled on this gateway" }, 404),
+  );
+
+  app.post("/v1/relay", async (c) => {
+    if (!relay) return c.json({ code: "FH_CONFIG", error: "relay is not enabled" }, 404);
+    const body = (await c.req.json().catch(() => null)) as {
+      to?: string;
+      data?: string;
+      value?: string;
+      gas?: string;
+    } | null;
+    if (!body?.to || !body.data) throw new ValidationError("relay: to and data are required");
+    const ref = await relay.send({
+      to: parseAddress(body.to),
+      data: body.data as `0x${string}`,
+      ...(body.value === undefined ? {} : { value: BigInt(body.value) }),
+      ...(body.gas === undefined ? {} : { gas: BigInt(body.gas) }),
+    });
+    return c.json(ref, 201);
+  });
+
+  return { app, logger, shutdown, serving, domain, memory, relay };
 }

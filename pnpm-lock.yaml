@@ -150,6 +150,9 @@ importers:
       '@firsthand/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters
+      '@firsthand/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
       '@firsthand/core':
         specifier: workspace:*
         version: link:../../packages/core

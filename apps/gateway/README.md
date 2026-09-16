@@ -6,7 +6,9 @@ Self-hostable serving path (README §4, §11). **Holds no key material** — enf
 Routes: `GET /healthz`, `GET /.well-known/firsthand.json` (discovery),
 `GET /v1/query/:grantId/:passportId` (402 priced from the sidecar's terms → `X-PAYMENT` → `verify()`
 → settle → `{sidecar, blob, wrappedDek, receipt}`), `GET /v1/passports/:id` (public sidecar),
-`GET /v1/blobs/:id` (ciphertext), `GET /v1/grants/:id/wrap`, `GET /v1/anchors/:root`; ingest
+`GET /v1/blobs/:id` (ciphertext), `GET /v1/grants/:id/wrap`, `GET /v1/anchors/:root`;
+`POST /v1/relay` + `GET /v1/relay/capabilities` (opt-in: submits signature-authorised calls for
+clients holding no key — allow-listed targets, zero value, simulated first); ingest
 `POST /v1/passports` (accepted only if the signature verifies, the root is anchored to the same
 owner and the terms preimage matches), `POST /v1/blobs` (content-addressed), `POST /v1/grants/:id/wrap`
 (only if `keccak256 == wrapRef` on chain). Verified ingest, verified serve — ADR-0011.

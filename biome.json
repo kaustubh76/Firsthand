@@ -20,7 +20,8 @@
       "!experiments/results",
       "!packages/test-vectors/vectors",
       "!packages/indexer/generated",
-      "!pnpm-lock.yaml"
+      "!pnpm-lock.yaml",
+      "!deploy/gateway/api"
     ]
   },
   "formatter": {

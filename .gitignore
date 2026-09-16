@@ -4,7 +4,6 @@ node_modules/
 
 # build outputs
 dist/
-dist-vercel/
 coverage/
 lcov.info
 .turbo/

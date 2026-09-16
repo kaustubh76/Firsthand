@@ -1,24 +1,26 @@
 import { defineConfig } from "tsup";
 
 /**
- * The hosted-gateway bundle: every dependency inlined so the deploy tree needs no install — and so
- * the Vercel builder never has to run Foundry (the contracts package builds its ABIs with forge).
+ * The hosted-gateway bundle: every workspace package inlined, so the deploy tree is a plain npm
+ * project with four registry dependencies — the Vercel builder never sees the monorepo, never runs
+ * Foundry (the contracts package builds its ABIs with forge) and never meets the Node-26 engine gate.
  */
 export default defineConfig({
   entry: { "api/index": "src/vercel.ts" },
-  outDir: "dist-vercel",
+  outDir: "../../deploy/gateway",
   format: ["esm"],
   platform: "node",
   target: "node22",
-  noExternal: [/.*/],
+  noExternal: [/^@firsthand\//],
+  external: ["hono", "viem", "zod", "@vercel/blob"],
   splitting: false,
   sourcemap: false,
-  minify: false,
+  // Whitespace and syntax only: identifiers stay readable in runtime stack traces.
+  esbuildOptions(options) {
+    options.minifyWhitespace = true;
+    options.minifySyntax = true;
+  },
   treeshake: true,
   clean: true,
   dts: false,
-  // CommonJS dependencies (jose, via @vercel/blob) `require` node built-ins; give the ESM bundle one.
-  banner: {
-    js: 'import { createRequire as __fhCreateRequire } from "node:module"; const require = __fhCreateRequire(import.meta.url);',
-  },
 });

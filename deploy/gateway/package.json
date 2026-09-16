@@ -1,0 +1,14 @@
+{
+  "name": "firsthand-gateway-hosted",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "hono": "4.13.7",
+    "viem": "2.56.3",
+    "zod": "4.6.2",
+    "@vercel/blob": "2.8.0"
+  }
+}

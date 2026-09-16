@@ -2,7 +2,7 @@
   "name": "firsthand-capture",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture → passport, locker view, rescind",
+  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture \u2192 passport, locker view, rescind",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@firsthand/adapters": "workspace:*",
     "@firsthand/core": "workspace:*",
     "@firsthand/crypto": "workspace:*",
     "@firsthand/sdk": "workspace:*",
@@ -23,7 +24,6 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@firsthand/adapters": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",

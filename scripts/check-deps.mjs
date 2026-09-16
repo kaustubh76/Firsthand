@@ -100,7 +100,9 @@ const GRAPH = {
     external: ["@modelcontextprotocol/sdk", "zod", "viem"],
   },
   "firsthand-capture": {
-    internal: ["@firsthand/sdk", "@firsthand/crypto", "@firsthand/core"],
+    // Adapters is a runtime dependency: the PWA needs the relay transport and the on-chain reader.
+    // It imports `@firsthand/adapters/client`, never the root entry, which pulls node built-ins.
+    internal: ["@firsthand/sdk", "@firsthand/crypto", "@firsthand/core", "@firsthand/adapters"],
     external: ["react", "react-dom"],
   },
   "@firsthand/experiments": {

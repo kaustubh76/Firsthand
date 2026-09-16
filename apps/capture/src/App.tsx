@@ -1,6 +1,7 @@
 import type { LockerSession } from "@firsthand/sdk/browser";
-import { useMemo, useState } from "react";
-import { createClient, openSession } from "./lib/locker.js";
+import { useEffect, useState } from "react";
+import { type AppConfig, loadConfig } from "./lib/config.js";
+import { type CaptureClient, createClient, openSession } from "./lib/locker.js";
 import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
 import { Capture } from "./routes/Capture.js";
 import { Enroll } from "./routes/Enroll.js";
@@ -10,20 +11,38 @@ import { Rescind } from "./routes/Rescind.js";
 type Route = "capture" | "locker" | "rescind";
 
 export function App() {
-  const client = useMemo(createClient, []);
+  // Addresses come from the gateway's discovery document, so this is async — the browser has no
+  // deployment file to read.
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [client, setClient] = useState<CaptureClient | null>(null);
+  useEffect(() => {
+    void loadConfig().then((c) => {
+      setConfig(c);
+      setClient(createClient(c));
+    });
+  }, []);
   const [credentialId, setCredentialId] = useState<Uint8Array | null>(savedCredentialId);
   const [session, setSession] = useState<LockerSession | null>(null);
   const [route, setRoute] = useState<Route>("capture");
   const [error, setError] = useState<string | null>(null);
 
   async function unlock(id: Uint8Array) {
+    if (!client) return;
     try {
-      setSession(await openSession(client, prfSourceFor(id)));
+      setSession(await openSession(client.client, prfSourceFor(id)));
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
+  if (!config || !client) {
+    return (
+      <section>
+        <h1>FIRSTHAND</h1>
+        <p>Loading…</p>
+      </section>
+    );
+  }
   if (credentialId === null) {
     return (
       <Enroll
@@ -54,8 +73,10 @@ export function App() {
           </button>
         ))}
       </nav>
-      {route === "capture" && <Capture session={session} />}
-      {route === "locker" && <LockerView session={session} />}
+      {route === "capture" && <Capture session={session} config={config} />}
+      {route === "locker" && (
+        <LockerView session={session} config={config} waitForTx={client.waitForTx} />
+      )}
       {route === "rescind" && <Rescind session={session} />}
     </main>
   );

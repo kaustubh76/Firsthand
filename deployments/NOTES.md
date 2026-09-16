@@ -28,10 +28,26 @@ First deploy tx: `0x41985bd7d388d1f700d3453f6064c533c01d06b3eb877b8b9d9cc7b1c2ae
 |---|---|---|
 | Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) |
 | Buyer | `0xE73b48c4d667aAe87cEf56624F5EDB7ba9A1CcD5` | **none** — it only signs; the relayer submits |
+| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float (~1 MON); refill from the faucet |
+
+The hosted relayer is deliberately a separate key with a small float: the public relay spends its
+gas on request, so a stranger looping on it can only ever drain that float, never the deployer.
+Rotate by setting a new `RELAYER_PRIVATE_KEY` on the Vercel project — nothing on chain names it.
 
 The buyer holds no native balance by design: `registerCard` and `acceptTerms` are relayable and the
 payment itself is an EIP-3009 signature, so the demand side never needs gas. Its MockUSDC is minted
 by the gates.
+
+## Hosted surfaces
+
+| Surface | URL | Source tree |
+|---|---|---|
+| Capture PWA | _pending — created from the Vercel dashboard, see `docs/DEPLOY.md`_ | `deploy/capture` |
+| Gateway | _pending_ | `deploy/gateway` |
+
+Until the links are live: `pnpm --filter firsthand-capture e2e` runs the exact shipped PWA tree in a
+browser against a local gateway (`E2E_TESTNET=1` for Monad testnet), so "works in a browser on the
+real chain" is already proven; only the hosting is pending.
 
 ## Caveats a reviewer should know
 

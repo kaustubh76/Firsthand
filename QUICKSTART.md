@@ -6,6 +6,10 @@ can withdraw consent — after which the same query is refused.
 
 This page gets you from `git clone` to watching that happen. Target: **under 10 minutes.**
 
+> **Hosted:** the capture app and gateway deploy from `deploy/capture` and `deploy/gateway`
+> ([`docs/DEPLOY.md`](docs/DEPLOY.md)). When the public links are live they are listed in
+> [`deployments/NOTES.md`](deployments/NOTES.md); the app needs nothing but a passkey.
+
 ## Prerequisites
 
 | | Why | Check |
@@ -81,3 +85,6 @@ the relayer submits and pays. Transaction hashes print as explorer links.
 - **`forge: command not found`** — install Foundry (above), then reopen your shell.
 - **`anvil did not start`** — something else may be on port 8545: `pkill anvil` and retry.
 - **contracts fail to build** — submodules: `git submodule update --init --recursive`.
+- **the capture app shows "offline · …"** — the status strip says why (gateway unreachable, relay
+  off, memory mode). Open it with `?gateway=http://127.0.0.1:8402` to point at a local gateway
+  started with `RELAY_ENABLED=true` and a `DEPLOYMENTS_FILE`.

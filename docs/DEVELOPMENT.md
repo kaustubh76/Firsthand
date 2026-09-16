@@ -40,6 +40,15 @@ colour-coded flows. Open it at excalidraw.com before touching a lane you have no
   a leftover node keeps the old deployment and the round-trips fail on `EpochNotAttested`.
 - `test:testnet` — needs `MONAD_RPC_URL` (and `DEPLOYER_PRIVATE_KEY` for scripts). Skipped otherwise.
 - Foundry: `forge test` (default profile), `FOUNDRY_PROFILE=ci forge test` (10k fuzz runs).
+- `pnpm --filter firsthand-capture e2e` — **the browser tier.** Everything above runs in Node; a
+  blank page, a wrong asset path or a browser-only API difference passes all of it. This serves the
+  committed `deploy/capture` tree in headless Chromium (Playwright, browsers already cached in
+  `~/Library/Caches/ms-playwright`; otherwise `pnpm exec playwright install chromium`), drives it with
+  a virtual passkey that speaks PRF, and runs enrol → activate → capture → anchor → publish against
+  a spawned anvil + gateway. `E2E_TESTNET=1` uses Monad testnet with the `.env` keys;
+  `E2E_GATEWAY_URL=` / `E2E_APP_URL=` test the hosted surfaces. It found the `this.#fetch` "Illegal
+  invocation" bug that made the relay unreachable from every browser — run it after touching
+  anything the PWA imports.
 
 ### Phase 1 gate locally (enroll → attest round-trip)
 

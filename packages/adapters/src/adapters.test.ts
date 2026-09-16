@@ -16,6 +16,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { OnchainAnchorWriter, prepareAnchorTx } from "./anchors/OnchainAnchorWriter.js";
 import { FsBlobStore } from "./blobs/FsBlobStore.js";
 import { IpfsBlobStore } from "./blobs/IpfsBlobStore.js";
+import { ObjectBlobStore } from "./blobs/ObjectBlobStore.js";
 import { anvil, createChainClients, monadTestnet } from "./chain.js";
 import { OnchainErc8004Registry } from "./erc8004/OnchainErc8004Registry.js";
 import { EnvioConsentLedger } from "./ledger/EnvioConsentLedger.js";
@@ -26,6 +27,7 @@ import {
   MemoryConsentLedger,
   MemoryErc8004Registry,
   MemoryFacilitator,
+  MemoryObjectStoreClient,
   MemoryTransport,
 } from "./memory/index.js";
 import type { AnchorRequest } from "./ports/AnchorWriter.js";
@@ -67,6 +69,31 @@ const tmp = mkdtempSync(join(tmpdir(), "firsthand-blobs-"));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 describeBlobStoreConformance("memory", () => new MemoryBlobStore());
 describeBlobStoreConformance("fs", () => new FsBlobStore(tmp));
+describeBlobStoreConformance(
+  "object store",
+  () => new ObjectBlobStore({ client: new MemoryObjectStoreClient() }),
+);
+
+describe("ObjectBlobStore", () => {
+  it("re-hashes on read: a tampered object is refused, not served", async () => {
+    const client = new MemoryObjectStoreClient("https://store.example");
+    const store = new ObjectBlobStore({ client });
+    await expect(store.get("0x12")).rejects.toThrow(ValidationError);
+    const ref = await store.put(new Uint8Array([1, 2, 3]));
+    expect(ref.locator).toBe(`https://store.example/blobs/${ref.id.slice(2, 4)}/${ref.id}.bin`);
+    const key = `blobs/${ref.id.slice(2, 4)}/${ref.id}.bin`;
+    client.objects.set(key, {
+      bytes: new Uint8Array([9]),
+      contentType: "application/octet-stream",
+    });
+    await expect(store.get(ref)).rejects.toThrow(/integrity/);
+    // `has` never throws, even when the client does.
+    const broken = new ObjectBlobStore({
+      client: { ...client, exists: async () => Promise.reject(new Error("down")) } as never,
+    });
+    expect(await broken.has(ref)).toBe(false);
+  });
+});
 
 describe("FsBlobStore", () => {
   it("rejects malformed ids and detects tampered files", async () => {

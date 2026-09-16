@@ -18,6 +18,8 @@ export const GatewayConfigSchema = z.object({
   MONAD_RPC_URL: z.string().url().default("https://testnet-rpc.monad.xyz"),
   /** With a deployment file the gateway reads anchors/grants from chain; without it, memory doubles. */
   DEPLOYMENTS_FILE: z.string().optional(),
+  /** The same document inline — for hosts with no disk (serverless). Wins over DEPLOYMENTS_FILE. */
+  DEPLOYMENT_JSON: z.string().optional(),
   /** Passport EIP-712 verifying contract in memory mode (ignored when DEPLOYMENTS_FILE is set). */
   PASSPORT_ANCHORS: address.default("0x0000000000000000000000000000000000000000"),
 
@@ -48,11 +50,22 @@ export const GatewayConfigSchema = z.object({
   /** Where buyers pay: the RoyaltyRouter (decision #9). Overridden by the deployment file. */
   PAY_TO: address.default("0x0000000000000000000000000000000000000000"),
   PUBLIC_URL: z.string().url().default("http://localhost:8402"),
+  /**
+   * Browser origins allowed to call the gateway (the capture PWA is served from another host).
+   * Comma-separated, or `*`. Every route is signature- or payment-authorised, never cookie-based,
+   * so a permissive default costs nothing.
+   */
+  CORS_ORIGINS: z.string().default("*"),
 
-  BLOB_STORE: z.enum(["memory", "fs"]).default("memory"),
+  /** `vercel` keeps blobs and passports in Vercel Blob — durable across serverless invocations. */
+  BLOB_STORE: z.enum(["memory", "fs", "vercel"]).default("memory"),
   BLOB_DIR: z.string().default("./data/blobs"),
-  CATALOG: z.enum(["memory", "fs"]).default("memory"),
+  CATALOG: z.enum(["memory", "fs", "vercel"]).default("memory"),
   CATALOG_DIR: z.string().default("./data/passports"),
+  /** Vercel Blob read-write token; the name Vercel injects when a store is connected to the project. */
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  /** Key prefix inside the store, so one store can host several gateways. */
+  BLOB_PREFIX: z.string().default("firsthand"),
   /** Maximum accepted ciphertext / wrap upload size. */
   MAX_UPLOAD_BYTES: z.coerce
     .number()

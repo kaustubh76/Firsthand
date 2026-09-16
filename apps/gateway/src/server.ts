@@ -16,6 +16,8 @@ import {
   MemorySettlement,
   MonadFacilitatorClient,
   monadTestnet,
+  ObjectBlobStore,
+  ObjectPassportCatalog,
   OnchainAnchorWriter,
   OnchainGrantReader,
   OnchainSettlement,
@@ -23,7 +25,7 @@ import {
   type Settlement,
   type X402Facilitator,
 } from "@firsthand/adapters";
-import { type Deployment, loadDeployment } from "@firsthand/contracts/deployments";
+import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/contracts/deployments";
 import {
   type Address,
   Bytes32Schema,
@@ -39,11 +41,13 @@ import {
   ShutdownRegistry,
 } from "@firsthand/runtime";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { GatewayConfig } from "./config.js";
 import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { type X402Vars, x402 } from "./middleware/x402.js";
 import { Relay } from "./services/Relay.js";
+import { createVercelBlobClient } from "./storage/vercelBlob.js";
 
 export { type GatewayConfig, loadConfig } from "./config.js";
 
@@ -68,13 +72,33 @@ export interface GatewayApp {
 }
 
 function readDeployment(config: GatewayConfig): Deployment {
-  const d = loadDeployment(config.DEPLOYMENTS_FILE as string);
+  let d: Deployment;
+  let source: string;
+  if (config.DEPLOYMENT_JSON) {
+    source = "DEPLOYMENT_JSON";
+    let raw: unknown;
+    try {
+      raw = JSON.parse(config.DEPLOYMENT_JSON);
+    } catch (cause) {
+      throw new ConfigError("DEPLOYMENT_JSON is not valid JSON", { cause });
+    }
+    d = parseDeployment(raw, source);
+  } else {
+    source = "DEPLOYMENTS_FILE";
+    d = loadDeployment(config.DEPLOYMENTS_FILE as string);
+  }
   if (BigInt(d.chainId) !== config.CHAIN_ID) {
-    throw new ConfigError(
-      `DEPLOYMENTS_FILE is for chain ${d.chainId}, CHAIN_ID is ${config.CHAIN_ID}`,
-    );
+    throw new ConfigError(`${source} is for chain ${d.chainId}, CHAIN_ID is ${config.CHAIN_ID}`);
   }
   return d;
+}
+
+/** Durable storage for hosts without a disk; both stores share one client and one token. */
+function objectStoreClient(config: GatewayConfig) {
+  if (!config.BLOB_READ_WRITE_TOKEN) {
+    throw new ConfigError("BLOB_READ_WRITE_TOKEN is required when BLOB_STORE or CATALOG is vercel");
+  }
+  return createVercelBlobClient({ token: config.BLOB_READ_WRITE_TOKEN });
 }
 
 /** Assembles adapters from config. Memory mode needs no network — used by tests and `pnpm dev`. */
@@ -98,12 +122,22 @@ export function createGateway(
             logger,
           });
         })();
+  const objects =
+    config.BLOB_STORE === "vercel" || config.CATALOG === "vercel"
+      ? objectStoreClient(config)
+      : null;
   const blobs =
-    config.BLOB_STORE === "fs" ? new FsBlobStore(config.BLOB_DIR) : new MemoryBlobStore();
+    config.BLOB_STORE === "vercel" && objects
+      ? new ObjectBlobStore({ client: objects, prefix: `${config.BLOB_PREFIX}/blobs` })
+      : config.BLOB_STORE === "fs"
+        ? new FsBlobStore(config.BLOB_DIR)
+        : new MemoryBlobStore();
   const catalog =
-    config.CATALOG === "fs"
-      ? new FsPassportCatalog(config.CATALOG_DIR)
-      : new MemoryPassportCatalog();
+    config.CATALOG === "vercel" && objects
+      ? new ObjectPassportCatalog({ client: objects, prefix: `${config.BLOB_PREFIX}/passports` })
+      : config.CATALOG === "fs"
+        ? new FsPassportCatalog(config.CATALOG_DIR)
+        : new MemoryPassportCatalog();
 
   // Chain-bound adapters (read-only anchors + grants; settlement relayer optional) or memory doubles.
   let anchors: AnchorWriter;
@@ -117,7 +151,7 @@ export function createGateway(
   let deployment: Deployment | null = null;
   let ledger: ConsentLedger | null = null;
 
-  if (config.DEPLOYMENTS_FILE) {
+  if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
     const d = readDeployment(config);
     deployment = d;
     const chain = d.chainId === 31337 ? anvil : monadTestnet;
@@ -185,7 +219,7 @@ export function createGateway(
     }
   } else {
     if (config.SETTLEMENT_MODE === "onchain")
-      throw new ConfigError("SETTLEMENT_MODE=onchain requires DEPLOYMENTS_FILE");
+      throw new ConfigError("SETTLEMENT_MODE=onchain requires DEPLOYMENTS_FILE or DEPLOYMENT_JSON");
     const mAnchors = new MemoryAnchorWriter();
     const mGrants = new MemoryGrantReader();
     const mLedger = new MemoryConsentLedger();
@@ -209,6 +243,16 @@ export function createGateway(
     c.header("x-firsthand-gateway", "0.1.0");
     await next();
   });
+  app.use(
+    "*",
+    cors({
+      origin:
+        config.CORS_ORIGINS === "*" ? "*" : config.CORS_ORIGINS.split(",").map((o) => o.trim()),
+      allowHeaders: ["content-type", "x-payment", "payment-signature", "authorization"],
+      exposeHeaders: ["x-firsthand-gateway", "x-payment-response", "payment-required"],
+      maxAge: 86_400,
+    }),
+  );
 
   app.get("/healthz", (c) =>
     c.json({

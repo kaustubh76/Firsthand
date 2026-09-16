@@ -17,9 +17,11 @@ import { verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, describe, expect, it } from "vitest";
 import { FsPassportCatalog } from "./catalog/FsPassportCatalog.js";
+import { ObjectPassportCatalog } from "./catalog/ObjectPassportCatalog.js";
 import {
   MemoryConsentLedger,
   MemoryGrantReader,
+  MemoryObjectStoreClient,
   MemoryPassportCatalog,
   MemorySettlement,
   receiptIdOf,
@@ -87,6 +89,22 @@ const tmp = mkdtempSync(join(tmpdir(), "fh-catalog-"));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 describeCatalogConformance("memory", () => new MemoryPassportCatalog());
 describeCatalogConformance("fs", () => new FsPassportCatalog(tmp));
+describeCatalogConformance(
+  "object store",
+  () => new ObjectPassportCatalog({ client: new MemoryObjectStoreClient() }),
+);
+
+describe("ObjectPassportCatalog", () => {
+  it("lays passports out like the fs catalog, so a store can be migrated by copying", async () => {
+    const client = new MemoryObjectStoreClient();
+    await new ObjectPassportCatalog({ client, prefix: "gw/" }).put(sidecar);
+    const id = passportId(sidecar.signed.passport);
+    expect([...client.objects.keys()]).toEqual([`gw/${id.slice(2, 4)}/${id}.json`]);
+    expect(client.objects.get(`gw/${id.slice(2, 4)}/${id}.json`)?.contentType).toBe(
+      "application/json",
+    );
+  });
+});
 
 describe("MemoryGrantReader", () => {
   it("mirrors the contract: cards, terms by preimage, lazy status precedence", async () => {

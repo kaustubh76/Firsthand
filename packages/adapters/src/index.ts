@@ -3,7 +3,11 @@ export { OnchainAnchorWriter } from "./anchors/OnchainAnchorWriter.js";
 export { FsBlobStore } from "./blobs/FsBlobStore.js";
 export type { IpfsBlobStoreOptions } from "./blobs/IpfsBlobStore.js";
 export { IpfsBlobStore } from "./blobs/IpfsBlobStore.js";
+export type { ObjectBlobStoreOptions } from "./blobs/ObjectBlobStore.js";
+export { ObjectBlobStore } from "./blobs/ObjectBlobStore.js";
 export { FsPassportCatalog } from "./catalog/FsPassportCatalog.js";
+export type { ObjectPassportCatalogOptions } from "./catalog/ObjectPassportCatalog.js";
+export { ObjectPassportCatalog } from "./catalog/ObjectPassportCatalog.js";
 export type { ChainClients, ChainClientsOptions } from "./chain.js";
 export { anvil, createChainClients, monadTestnet } from "./chain.js";
 export { OnchainErc8004Registry } from "./erc8004/OnchainErc8004Registry.js";
@@ -37,6 +41,7 @@ export type {
   PrincipalLivenessView,
   RegisteredTermsView,
 } from "./ports/GrantReader.js";
+export type { ObjectStoreClient } from "./ports/ObjectStore.js";
 export type { PassportCatalog } from "./ports/PassportCatalog.js";
 export type { Settlement, SettleRequest, SettleResult } from "./ports/Settlement.js";
 export { splitSignature } from "./ports/Settlement.js";

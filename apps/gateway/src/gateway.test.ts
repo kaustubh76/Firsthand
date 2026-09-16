@@ -189,6 +189,86 @@ describe("gateway", () => {
     expect((await relayed.app.request("/v1/relay/capabilities")).status).toBe(404);
   });
 
+  it("boots from DEPLOYMENT_JSON on hosts with no disk, and answers browsers cross-origin", async () => {
+    const deployment = {
+      chainId: 31337,
+      PassportAnchors: `0x${"ab".repeat(20)}`,
+      PassportAnchorsBaseline: `0x${"ab".repeat(20)}`,
+      PassportAnchorsPaged: `0x${"bb".repeat(20)}`,
+      PrincipalRegistry: `0x${"ac".repeat(20)}`,
+      Rescissions: `0x${"bc".repeat(20)}`,
+      GrantManager: `0x${"ad".repeat(20)}`,
+      ReceiptLedger: `0x${"ae".repeat(20)}`,
+      RoyaltyRouter: `0x${"af".repeat(20)}`,
+      FirsthandLens: `0x${"bf".repeat(20)}`,
+      USDC: `0x${"b0".repeat(20)}`,
+      anchorsLayout: "baseline",
+      genesis: 1_700_000_000,
+      epochLength: 604_800,
+      revealWindowBlocks: 1000,
+    };
+    const base = { CHAIN_ID: "31337", MONAD_RPC_URL: "http://127.0.0.1:1" };
+    const gw = createGateway(loadConfig({ ...base, DEPLOYMENT_JSON: JSON.stringify(deployment) }), {
+      logger: noopLogger,
+    });
+    expect(gw.memory).toBeNull();
+    expect(gw.domain.verifyingContract).toBe(`0x${"ab".repeat(20)}`);
+    expect(() =>
+      createGateway(loadConfig({ ...base, DEPLOYMENT_JSON: "{nope" }), { logger: noopLogger }),
+    ).toThrow(/not valid JSON/);
+    expect(() =>
+      createGateway(loadConfig({ ...base, DEPLOYMENT_JSON: JSON.stringify({ chainId: 31337 }) }), {
+        logger: noopLogger,
+      }),
+    ).toThrow(/DEPLOYMENT_JSON: missing or malformed/);
+
+    // The PWA is served from another host: a preflight must succeed, and the payment headers the
+    // x402 handshake uses must be readable by the page.
+    const preflight = await gw.app.request("/v1/relay", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://capture.example",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("x-payment");
+    const narrow = createGateway(
+      loadConfig({ CORS_ORIGINS: "https://a.example, https://b.example" }),
+      {
+        logger: noopLogger,
+      },
+    );
+    const allowed = await narrow.app.request("/healthz", {
+      headers: { origin: "https://b.example" },
+    });
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://b.example");
+    const denied = await narrow.app.request("/healthz", {
+      headers: { origin: "https://c.example" },
+    });
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("refuses the vercel stores without a token, and binds them when one is present", async () => {
+    expect(() =>
+      createGateway(loadConfig({ BLOB_STORE: "vercel" }), { logger: noopLogger }),
+    ).toThrow(/BLOB_READ_WRITE_TOKEN/);
+    expect(() => createGateway(loadConfig({ CATALOG: "vercel" }), { logger: noopLogger })).toThrow(
+      /BLOB_READ_WRITE_TOKEN/,
+    );
+    const gw = createGateway(
+      loadConfig({
+        BLOB_STORE: "vercel",
+        CATALOG: "vercel",
+        BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_x",
+      }),
+      { logger: noopLogger },
+    );
+    expect(await (await gw.app.request("/healthz")).json()).toMatchObject({ blobs: "vercel" });
+  });
+
   it("refuses to boot in monad mode without a facilitator URL", () => {
     expect(() => createGateway(loadConfig({ X402_MODE: "monad" }), { logger: noopLogger })).toThrow(
       /X402_FACILITATOR_URL/,

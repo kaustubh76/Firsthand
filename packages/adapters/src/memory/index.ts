@@ -6,6 +6,7 @@ export type { MemoryFacilitatorOptions } from "./MemoryFacilitator.js";
 export { MemoryFacilitator } from "./MemoryFacilitator.js";
 export type { MemoryGrantInput } from "./MemoryGrantReader.js";
 export { MemoryGrantReader } from "./MemoryGrantReader.js";
+export { MemoryObjectStoreClient } from "./MemoryObjectStoreClient.js";
 export { MemoryPassportCatalog } from "./MemoryPassportCatalog.js";
 export { MemorySettlement, receiptIdOf } from "./MemorySettlement.js";
 export type { MemoryTransportOptions } from "./MemoryTransport.js";

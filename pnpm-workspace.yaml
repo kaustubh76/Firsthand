@@ -1,44 +1,37 @@
 packages:
-  - "packages/*"
-  - "apps/*"
-  - "contracts"
-  - "experiments"
+  - packages/*
+  - apps/*
+  - contracts
+  - experiments
 
-# Single source of truth for shared dependency versions.
-# Packages reference these with `"<name>": "catalog:"`.
 catalog:
-  # language / build / test
-  typescript: 5.9.3
-  tsup: 8.5.1
-  tsx: 4.23.13
-  vitest: 4.1.11
-  "@vitest/coverage-v8": 4.1.11
-  fast-check: 4.10.0
-  "@types/node": 26.5.1
-  # lint / format / task runner
-  "@biomejs/biome": 2.5.13
-  turbo: 2.10.12
-  # protocol runtime
-  zod: 4.6.2
-  viem: 2.56.3
+  '@biomejs/biome': 2.5.13
+  '@hono/node-server': 1.19.0
+  '@modelcontextprotocol/sdk': 1.30.0
+  '@noble/ciphers': 2.4.0
+  '@noble/curves': 2.4.0
+  '@noble/hashes': 2.4.0
+  '@types/node': 26.5.1
+  '@types/react': 19.3.0
+  '@types/react-dom': 19.3.0
+  '@vercel/blob': 2.8.0
+  '@vitejs/plugin-react': 5.2.0
+  '@vitest/coverage-v8': 4.1.11
   abitype: 1.3.0
-  "@noble/hashes": 2.4.0
-  "@noble/curves": 2.4.0
-  "@noble/ciphers": 2.4.0
-  # servers / tools
+  fast-check: 4.10.0
   hono: 4.13.7
-  "@hono/node-server": 1.19.0
-  "@modelcontextprotocol/sdk": 1.30.0
-  # frontend
   react: 19.3.0
   react-dom: 19.3.0
-  "@types/react": 19.3.0
-  "@types/react-dom": 19.3.0
+  tsup: 8.5.1
+  tsx: 4.23.13
+  turbo: 2.10.12
+  typescript: 5.9.3
+  viem: 2.56.3
   vite: 7.3.6
-  "@vitejs/plugin-react": 5.2.0
   vite-plugin-pwa: 1.3.0
+  vitest: 4.1.11
+  zod: 4.6.2
 
-# pnpm 10 refuses lifecycle scripts unless allow-listed. Biome ships a native binary.
 onlyBuiltDependencies:
-  - "@biomejs/biome"
+  - '@biomejs/biome'
   - esbuild

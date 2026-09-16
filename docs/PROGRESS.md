@@ -224,3 +224,28 @@ Also: `firsthand_import` turns a ChatGPT or Claude export into one passport per 
 
 **Still not built:** Envio handlers (deferred — the logs-backed Consent Ledger covers the demo, see
 ADR-0013), the docs site, media/clip capture in the PWA, and the MCP↔PWA WebAuthn PRF handoff.
+
+### Update — the browser tier, and what it caught (16 Sep 2026)
+
+The previous update said "verified against Monad testnet". It was — from Node. Every gate in the
+repo ran in Node or anvil, and none of them could see what a browser sees. So there is now a
+**browser tier**: `pnpm --filter firsthand-capture e2e` serves the committed `deploy/capture` tree
+(the bytes Vercel ships) in headless Chromium, drives it with a virtual passkey that speaks PRF, and
+runs enrol → activate → capture → anchor → publish against a spawned anvil + gateway, Monad testnet
+(`E2E_TESTNET=1`), or a hosted gateway (`E2E_GATEWAY_URL`).
+
+Its first run failed at "Activate on chain" with *relay unreachable*. The cause was a one-line
+browser-only bug in every fetch-based adapter: the transport stored `fetch` on the instance and
+called `this.#fetch(...)`, which invokes `window.fetch` with `this` bound to the transport — Chrome
+refuses that as "Illegal invocation". **No keyless browser could ever have anchored.** Bound to
+`globalThis`, pinned by a unit test, and the tier now passes in all three modes — including against
+the exact hosted gateway bundle npm-installed on Node 22, the way Vercel runs it.
+
+The PWA also no longer has a silent failure mode: an error boundary turns render exceptions into
+words, a status strip on every screen says `live · chain 10143 · host` or `offline · <why>`, and
+discovery gives up after 8 s with a reason instead of hanging on "Loading…".
+
+**Hosting:** the two deploy trees (`deploy/gateway`, one Vercel function; `deploy/capture`, static)
+are committed and proven; `docs/DEPLOY.md` is the five-step dashboard runbook. The public links are
+recorded in `deployments/NOTES.md` once the projects exist — the Vercel API refuses project creation
+from the connector, so that step is manual.

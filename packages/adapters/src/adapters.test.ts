@@ -13,6 +13,7 @@ import {
   ValidationError,
 } from "@firsthand/core";
 import { afterAll, describe, expect, it } from "vitest";
+import { OnchainAnchorWriter, prepareAnchorTx } from "./anchors/OnchainAnchorWriter.js";
 import { FsBlobStore } from "./blobs/FsBlobStore.js";
 import { IpfsBlobStore } from "./blobs/IpfsBlobStore.js";
 import { anvil, createChainClients, monadTestnet } from "./chain.js";
@@ -354,6 +355,105 @@ describe("BtxTransport", () => {
     });
     expect((await t.probe()).detail).toContain("ECONNREFUSED");
     await expect(t.send({ to: addr(1), data: "0x" })).rejects.toThrow(TransportError);
+  });
+});
+
+describe("OnchainAnchorWriter via a relay (the browser's write path)", () => {
+  const request = {
+    principalId: `0x${"11".repeat(32)}`,
+    ns: 0,
+    epoch: 5n,
+    batchRoot: `0x${"22".repeat(32)}`,
+    termsHash: `0x${"33".repeat(32)}`,
+    nonce: `0x${"44".repeat(32)}`,
+    depositKeys: Array.from({ length: 16 }, (_, i) => addr(i + 1)),
+    depositSig: `0x${"55".repeat(65)}`,
+  } as const;
+
+  it("produces calldata a relay can submit, and refuses a short deposit-key array", () => {
+    const tx = prepareAnchorTx(addr(9), request);
+    expect(tx.to).toBe(addr(9));
+    // Fixed-size address[16]: a short array must fail here, not inside viem's encoder.
+    expect(() => prepareAnchorTx(addr(9), { ...request, depositKeys: [addr(1)] })).toThrow(
+      /exactly 16 entries/,
+    );
+    // Same encoding either way — one code path produces the bytes.
+    expect(prepareAnchorTx(addr(9), request).data).toBe(tx.data);
+    expect(tx.data.startsWith("0x")).toBe(true);
+  });
+
+  it("relays the write and recovers block and batch index by reading the chain", async () => {
+    const sent: { to: string; data: string }[] = [];
+    const transport = {
+      kind: "public" as const,
+      async send(tx: { to: string; data: string }) {
+        sent.push(tx);
+        return { hash: `0x${"ab".repeat(32)}`, transport: "public" as const, submittedAt: 1 };
+      },
+      async capabilities() {
+        return { encryptedMempool: false };
+      },
+    };
+    const publicClient = {
+      call: async () => ({ data: "0x" }),
+      waitForTransactionReceipt: async () => ({ status: "success", blockNumber: 99n, gasUsed: 7n }),
+      readContract: async () => ({
+        principalId: request.principalId,
+        termsHash: request.termsHash,
+        epoch: 5n,
+        blockNumber: 99n,
+        ns: 0,
+        batchIndex: 3,
+      }),
+    } as never;
+    const writer = new OnchainAnchorWriter({
+      address: addr(9),
+      layout: "baseline",
+      publicClient,
+      transport,
+    });
+    expect(writer.canWrite).toBe(true);
+    const ref = await writer.anchor(request);
+    expect(sent[0]?.to).toBe(addr(9));
+    expect(ref).toEqual({
+      batchRoot: request.batchRoot,
+      batchIndex: 3,
+      blockNumber: 99n,
+      txHash: `0x${"ab".repeat(32)}`,
+      gasUsed: 7n,
+    });
+  });
+
+  it("simulates first, so a refusal never costs the relayer a transaction", async () => {
+    const transport = {
+      kind: "public" as const,
+      send: async () => {
+        throw new Error("should not be reached");
+      },
+      capabilities: async () => ({ encryptedMempool: false }),
+    };
+    const publicClient = {
+      call: async () => {
+        throw new Error("execution reverted");
+      },
+    } as never;
+    const writer = new OnchainAnchorWriter({
+      address: addr(9),
+      layout: "baseline",
+      publicClient,
+      transport,
+    });
+    await expect(writer.anchor(request)).rejects.toMatchObject({ code: "FH_CHAIN" });
+  });
+
+  it("is read-only with neither a wallet nor a transport", async () => {
+    const writer = new OnchainAnchorWriter({
+      address: addr(9),
+      layout: "baseline",
+      publicClient: {} as never,
+    });
+    expect(writer.canWrite).toBe(false);
+    await expect(writer.anchor(request)).rejects.toMatchObject({ code: "FH_CONFIG" });
   });
 });
 

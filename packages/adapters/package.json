@@ -24,6 +24,11 @@
       "types": "./dist/x402/index.d.ts",
       "import": "./dist/x402/index.js",
       "require": "./dist/x402/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/client/index.cjs"
     }
   },
   "files": [

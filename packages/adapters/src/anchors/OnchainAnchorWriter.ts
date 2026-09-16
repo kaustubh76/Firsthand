@@ -13,6 +13,7 @@ import {
   type Chain,
   ContractFunctionRevertedError,
   decodeErrorResult,
+  encodeFunctionData,
   type PublicClient,
   type Transport,
   type WalletClient,
@@ -24,6 +25,7 @@ import type {
   AnchorRequest,
   AnchorWriter,
 } from "../ports/AnchorWriter.js";
+import type { PreparedTx, TxTransport } from "../ports/TxTransport.js";
 
 export interface OnchainAnchorWriterOptions {
   readonly address: Address;
@@ -31,6 +33,39 @@ export interface OnchainAnchorWriterOptions {
   readonly publicClient: PublicClient<Transport, Chain>;
   /** Omit for a read-only instance (the gateway never signs): `anchor()` then throws ConfigError. */
   readonly walletClient?: WalletClient<Transport, Chain, PrivateKeyAccount>;
+  /**
+   * Alternative write path for callers that hold no key — the capture PWA relays through the
+   * gateway. Reads still go through `publicClient`, because a `TxRef` carries no receipt and
+   * `AnchorRef.blockNumber` is load-bearing for manifests.
+   */
+  readonly transport?: TxTransport;
+}
+
+/**
+ * The anchor calldata, with no client involved — so a keyless caller can hand it to a relay and get
+ * byte-identical calldata to what this writer would have sent itself.
+ */
+export function prepareAnchorTx(address: Address, request: AnchorRequest): PreparedTx {
+  if (request.depositKeys.length !== 16) {
+    throw new ValidationError("anchor: depositKeys must have exactly 16 entries");
+  }
+  return {
+    to: address,
+    data: encodeFunctionData({
+      abi: PassportAnchorsBaselineAbi,
+      functionName: "anchor",
+      args: [
+        request.principalId,
+        request.ns,
+        request.epoch,
+        request.batchRoot,
+        request.termsHash,
+        request.nonce,
+        request.depositKeys as unknown as DepositKeys16,
+        request.depositSig,
+      ],
+    }),
+  };
 }
 
 type DepositKeys16 = readonly [
@@ -62,25 +97,32 @@ export class OnchainAnchorWriter implements AnchorWriter {
   readonly address: Address;
   readonly #public: PublicClient<Transport, Chain>;
   readonly #wallet: WalletClient<Transport, Chain, PrivateKeyAccount> | null;
+  readonly #transport: TxTransport | null;
 
   constructor(options: OnchainAnchorWriterOptions) {
     this.layout = options.layout;
     this.address = options.address;
     this.#public = options.publicClient;
     this.#wallet = options.walletClient ?? null;
+    this.#transport = options.transport ?? null;
   }
 
   get canWrite(): boolean {
-    return this.#wallet !== null;
+    return this.#wallet !== null || this.#transport !== null;
   }
 
   async anchor(request: AnchorRequest): Promise<AnchorRef> {
-    if (this.#wallet === null) {
-      throw new ConfigError("OnchainAnchorWriter is read-only: no relayer wallet configured");
+    if (this.#wallet === null && this.#transport === null) {
+      throw new ConfigError(
+        "OnchainAnchorWriter is read-only: configure a relayer wallet or a relay transport",
+      );
     }
+    // Validate once, before either write path: `address[16]` is fixed-size, so a short array
+    // fails deep inside viem's encoder with a far worse message.
     if (request.depositKeys.length !== 16) {
       throw new ValidationError("anchor: depositKeys must have exactly 16 entries");
     }
+    if (this.#wallet === null) return this.#anchorViaTransport(request);
     const args = [
       request.principalId,
       request.ns,
@@ -125,6 +167,35 @@ export class OnchainAnchorWriter implements AnchorWriter {
       if (cause instanceof ChainError) throw cause;
       throw new ChainError("anchor failed", { cause, retryable: true });
     }
+  }
+
+  /**
+   * Relayed write: the caller holds no key, so the gateway submits the same calldata and we recover
+   * the block and batch index by reading the chain afterwards — `TxRef` carries neither.
+   */
+  async #anchorViaTransport(request: AnchorRequest): Promise<AnchorRef> {
+    const transport = this.#transport as TxTransport;
+    const tx = prepareAnchorTx(this.address, request);
+    // Simulate first so a refusal is a decoded reason here rather than a relayed transaction that
+    // reverts at someone else's expense.
+    try {
+      await this.#public.call({ to: tx.to, data: tx.data });
+    } catch (cause) {
+      throw decodeRevert(cause, "anchor refused");
+    }
+    const ref = await transport.send(tx);
+    const receipt = await this.#public.waitForTransactionReceipt({ hash: ref.hash });
+    if (receipt.status !== "success") {
+      throw new ChainError("anchor transaction reverted", { context: { hash: ref.hash } });
+    }
+    const record = await this.anchorOf(request.batchRoot);
+    return {
+      batchRoot: request.batchRoot,
+      batchIndex: record?.batchIndex ?? 0,
+      blockNumber: receipt.blockNumber,
+      txHash: ref.hash,
+      gasUsed: receipt.gasUsed,
+    };
   }
 
   isAnchored(batchRoot: Bytes32): Promise<boolean> {

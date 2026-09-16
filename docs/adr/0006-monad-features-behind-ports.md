@@ -19,7 +19,7 @@ in-memory double; experiment arms (README §15) are adapter selections, never co
 | P-256 precompile | `P256.sol` | RIP-7212 at `0x100` | — (etched daimo verifier in tests) | `P256Double` |
 | x402 | `X402Facilitator` | `MonadFacilitatorClient` | — | `MemoryFacilitator` |
 | ERC-8004 | `Erc8004Registry` | `OnchainErc8004Registry` (shell) | ECIES over card key if no X25519 field | `MemoryErc8004Registry` |
-| Envio | `ConsentLedger` | `EnvioConsentLedger` (shell) | — | `MemoryConsentLedger` |
+| Envio | `ConsentLedger` | `EnvioConsentLedger` (shell) | `LogsConsentLedger` (ADR-0013) | `MemoryConsentLedger` |
 
 - `BtxTransport.send` fails with `FH_BTX_UNAVAILABLE` until the node knows the method (probe-gated;
   BTX is not on Monad testnet as of 2026-09, ADR-0012) — callers must choose commit-reveal

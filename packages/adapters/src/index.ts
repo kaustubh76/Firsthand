@@ -11,6 +11,8 @@ export type { OnchainGrantReaderOptions } from "./grants/OnchainGrantReader.js";
 export { OnchainGrantReader } from "./grants/OnchainGrantReader.js";
 export type { EnvioConsentLedgerOptions } from "./ledger/EnvioConsentLedger.js";
 export { EnvioConsentLedger } from "./ledger/EnvioConsentLedger.js";
+export type { LogsConsentLedgerOptions } from "./ledger/LogsConsentLedger.js";
+export { LogsConsentLedger } from "./ledger/LogsConsentLedger.js";
 export * from "./memory/index.js";
 export type {
   AnchorLayout,

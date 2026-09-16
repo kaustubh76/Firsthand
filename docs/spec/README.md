@@ -54,7 +54,7 @@ and `demand.test.ts`.
 | `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLiveness`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |
 | `Settlement` (`settle(grantId, terms, payment) → receipt`) | demand | `OnchainSettlement` → `RoyaltyRouter.settle` |
 | `PaymentFacilitator` | demand | memory; Monad x402 facilitator in Phase 5 |
-| `ConsentLedger` | audit | `EnvioConsentLedger` (Phase 5) |
+| `ConsentLedger` (`receiptsForGrant`, `anchorsFor`, `consentTimeline`) | audit | `LogsConsentLedger` (viem `getLogs`, live today); `EnvioConsentLedger` indexed, Phase 5 (ADR-0013) |
 
 ## D. The verification predicate
 

@@ -27,6 +27,8 @@ export const GatewayConfigSchema = z.object({
    * key — the capture PWA. Off by default: it spends the relayer's gas on request.
    */
   RELAY_ENABLED: z.coerce.boolean().default(false),
+  /** Deployment block: where the Consent Ledger starts scanning logs. Scanning from 0 is slow. */
+  LEDGER_FROM_BLOCK: z.coerce.bigint().optional(),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
 

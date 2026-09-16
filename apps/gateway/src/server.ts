@@ -1,10 +1,12 @@
 import {
   type AnchorWriter,
   anvil,
+  type ConsentLedger,
   createChainClients,
   FsBlobStore,
   FsPassportCatalog,
   type GrantReader,
+  LogsConsentLedger,
   MemoryAnchorWriter,
   MemoryBlobStore,
   MemoryConsentLedger,
@@ -52,6 +54,8 @@ export interface GatewayApp {
   readonly domain: Eip712Domain;
   /** Present in chain mode with a relayer: submits signature-authorised calls for keyless clients. */
   readonly relay: Relay | null;
+  /** Audit surface: receipts, anchors and the consent timeline. Chain mode reads them from logs. */
+  readonly ledger: ConsentLedger;
   /** Present in memory mode so tests and demos can seed grants and inspect receipts. */
   readonly memory: {
     grants: MemoryGrantReader;
@@ -107,6 +111,7 @@ export function createGateway(
   let usdc = config.USDC_ADDRESS.toLowerCase() as Address;
   let passportAnchors = config.PASSPORT_ANCHORS.toLowerCase() as Address;
   let relay: Relay | null = null;
+  let ledger: ConsentLedger | null = null;
 
   if (config.DEPLOYMENTS_FILE) {
     const d = readDeployment(config);
@@ -131,6 +136,16 @@ export function createGateway(
       grantManager: d.GrantManager.toLowerCase() as Address,
       principalRegistry: d.PrincipalRegistry.toLowerCase() as Address,
       receiptLedger: d.ReceiptLedger.toLowerCase() as Address,
+    });
+    // Envio is the indexed path (ADR-0013); logs need only an RPC, so the audit surface is live
+    // the moment the contracts are deployed.
+    ledger = new LogsConsentLedger({
+      publicClient: clients.publicClient,
+      principalRegistry: d.PrincipalRegistry.toLowerCase() as Address,
+      passportAnchors,
+      grantManager: d.GrantManager.toLowerCase() as Address,
+      receiptLedger: d.ReceiptLedger.toLowerCase() as Address,
+      ...(config.LEDGER_FROM_BLOCK === undefined ? {} : { fromBlock: config.LEDGER_FROM_BLOCK }),
     });
     if (clients.walletClient && config.RELAY_ENABLED) {
       // Only the four contracts whose entry points authorise by signature rather than msg.sender.
@@ -170,6 +185,7 @@ export function createGateway(
     grants = mGrants;
     settlement = new MemorySettlement(mGrants, mLedger);
     memory = { grants: mGrants, ledger: mLedger, anchors: mAnchors };
+    ledger = mLedger;
   }
 
   const domain: Eip712Domain = { chainId: config.CHAIN_ID, verifyingContract: passportAnchors };
@@ -232,6 +248,12 @@ export function createGateway(
     const parsed = Bytes32Schema.safeParse(value);
     if (!parsed.success) throw new ValidationError(`${label} must be 32-byte hex`);
     return parsed.data;
+  };
+
+  // Both assembly branches set it; this keeps the routes honest without a non-null assertion.
+  const requireLedger = (): ConsentLedger => {
+    if (!ledger) throw new ConfigError("no consent ledger configured");
+    return ledger;
   };
 
   const parseAddress = (value: string): Address => {
@@ -342,6 +364,26 @@ export function createGateway(
     return c.json({ grantId, wrapRef }, 201);
   });
 
+  // ── audit (Consent Ledger) ──────────────────────────────────────────────────────────────────
+  // The evidence surface: what was licensed, what was paid for, and when consent ended.
+
+  app.get("/v1/grants/:grantId/receipts", async (c) => {
+    const grantId = parseId(c.req.param("grantId"), "grantId");
+    return c.json({ grantId, receipts: await requireLedger().receiptsForGrant(grantId) });
+  });
+
+  app.get("/v1/principals/:principalId/anchors", async (c) => {
+    const principalId = parseId(c.req.param("principalId"), "principalId");
+    const ns = Number(c.req.query("ns") ?? "0");
+    if (!Number.isInteger(ns) || ns < 0 || ns > 15) throw new ValidationError("ns must be 0..15");
+    return c.json({ principalId, ns, anchors: await requireLedger().anchorsFor(principalId, ns) });
+  });
+
+  app.get("/v1/principals/:principalId/timeline", async (c) => {
+    const principalId = parseId(c.req.param("principalId"), "principalId");
+    return c.json({ principalId, events: await requireLedger().consentTimeline(principalId) });
+  });
+
   // ── relay ───────────────────────────────────────────────────────────────────────────────────
   // For clients that hold no key (the capture PWA). Authorisation is inside the calldata — a P-256
   // signature under the contract's own EIP-712 domain — so relaying cannot change what a call means.
@@ -370,5 +412,5 @@ export function createGateway(
     return c.json(ref, 201);
   });
 
-  return { app, logger, shutdown, serving, domain, memory, relay };
+  return { app, logger, shutdown, serving, domain, memory, relay, ledger: requireLedger() };
 }

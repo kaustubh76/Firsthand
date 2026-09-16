@@ -358,7 +358,11 @@ describe("BtxTransport", () => {
 });
 
 describe("HttpRelayTransport", () => {
-  const relay = (status: number, body: unknown, seen?: { url?: string; init?: RequestInit }) =>
+  const relay = (
+    status: number,
+    body: unknown,
+    seen?: { url?: string; init?: RequestInit | undefined },
+  ) =>
     (async (url: string, init?: RequestInit) => {
       if (seen) {
         seen.url = url;
@@ -368,7 +372,7 @@ describe("HttpRelayTransport", () => {
     }) as unknown as typeof fetch;
 
   it("posts a prepared tx and returns the relay's TxRef", async () => {
-    const seen: { url?: string; init?: RequestInit } = {};
+    const seen: { url?: string; init?: RequestInit | undefined } = {};
     const t = new HttpRelayTransport({
       baseUrl: "http://gw/",
       fetch: relay(201, { hash: `0x${"ab".repeat(32)}`, transport: "public", submittedAt: 7 }),

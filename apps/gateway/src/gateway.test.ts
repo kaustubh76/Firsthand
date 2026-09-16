@@ -139,7 +139,7 @@ describe("gateway", () => {
       }),
       { logger: noopLogger },
     );
-    expect(withRelay.relay?.allowList.sort()).toEqual(
+    expect([...(withRelay.relay?.allowList ?? [])].sort()).toEqual(
       [
         `0x${"ab".repeat(20)}`, // PassportAnchors
         `0x${"ac".repeat(20)}`, // PrincipalRegistry

@@ -170,27 +170,33 @@ Causal chain (text sequence): `passkey tap → PRF → derived keys → deposit 
 
 Hackathon deployment is **immutable** — no proxies, no admin upgrade path (see §12).
 
-## 10. Suggested Repository Structure
+## 10. Repository Structure
+
+Start at [`QUICKSTART.md`](QUICKSTART.md) — `pnpm demo` runs a complete first recall in about fifteen
+seconds. The whole system on one canvas: `docs/diagrams/firsthand-product.excalidraw`.
 
 ```
-firsthand/
-├── contracts/            # Solidity (Foundry)
-│   ├── src/              # contracts of §9
-│   ├── test/             # unit + invariant + fuzz (SplitMath, MerkleLib first)
-│   └── script/           # deploy + verify scripts
-├── sdk/                  # @firsthand/sdk (TypeScript)
-│   ├── src/keys/         # PRF→HKDF tree, WebAuthn ceremonies
-│   ├── src/passport/     # mint, batch, prove
-│   ├── src/verbs/        # deposit / query / rescind
-│   └── src/manifest/     # lineage manifest export + verifier
-├── mcp/                  # firsthand-mcp server (deposit/query/rescind tools)
-├── importers/            # ChatGPT & Claude memory-export → namespaces
-├── capture/              # minimal PWA: phone capture → passport
-├── experiments/          # race-window harness, gas benches, baselines (§15)
-├── docs/                 # docs site, SECURITY.md, ENGINE-notes, ROADMAP-*.md
-├── integrations/         # PRs/templates for partner teams
-├── deployments/          # addresses, judge credentials, testnet notes
-└── demo/                 # demo script assets, seeded fixtures
+firsthand/                      # pnpm workspaces + Turborepo
+├── contracts/                  # Solidity (Foundry): §9 contracts, libraries, fuzz + invariants
+│   ├── src/ test/ script/      #   deploy writes deployments/<chainId>.json
+│   └── ts/ abi/                #   typed deployment loader + generated ABIs
+├── packages/
+│   ├── core/                   # encodings, Merkle, SplitMath, epochs, verify() predicate
+│   ├── crypto/                 # PRF→HKDF tree, P-256 / secp256k1, envelope, sealed box
+│   ├── adapters/               # ports + memory doubles + on-chain implementations
+│   ├── sdk/                    # Locker, Batcher, the three verbs, Lineage Manifest
+│   ├── runtime/ importers/     # logging/env; ChatGPT & Claude exports → namespaces
+│   ├── test-vectors/           # golden vectors shared by vitest and forge
+│   └── indexer/                # Envio Consent Ledger (spec only — see ADR-0013)
+├── apps/
+│   ├── gateway/                # serving path: verified ingest, x402 query, relay (holds no keys)
+│   ├── mcp/                    # firsthand-mcp: the verbs as agent tools
+│   ├── capture/                # PWA: phone capture → passport, relayed on chain
+│   └── demo/                   # `pnpm demo` — the first recall, end to end
+├── experiments/                # S1–S4: race window, gas, refusal (§15) + raw results
+├── docs/                       # ADRs, SECURITY.md, spec appendix, diagrams, PROGRESS.md
+├── deployments/                # addresses + NOTES.md (judge credentials, testnet notes)
+├── integrations/ demo/         # partner templates; demo assets
 ```
 
 ## 11. Risk / Control State

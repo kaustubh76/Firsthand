@@ -91,6 +91,7 @@ const GRAPH = {
   },
   "firsthand-mcp": {
     internal: [
+      "@firsthand/importers",
       "@firsthand/sdk",
       "@firsthand/crypto",
       "@firsthand/importers",

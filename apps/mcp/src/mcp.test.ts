@@ -64,6 +64,7 @@ describe("firsthand-mcp", () => {
       "firsthand_deposit",
       "firsthand_enroll",
       "firsthand_grant",
+      "firsthand_import",
       "firsthand_query",
       "firsthand_register_card",
       "firsthand_rescind",
@@ -151,6 +152,67 @@ describe("firsthand-mcp", () => {
       },
     });
     expect(query.isError).toBe(true); // no buyer keys configured in this session
+  });
+});
+
+describe("firsthand_import", () => {
+  it("mints one passport per conversation and keeps going when one is refused", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "fh-import-"));
+    const file = join(dir, "conversations.json");
+    writeFileSync(
+      file,
+      JSON.stringify([
+        {
+          id: "c1",
+          title: "first",
+          create_time: 1_700_000_000,
+          current_node: "a",
+          mapping: {
+            a: {
+              id: "a",
+              parent: null,
+              message: {
+                author: { role: "user" },
+                create_time: 1,
+                content: { parts: ["hello"] },
+              },
+            },
+          },
+        },
+        {
+          id: "c2",
+          title: "second",
+          create_time: 1_700_000_100,
+          current_node: "b",
+          mapping: {
+            b: {
+              id: "b",
+              parent: null,
+              message: {
+                author: { role: "user" },
+                create_time: 2,
+                content: { parts: ["world"] },
+              },
+            },
+          },
+        },
+      ]),
+    );
+    const client = await connect();
+    const out = textOf(
+      (await client.callTool({
+        name: "firsthand_import",
+        arguments: { source: "chatgpt", path: file, payee: `0x${"cc".repeat(20)}` },
+      })) as { content: unknown },
+    );
+    expect(out.minted).toBe(2);
+    expect(out.passports[0].passportId).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(out.passports.map((p: { title: string }) => p.title)).toEqual(["first", "second"]);
+    // No deployment configured in this test, so it says the import is not anchored.
+    expect(out.warning).toMatch(/not anchored/);
   });
 });
 

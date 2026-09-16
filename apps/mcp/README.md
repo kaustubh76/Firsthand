@@ -1,6 +1,6 @@
 # firsthand-mcp
 
-MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_grant`, `firsthand_query`, `firsthand_rescind`, `firsthand_status`
+MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_accept_terms`, `firsthand_query`, `firsthand_rescind`, `firsthand_status`
 over stdio. Runs on the **user's** machine and may derive keys (README §22, §13 "malicious MCP client":
 a hostile client can only pollute its own user's locker — deposits are valid only under derived keys).
 

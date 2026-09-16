@@ -26,6 +26,16 @@ export const DepositInputSchema = z.object({
     ),
 });
 
+export const ImportInputSchema = z.object({
+  source: z.enum(["chatgpt", "claude"]).describe("Which export format the file is in"),
+  path: z.string().min(1).describe("Path to the export file on this machine"),
+  ns: z.number().int().min(0).max(15).default(0),
+  priceUnits: z.string().regex(/^\d+$/).default("1"),
+  payee: address.describe("Address that receives royalties"),
+  limit: z.number().int().min(1).max(500).default(25).describe("Maximum conversations to deposit"),
+  publish: z.boolean().default(true),
+});
+
 export const RegisterCardInputSchema = z.object({});
 
 export const AcceptTermsInputSchema = z.object({

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import {
   type Address,
   AttestationClass,
@@ -12,6 +13,7 @@ import {
   WAD,
   ZERO_HASH,
 } from "@firsthand/core";
+import { parseExport } from "@firsthand/importers";
 import type { Logger } from "@firsthand/runtime";
 import type { BuyerSession, LockerSession } from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +23,7 @@ import {
   DepositInputSchema,
   EnrollInputSchema,
   GrantInputSchema,
+  ImportInputSchema,
   QueryInputSchema,
   RegisterCardInputSchema,
   RescindInputSchema,
@@ -420,6 +423,70 @@ export function createMcpServer(deps: McpDeps): McpServer {
         });
       } catch (error) {
         deps.logger.warn("acceptTerms failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_import",
+    {
+      title: "Import a ChatGPT or Claude export",
+      description:
+        "Mint one passport per conversation from a memory export, sealed client-side and tagged with AttestationClass.IMPORT plus the source, so buyers can filter imported data from device-captured data. Anchors and publishes like any other deposit when a deployment and gateway are configured.",
+      inputSchema: ImportInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const session = await deps.session();
+        const contents = await readFile(input.path, "utf8");
+        const terms: Terms = {
+          price: BigInt(input.priceUnits),
+          licenseId: LICENSE_FH_1_0,
+          scope: Scope.TRAIN | Scope.INFER | Scope.EVAL,
+          ns: input.ns,
+          rateLimit: 100,
+          payees: [input.payee as Address],
+          weights: [WAD],
+        };
+        const minted: { passportId: string; title: string | null; messages: number }[] = [];
+        const refused: { title: string | null; reason: string }[] = [];
+        for (const item of parseExport(input.source, contents)) {
+          if (minted.length >= input.limit) break;
+          try {
+            const result = await session.deposit({
+              ns: input.ns,
+              datum: item.datum,
+              terms,
+              attestation: item.attestation,
+            });
+            minted.push({
+              passportId: result.passportId,
+              title: item.conversation.title ?? null,
+              messages: item.conversation.messages.length,
+            });
+          } catch (error) {
+            // One unprovable or duplicate conversation must not abandon the rest of the import.
+            refused.push({
+              title: item.conversation.title ?? null,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        const wantsPublish = input.publish && deps.canAnchor && deps.gatewayUrl !== undefined;
+        if (wantsPublish && minted.length > 0) await session.flush();
+        return text({
+          source: input.source,
+          minted: minted.length,
+          refused: refused.length,
+          passports: minted,
+          ...(refused.length > 0 ? { refusals: refused } : {}),
+          ...(input.publish && !wantsPublish
+            ? { warning: "not anchored: configure DEPLOYMENTS_FILE and GATEWAY_URL" }
+            : {}),
+        });
+      } catch (error) {
+        deps.logger.warn("import failed", { error });
         return failure(error);
       }
     },

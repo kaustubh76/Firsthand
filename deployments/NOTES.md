@@ -42,12 +42,14 @@ by the gates.
 
 | Surface | URL | Source tree |
 |---|---|---|
-| Capture PWA | _pending — created from the Vercel dashboard, see `docs/DEPLOY.md`_ | `deploy/capture` |
-| Gateway | _pending_ | `deploy/gateway` |
+| Capture PWA | <https://firsthand-capture.vercel.app> | `deploy/capture` |
+| Gateway | <https://firsthand-gateway.vercel.app> | `deploy/gateway` |
 
-Until the links are live: `pnpm --filter firsthand-capture e2e` runs the exact shipped PWA tree in a
-browser against a local gateway (`E2E_TESTNET=1` for Monad testnet), so "works in a browser on the
-real chain" is already proven; only the hosting is pending.
+Live since **2026-09-17**. Proven with the browser tier against the live URLs: a virtual passkey
+enrolled, activated through the hosted relay (enroll tx
+`0x0fdf21680fb1e10ba297e716a8b696ca4a3d1e97a7d542a12a5571bfc351a30b`, block 63315847), captured,
+anchored and published; the sidecar was served again after a fresh deployment (Vercel Blob).
+Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`).
 
 ## Caveats a reviewer should know
 

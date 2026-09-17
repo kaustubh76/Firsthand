@@ -3,6 +3,10 @@
 Minimal PWA: enrol a passkey with the WebAuthn `prf` extension, tap to unlock the locker, stamp a
 capture with a `DEVICE_CAPTURE` passport, anchor batches on chain, post a rescission.
 
+**Hosted:** <https://firsthand-capture.vercel.app> (against <https://firsthand-gateway.vercel.app>).
+`?gateway=https://…` points the same build at another gateway and is remembered; `?gateway=`
+forgets. Redeploy with `pnpm deploy:capture` (`docs/DEPLOY.md`).
+
 **Live against a deployment, without holding a key.** Addresses, epoch parameters and the anchors
 layout come from the gateway's `/.well-known/firsthand.json` — the browser's substitute for
 `deployments/<chainId>.json`, which it cannot read. Reads go through a key-less viem client; writes
@@ -15,9 +19,13 @@ cp .env.example .env          # set VITE_GATEWAY_URL (and VITE_RPC_URL if not pu
 pnpm --filter firsthand-capture dev      # WebAuthn needs localhost or HTTPS
 ```
 
-The gateway must run with `RELAY_ENABLED=true` for anchoring to work. Without `VITE_GATEWAY_URL` the
-app falls back to memory adapters so `pnpm dev` still works offline — it will say so on screen, since
-nothing captured that way can ever be recalled.
+The gateway must run with `RELAY_ENABLED=true` for anchoring to work. Without a reachable relay the
+app falls back to memory adapters so `pnpm dev` still works offline — the status strip on every
+screen says `offline · <why>`, since nothing captured that way can ever be recalled.
+
+**Browser tier:** `pnpm --filter firsthand-capture e2e` drives the committed `deploy/capture` tree
+in headless Chromium with a virtual PRF passkey (local anvil by default, `E2E_TESTNET=1`, or
+`E2E_GATEWAY_URL=`/`E2E_APP_URL=` for the hosted links).
 
 **Order matters:** "Activate on chain" (enroll + attest) must happen before the first anchor.
 `PassportAnchors.anchor` verifies the deposit-key signature against the root attested for that epoch,

@@ -1,44 +1,48 @@
 # Deploying the public surfaces
 
-Two Vercel projects, both served straight from committed deploy trees so the builder never has to
-build the monorepo (it needs Foundry and Node 26, which Vercel's builders lack):
+| Surface | Live URL | Vercel project | Source tree |
+| --- | --- | --- | --- |
+| Capture PWA | <https://firsthand-capture.vercel.app> | `firsthand-capture` | `deploy/capture` (static) |
+| Gateway | <https://firsthand-gateway.vercel.app> | `firsthand-gateway` | `deploy/gateway` (one Node function) |
 
-| Project             | Root directory    | What it is                                                           |
-| ------------------- | ----------------- | -------------------------------------------------------------------- |
-| `firsthand-gateway` | `deploy/gateway`  | One Node function (`api/index.js`) fronting the whole Hono gateway    |
-| `firsthand-capture` | `deploy/capture`  | The capture PWA, static                                              |
+Both are served from **committed, prebuilt deploy trees**. The builder never builds the monorepo
+(that needs Foundry and Node 26, which Vercel's builders lack): the gateway tree is a four-dependency
+npm project whose `api/index.js` bundles every `@firsthand/*` package; the capture tree is Vite output.
 
-Regenerate the trees after any change to `apps/gateway`, `apps/capture` or a package they depend on:
+## Redeploy (one command)
 
 ```bash
-pnpm build                                        # workspace packages first
-pnpm --filter firsthand-gateway bundle:vercel     # → deploy/gateway
-FH_HOSTED_GATEWAY_URL=https://<gateway-host> pnpm --filter firsthand-capture bundle:vercel   # → deploy/capture
+pnpm build                 # workspace packages first
+pnpm deploy:hosted         # gateway, then capture built against the gateway URL
 git add deploy && git commit -m "build: regenerate deploy trees" && git push
 ```
 
-Every push to `main` redeploys both projects.
+`pnpm deploy:gateway` / `pnpm deploy:capture` ship one side. The script uses `npx vercel@59`; run
+`npx vercel@59 login` once on a new machine. Each `deploy/*` directory keeps its project link in a
+git-ignored `.vercel/`; on a fresh clone the script re-links by project name.
 
-## One-time setup (dashboard — the API cannot create projects or set secrets)
+## How it was set up (reproducible from the CLI, no dashboard)
 
-1. **Gateway project.** Vercel → *Add New → Project → Import* `kaustubh76/Firsthand`.
-   Project name `firsthand-gateway`, **Root Directory `deploy/gateway`**, framework *Other*, leave
-   build/output empty. Deploy. It boots *degraded* (`/healthz` shows `memory`) until step 3.
-2. **Blob store.** Project → *Storage → Create → Blob*, connect it to the project (this injects
-   `BLOB_READ_WRITE_TOKEN`). Durable blobs and passports across cold starts.
-3. **Relayer key.** Project → *Settings → Environment Variables*: `RELAYER_PRIVATE_KEY` = the
-   value of `HOSTED_RELAYER_PRIVATE_KEY` in the repo-root `.env` (generated with `cast wallet new`;
-   never the deployer). Fund its address with ~1 MON from the Monad faucet. Redeploy.
-4. **Capture project.** Import the same repo again: name `firsthand-capture`, **Root Directory
-   `deploy/capture`**, framework *Other*. If the gateway's production host is not
-   `firsthand-gateway.vercel.app`, rebuild `deploy/capture` with `FH_HOSTED_GATEWAY_URL` (or open
-   the PWA with `?gateway=https://<host>` — it remembers).
-5. **Deployment protection.** Both projects → *Settings → Deployment Protection → Off* for
-   production, or visitors are asked to log in to Vercel.
+```bash
+cd deploy/gateway
+npx vercel@59 link --yes --project firsthand-gateway --scope <team>
+npx vercel@59 blob create-store firsthand-gateway --access public --yes   # injects BLOB_READ_WRITE_TOKEN
+printf %s "$HOSTED_RELAYER_PRIVATE_KEY" | npx vercel@59 env add RELAYER_PRIVATE_KEY production --sensitive
+npx vercel@59 deploy --prod --yes
+
+cd ../capture   # built with FH_HOSTED_GATEWAY_URL=https://firsthand-gateway.vercel.app
+npx vercel@59 link --yes --project firsthand-capture --scope <team>
+npx vercel@59 deploy --prod --yes
+```
+
+Deployment protection was switched off on both projects (`PATCH /v9/projects/:id`
+`{"ssoProtection":null}`) so deployment URLs open without a Vercel login.
 
 Everything else — chain id, the deployment document, `RELAY_ENABLED`, the vercel stores, on-chain
 settlement, rate limits, `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to
-an explicit environment variable.
+an explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
+(the dedicated hosted relayer `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C`, small float) and
+`BLOB_READ_WRITE_TOKEN` (injected by the store connection).
 
 ## Verify
 
@@ -46,19 +50,24 @@ an explicit environment variable.
 GW=https://firsthand-gateway.vercel.app
 curl -s $GW/healthz                       # {"ok":true,"settlement":"onchain","blobs":"vercel"}
 curl -s $GW/.well-known/firsthand.json    # relay.enabled true, contracts of deployments/10143.json
-curl -s $GW/v1/relay/capabilities         # 200 with the four allow-listed contracts
+curl -s $GW/v1/relay/capabilities         # 200, relayer 0x0DbD…, the four allow-listed contracts
+
+# The browser proof against the live links (real relayed transactions on Monad testnet):
+E2E_GATEWAY_URL=$GW E2E_APP_URL=https://firsthand-capture.vercel.app pnpm --filter firsthand-capture e2e
 ```
 
-Then from the PWA: enrol → activate on chain → capture → the anchor transaction appears on
-`testnet.monadexplorer.com`, and `GET $GW/v1/passports/<id>` returns the sidecar — also after the
-function has gone cold, which is what the Blob store is for.
+Published passports and ciphertext live in Vercel Blob (`firsthand/blobs/…`, `firsthand/passports/…`,
+the same layout as the fs adapters), so `GET /v1/passports/:id` answers after any cold start or
+redeploy — verified by redeploying and re-fetching.
 
 ## Operating the public relay
 
 - The relay spends the relayer's gas on request. It is allow-listed to the four authority contracts,
   refuses non-zero value, simulates first, and the hosted defaults rate-limit to 20 requests with a
   0.2/s refill per IP (per warm instance — the chain-side counters remain the source of truth).
-- Refill: send MON to the relayer address in `deployments/NOTES.md`. Rotate by setting a new
-  `RELAYER_PRIVATE_KEY` and redeploying; nothing on chain references the relayer.
-- The relayer key is the only secret on the public surface. It cannot sign as any user: every
-  relayed call carries the user's P-256 signature in calldata (ADR-0001).
+- One full enrol → attest → anchor loop costs ≈ 0.05 MON; 5 MON ≈ 100 loops.
+  Refill: send testnet MON to the relayer address above. Rotate: `npx vercel@59 env rm
+  RELAYER_PRIVATE_KEY production` then `env add` a new one and redeploy — nothing on chain
+  references the relayer.
+- The relayer key cannot sign as any user: every relayed call carries the user's P-256 signature
+  in calldata (ADR-0001).

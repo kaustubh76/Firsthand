@@ -1,8 +1,10 @@
 # FIRSTHAND — progress report
 
 **Monad Metropolis 2026 · Track 04 (Trust, Identity & AI Infrastructure) · solo build**
-Repo: <https://github.com/kaustubh76/Firsthand> · as of 16 Sep 2026
+Repo: <https://github.com/kaustubh76/Firsthand> · as of 17 Sep 2026
 **Live on Monad testnet (chainId 10143)** — addresses and costs in `deployments/NOTES.md`
+**Try it:** <https://firsthand-capture.vercel.app> (passkey → capture → anchored on Monad) ·
+gateway <https://firsthand-gateway.vercel.app>
 
 ---
 
@@ -245,7 +247,7 @@ The PWA also no longer has a silent failure mode: an error boundary turns render
 words, a status strip on every screen says `live · chain 10143 · host` or `offline · <why>`, and
 discovery gives up after 8 s with a reason instead of hanging on "Loading…".
 
-**Hosting:** the two deploy trees (`deploy/gateway`, one Vercel function; `deploy/capture`, static)
-are committed and proven; `docs/DEPLOY.md` is the five-step dashboard runbook. The public links are
-recorded in `deployments/NOTES.md` once the projects exist — the Vercel API refuses project creation
-from the connector, so that step is manual.
+**Hosting (17 Sep):** both surfaces are public — <https://firsthand-capture.vercel.app> and
+<https://firsthand-gateway.vercel.app> — deployed from the committed trees with the Vercel CLI
+(`pnpm deploy:hosted`), durable passports in Vercel Blob, a dedicated small-float relayer. The browser
+tier passes against the live URLs: real relayed transactions on Monad testnet from a public link.

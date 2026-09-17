@@ -6,9 +6,12 @@ can withdraw consent — after which the same query is refused.
 
 This page gets you from `git clone` to watching that happen. Target: **under 10 minutes.**
 
-> **Hosted:** the capture app and gateway deploy from `deploy/capture` and `deploy/gateway`
-> ([`docs/DEPLOY.md`](docs/DEPLOY.md)). When the public links are live they are listed in
-> [`deployments/NOTES.md`](deployments/NOTES.md); the app needs nothing but a passkey.
+> **No install needed — open the live app:** <https://firsthand-capture.vercel.app>
+> Create a passkey, *Activate on chain*, stamp a note: it is anchored on Monad testnet through the
+> hosted gateway <https://firsthand-gateway.vercel.app> (discovery at
+> [`/.well-known/firsthand.json`](https://firsthand-gateway.vercel.app/.well-known/firsthand.json)).
+> The browser holds no key and pays no gas. Needs a passkey-capable browser (Chrome, Safari,
+> Android/iOS) — the PRF extension is what derives every key.
 
 ## Prerequisites
 

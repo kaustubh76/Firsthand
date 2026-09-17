@@ -33,3 +33,4 @@ contracts/broadcast/**/31337/
 deployments/31337.json
 dev-dist/
 e2e-out/
+.vercel/

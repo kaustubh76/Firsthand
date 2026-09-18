@@ -49,6 +49,16 @@ describe("clientOptionsFromDeployment", () => {
     expect(options.transport.kind).toBe("memory");
   });
 
+  it("anchors through the explicit transport when there is no wallet (a relayed client can anchor)", () => {
+    const options = clientOptionsFromDeployment({
+      deployment,
+      publicClient,
+      blobs: new MemoryBlobStore(),
+      transport: new MemoryTransport(),
+    });
+    expect((options.anchors as unknown as { canWrite: boolean }).canWrite).toBe(true);
+  });
+
   it("refuses to guess a transport when there is neither a wallet nor an explicit one", () => {
     expect(() =>
       clientOptionsFromDeployment({ deployment, publicClient, blobs: new MemoryBlobStore() }),

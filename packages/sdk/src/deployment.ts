@@ -25,7 +25,7 @@ export { type Deployment, loadDeployment } from "@firsthand/contracts/deployment
 export interface DeploymentClientOptions {
   readonly deployment: Deployment;
   readonly publicClient: PublicClient<Transport, Chain>;
-  /** Required to anchor: `OnchainAnchorWriter.anchor()` refuses without a relayer wallet. */
+  /** Anchors sign and broadcast through this wallet; without one they ride `transport` (a relay). */
   readonly walletClient?: WalletClient<Transport, Chain, PrivateKeyAccount>;
   readonly blobs: BlobStore;
   /** Defaults to a public-mempool transport over `walletClient`; pass BTX or a relay explicitly. */
@@ -53,11 +53,13 @@ export function clientOptionsFromDeployment(
     // The anchors contract is the EIP-712 verifyingContract for passports (ADR-0002/0009).
     domain: { chainId: BigInt(d.chainId), verifyingContract: d.PassportAnchors as Address },
     epochs: { genesis: BigInt(d.genesis), length: BigInt(d.epochLength) },
+    // A key-less client (the MCP as a pure buyer/relayed seller) anchors through the same relay
+    // its other verbs use; with a wallet the writer signs and broadcasts itself.
     anchors: new OnchainAnchorWriter({
       address: d.PassportAnchors as Address,
       layout: d.anchorsLayout,
       publicClient: options.publicClient,
-      ...(options.walletClient ? { walletClient: options.walletClient } : {}),
+      ...(options.walletClient ? { walletClient: options.walletClient } : { transport }),
     }),
     blobs: options.blobs,
     transport,

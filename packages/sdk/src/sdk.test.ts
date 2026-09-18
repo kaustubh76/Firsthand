@@ -23,6 +23,7 @@ import {
   hashTerms,
   LICENSE_FH_1_0,
   MONAD_TESTNET_CHAIN_ID,
+  type PassportSidecar,
   passportDigest,
   passportId,
   RefusalError,
@@ -55,12 +56,19 @@ import { BuyerSession, createBuyerKeys } from "./client/BuyerSession.js";
 import { FirsthandClient } from "./client/FirsthandClient.js";
 import { Locker } from "./locker/Locker.js";
 import { exportManifest, serialiseManifest } from "./manifest/export.js";
+import { manifestFromQueries, manifestFromSidecars } from "./manifest/fromSidecars.js";
 import { verifyManifest } from "./manifest/verify.js";
 import { planAttest } from "./verbs/attest.js";
-import { acceptSigned, deposit, mintPassport, refuseUnlessProvable } from "./verbs/deposit.js";
+import {
+  acceptSigned,
+  type DepositResult,
+  deposit,
+  mintPassport,
+  refuseUnlessProvable,
+} from "./verbs/deposit.js";
 import { planEnroll, sendEnroll } from "./verbs/enroll.js";
 import { planGrant } from "./verbs/grant.js";
-import { publishDeposit, sidecarFor } from "./verbs/publish.js";
+import { publishDeposit, sidecarFor, sidecarsForBatch } from "./verbs/publish.js";
 import { checkServed, openQueried, query } from "./verbs/query.js";
 import {
   defaultRescindPath,
@@ -417,6 +425,110 @@ describe("verify() and the Lineage Manifest", () => {
         batches: [{ ...(batcher.flushed()[0] as AnchoredBatch), proofs: new Map() }],
       }),
     ).toThrow(/no proof/);
+  });
+
+  it("builds the same manifest from published sidecars, and the buyer's file from served queries", async () => {
+    const anchors = new MemoryAnchorWriter();
+    const locker = makeLocker(1, anchors);
+    const batcher = new Batcher(locker, anchors, 2);
+    const payee = locker.depositKey(0).address;
+    const t = terms(0, payee);
+    const results: DepositResult[] = [];
+    for (let i = 0; i < 4; i++) {
+      results.push(
+        await deposit(locker, batcher, {
+          ns: 0,
+          datum: { kind: "bytes", bytes: new Uint8Array([10 + i]) },
+          terms: t,
+          attestation,
+        }),
+      );
+    }
+    // What the gateway hosts: one sidecar per passport, across both batches.
+    const sidecars = batcher.flushed().flatMap((b) => sidecarsForBatch(locker, b, t, results));
+    const fromBatches = exportManifest({
+      domain,
+      principalId: locker.principalId,
+      ns: 0,
+      batches: batcher.flushed(),
+      now: () => 7n,
+    });
+    const fromSidecars = await manifestFromSidecars({
+      domain,
+      principalId: locker.principalId,
+      ns: 0,
+      sidecars,
+      anchors,
+      now: () => 7n,
+    });
+    expect(serialiseManifest(fromSidecars)).toBe(serialiseManifest(fromBatches));
+    anchors.mineBlocks(3);
+    expect((await verifyManifest(fromSidecars, { anchors, headBlock: anchors.head })).ok).toBe(
+      true,
+    );
+    // A sidecar from another namespace or an unanchored root is refused, not silently included.
+    await expect(
+      manifestFromSidecars({
+        domain,
+        principalId: locker.principalId,
+        ns: 1,
+        sidecars,
+        anchors,
+      }),
+    ).rejects.toThrow(/another principal or namespace/);
+    const first = sidecars[0] as PassportSidecar;
+    await expect(
+      manifestFromSidecars({
+        domain,
+        principalId: locker.principalId,
+        ns: 0,
+        sidecars: [{ ...first, batchRoot: `0x${"cd".repeat(32)}` }],
+        anchors,
+      }),
+    ).rejects.toThrow(/not anchored/);
+
+    // The buyer's file: what a paid query returns is enough — sidecar + receipt, grant id from the
+    // resource it paid for. No locker, no batcher, no gateway call beyond the query itself.
+    const grantId = `0x${"9a".repeat(32)}` as Bytes32;
+    const served = sidecars.slice(0, 2).map((sidecar, i) => ({
+      passportId: passportId(sidecar.signed.passport),
+      sidecar,
+      signed: sidecar.signed,
+      blob: new Uint8Array(),
+      wrappedDek: new Uint8Array(),
+      receipt: {
+        receiptId: `0x${(0x30 + i).toString(16).repeat(32)}` as Bytes32,
+        txHash: `0x${(0x40 + i).toString(16).repeat(32)}` as Bytes32,
+        blockNumber: BigInt(100 + i),
+      },
+      paid: {
+        requirements: {
+          scheme: "exact",
+          network: "monad-testnet",
+          maxAmountRequired: "1000",
+          resource: `http://gw/v1/query/${grantId}/${passportId(sidecar.signed.passport)}`,
+          description: "",
+          mimeType: "application/json",
+          payTo: payee,
+          maxTimeoutSeconds: 60,
+          asset: payee,
+        },
+        nonce: `0x${"11".repeat(32)}` as Bytes32,
+      },
+    }));
+    const buyers = await manifestFromQueries({
+      domain,
+      results: served as never,
+      anchors,
+      payer: payee,
+    });
+    expect(buyers.assets).toHaveLength(2);
+    expect(buyers.assets.map((a) => a.receipt?.grantId)).toEqual([grantId, grantId]);
+    expect(buyers.assets[1]?.receipt?.blockNumber).toBe(101n);
+    expect((await verifyManifest(buyers, { anchors, headBlock: anchors.head })).ok).toBe(true);
+    await expect(manifestFromQueries({ domain, results: [], anchors })).rejects.toThrow(
+      /no queries/,
+    );
   });
 });
 

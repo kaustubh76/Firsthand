@@ -63,13 +63,35 @@ describe("firsthand-mcp", () => {
       "firsthand_attest",
       "firsthand_deposit",
       "firsthand_enroll",
+      "firsthand_export_manifest",
       "firsthand_grant",
       "firsthand_import",
       "firsthand_query",
       "firsthand_register_card",
+      "firsthand_request_access",
       "firsthand_rescind",
       "firsthand_status",
     ]);
+  });
+
+  it("request_access and export_manifest say plainly what they need", async () => {
+    const client = await connect();
+    const request = await client.callTool({
+      name: "firsthand_request_access",
+      arguments: { passportId: `0x${"11".repeat(32)}` },
+    });
+    expect(request.isError).toBe(true);
+    expect(textOf(request as { content: unknown }).message).toMatch(/no buyer keys/);
+    const manifest = await client.callTool({
+      name: "firsthand_export_manifest",
+      arguments: {
+        gatewayUrl: "http://gw.test",
+        grantId: `0x${"22".repeat(32)}`,
+        passportIds: [`0x${"11".repeat(32)}`],
+      },
+    });
+    expect(manifest.isError).toBe(true);
+    expect(textOf(manifest as { content: unknown }).message).toMatch(/no buyer keys/);
   });
 
   it("deposits, reports status, refuses bad namespaces, and posts a rescission commitment", async () => {

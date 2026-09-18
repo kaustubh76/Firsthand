@@ -3,6 +3,7 @@ import {
   BtxTransport,
   createChainClients,
   FsBlobStore,
+  HttpRelayTransport,
   MemoryAnchorWriter,
   MemoryFacilitator,
   MemoryTransport,
@@ -44,8 +45,19 @@ const relayerClients =
         privateKey: config.RELAYER_PRIVATE_KEY as `0x${string}`,
       })
     : null;
+// A key-less reader when there is an RPC but no relayer: the buyer path (card, terms, query) and
+// anchoring can all ride a gateway's relay — an agent needs no MON to take part.
+const readerClients =
+  relayerClients ??
+  (config.RPC_URL
+    ? createChainClients({
+        rpcUrl: config.RPC_URL,
+        chain: config.CHAIN_ID === 31337n ? anvil : monadTestnet,
+      })
+    : null);
 // BTX when an endpoint is configured (probe-gated — a direct btx plan never degrades to the public
-// mempool, ADR-0012), else the public mempool, else the memory double (calldata only).
+// mempool, ADR-0012), else the public mempool, else the gateway's relay, else the memory double
+// (calldata only).
 const transport: TxTransport = relayerClients?.walletClient
   ? config.BTX_RPC_URL
     ? new BtxTransport({
@@ -54,7 +66,10 @@ const transport: TxTransport = relayerClients?.walletClient
         method: config.BTX_METHOD,
       })
     : new PublicMempoolTransport(relayerClients.walletClient)
-  : new MemoryTransport();
+  : config.GATEWAY_URL
+    ? new HttpRelayTransport({ baseUrl: config.GATEWAY_URL })
+    : new MemoryTransport();
+const relayed = transport instanceof HttpRelayTransport;
 if (transport.kind === "btx") {
   const caps = await transport.capabilities();
   logger.info("btx transport", { encryptedMempool: caps.encryptedMempool, detail: caps.detail });
@@ -70,16 +85,16 @@ if (deployment && BigInt(deployment.chainId) !== config.CHAIN_ID) {
     `DEPLOYMENTS_FILE is for chain ${deployment.chainId}, CHAIN_ID is ${config.CHAIN_ID}`,
   );
 }
-if (deployment && relayerClients)
-  await assertChain(relayerClients.publicClient, deployment, "DEPLOYMENTS_FILE");
+if (deployment && readerClients)
+  await assertChain(readerClients.publicClient, deployment, "DEPLOYMENTS_FILE");
 
 const blobs = new FsBlobStore(config.BLOB_DIR);
 const client = new FirsthandClient(
-  deployment && relayerClients
+  deployment && readerClients
     ? clientOptionsFromDeployment({
         deployment,
-        publicClient: relayerClients.publicClient,
-        ...(relayerClients.walletClient ? { walletClient: relayerClients.walletClient } : {}),
+        publicClient: readerClients.publicClient,
+        ...(readerClients.walletClient ? { walletClient: readerClients.walletClient } : {}),
         blobs,
         transport,
         logger,
@@ -106,7 +121,12 @@ const client = new FirsthandClient(
 logger.info("firsthand-mcp", {
   envFile: envFile.path ?? `none (${envFile.reason})`,
   chainId: String(config.CHAIN_ID),
-  anchors: deployment && relayerClients ? "onchain" : "memory (deposits stay local)",
+  anchors:
+    deployment && readerClients
+      ? relayed
+        ? "onchain via the gateway relay"
+        : "onchain"
+      : "memory (deposits stay local)",
   gateway: config.GATEWAY_URL ?? "none",
   transport: transport.kind,
 });
@@ -156,7 +176,16 @@ const server = createMcpServer({
   session: openSession,
   logger,
   canBroadcast: transport.kind !== "memory",
-  canAnchor: deployment !== null && relayerClients?.walletClient !== undefined,
+  canAnchor: deployment !== null && (relayerClients?.walletClient !== undefined || relayed),
+  ...(readerClients
+    ? {
+        publicClient: readerClients.publicClient as never,
+        anchors: client.options.anchors,
+        waitForTx: async (hash: `0x${string}`) => {
+          await readerClients.publicClient.waitForTransactionReceipt({ hash });
+        },
+      }
+    : {}),
   ...(config.GATEWAY_URL ? { gatewayUrl: config.GATEWAY_URL } : {}),
   buyer: openBuyer,
   passportDomain: {

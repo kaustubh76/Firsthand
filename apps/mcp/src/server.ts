@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { AnchorWriter } from "@firsthand/adapters";
 import {
   type Address,
   AttestationClass,
@@ -6,6 +7,7 @@ import {
   type Eip712Domain,
   isFirsthandError,
   LICENSE_FH_1_0,
+  parseSidecar,
   passportId,
   Scope,
   type Terms,
@@ -15,17 +17,27 @@ import {
 } from "@firsthand/core";
 import { parseExport } from "@firsthand/importers";
 import type { Logger } from "@firsthand/runtime";
-import type { BuyerSession, LockerSession } from "@firsthand/sdk";
+import {
+  type BuyerSession,
+  type LockerSession,
+  manifestFromQueries,
+  type QueryResult,
+  serialiseManifest,
+  verifyManifest,
+} from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { PublicClient } from "viem";
 import {
   AcceptTermsInputSchema,
   AttestInputSchema,
   DepositInputSchema,
   EnrollInputSchema,
+  ExportManifestInputSchema,
   GrantInputSchema,
   ImportInputSchema,
   QueryInputSchema,
   RegisterCardInputSchema,
+  RequestAccessInputSchema,
   RescindInputSchema,
   StatusInputSchema,
 } from "./tools/schemas.js";
@@ -43,6 +55,12 @@ export interface McpDeps {
   readonly gatewayUrl?: string;
   /** True when the anchors adapter reaches a chain — i.e. a deposit can actually be anchored. */
   readonly canAnchor: boolean;
+  /** Chain reader for the buyer's own verification (manifest anchors, head block). */
+  readonly publicClient?: PublicClient;
+  /** Read-only anchors view for manifest verification; defaults to the session's writer. */
+  readonly anchors?: Pick<AnchorWriter, "isAnchored" | "anchorBlock">;
+  /** Waits for a relayed transaction to land, so dependent calls do not simulate against thin air. */
+  readonly waitForTx?: (hash: Bytes32) => Promise<void>;
 }
 
 const CLASS = {
@@ -423,6 +441,114 @@ export function createMcpServer(deps: McpDeps): McpServer {
         });
       } catch (error) {
         deps.logger.warn("acceptTerms failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_request_access",
+    {
+      title: "Ask a human for access to a passport",
+      description:
+        "Buyer side, the whole handshake: reads the passport's public sidecar from the gateway (principal, namespace, price), registers this agent's card and accepts those exact terms on chain (relayed — no gas needed), and returns the link the human opens in the capture app to approve with a passkey. The grant id is deterministic, so poll firsthand_query with it once approved.",
+      inputSchema: RequestAccessInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.buyer)
+          throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
+        if (!deps.gatewayUrl) throw new Error("GATEWAY_URL is required to read the sidecar");
+        const res = await fetch(`${deps.gatewayUrl}/v1/passports/${input.passportId}`);
+        if (res.status === 404) throw new Error(`the gateway does not host ${input.passportId}`);
+        if (!res.ok) throw new Error(`gateway answered ${res.status}`);
+        const sidecar = parseSidecar(await res.json());
+        const buyer = await deps.buyer();
+        const card = await buyer.registerCard();
+        await deps.waitForTx?.(card.txHash);
+        const accept = buyer.acceptTerms(sidecar.principalId, sidecar.terms);
+        const accepted = await accept.send();
+        await deps.waitForTx?.(accepted.txHash);
+        const q = new URLSearchParams({
+          grant: buyer.cardId,
+          pub: buyer.encryptionPubKey,
+          ns: String(sidecar.ns),
+          from: input.label,
+        });
+        return text({
+          principalId: sidecar.principalId,
+          ns: sidecar.ns,
+          terms: {
+            priceUnits: sidecar.terms.price.toString(),
+            scope: sidecar.terms.scope,
+            rateLimit: sidecar.terms.rateLimit,
+            payees: sidecar.terms.payees,
+          },
+          termsHash: accept.plan.termsHash,
+          cardId: buyer.cardId,
+          approvalLink: `${input.appUrl.replace(/\/+$/, "")}/?${q.toString()}`,
+          registerCardTx: card.txHash,
+          acceptTermsTx: accepted.txHash,
+          next: "Send approvalLink to the human. Once they approve, firsthand_query works with the grantId of the epoch they granted in (the Locker shows it); the wrap is published by the app.",
+        });
+      } catch (error) {
+        deps.logger.warn("requestAccess failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_export_manifest",
+    {
+      title: "Export the buyer's Lineage Manifest",
+      description:
+        "Buyer side: query the listed passports under a grant (paying per query) and assemble the compliance file — one asset per passport with its origin signature, Merkle proof, anchor and receipt — verified against the chain before it is returned.",
+      inputSchema: ExportManifestInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.buyer)
+          throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
+        if (!deps.anchors || !deps.publicClient)
+          throw new Error(
+            "manifest verification needs a chain reader (RPC_URL + DEPLOYMENTS_FILE)",
+          );
+        const buyer = await deps.buyer();
+        const results: QueryResult[] = [];
+        for (const id of input.passportIds) {
+          const { result } = await buyer.queryAndOpen(
+            {
+              gatewayUrl: input.gatewayUrl,
+              grantId: input.grantId as Bytes32,
+              passportId: id as Bytes32,
+            },
+            deps.passportDomain,
+          );
+          results.push(result);
+        }
+        const manifest = await manifestFromQueries({
+          domain: deps.passportDomain,
+          results,
+          anchors: deps.anchors,
+          payer: buyer.owner,
+          finalityDepth: 0,
+        });
+        const headBlock = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
+        const verdict = await verifyManifest(manifest, { anchors: deps.anchors, headBlock });
+        return text({
+          verifies: verdict.ok,
+          assets: verdict.assets,
+          hashesPerAsset: verdict.hashesPerAsset,
+          paid: results.map((r) => ({
+            passportId: r.passportId,
+            receiptId: r.receipt.receiptId,
+            txHash: r.receipt.txHash,
+          })),
+          manifest: JSON.parse(serialiseManifest(manifest)),
+        });
+      } catch (error) {
+        deps.logger.warn("exportManifest failed", { error });
         return failure(error);
       }
     },

@@ -52,6 +52,24 @@ export const QueryInputSchema = z.object({
   passportId: hex32,
 });
 
+export const RequestAccessInputSchema = z.object({
+  passportId: hex32.describe(
+    "A passport the gateway hosts — its sidecar names the principal and terms",
+  ),
+  label: z.string().max(64).default("an agent").describe("How the human will see this buyer"),
+  appUrl: z
+    .string()
+    .url()
+    .default("https://firsthand-capture.vercel.app")
+    .describe("The capture app the human uses; the approval link opens there"),
+});
+
+export const ExportManifestInputSchema = z.object({
+  gatewayUrl: z.string().url(),
+  grantId: hex32,
+  passportIds: z.array(hex32).min(1).max(64),
+});
+
 export const RescindInputSchema = z.object({
   grantId: hex32,
   path: z

@@ -7,10 +7,12 @@ import {
   mintPassport,
 } from "@firsthand/sdk/browser";
 import { useState } from "react";
+import { ActivationCard } from "../components/ActivationCard.js";
 import { Hex, Tx } from "../components/Tx.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Landed, land } from "../lib/deposits.js";
-import { describeLiveness, type Liveness } from "../lib/liveness.js";
+import type { Liveness } from "../lib/liveness.js";
+import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
 import { NS, termsFor } from "../lib/terms.js";
 
@@ -29,17 +31,16 @@ const now = () => BigInt(Math.floor(Date.now() / 1000));
 export function Capture({
   session,
   config,
+  client,
   liveness,
+  onActivated,
 }: {
   session: LockerSession;
   config: AppConfig;
+  client: CaptureClient;
   liveness: Liveness;
+  onActivated: () => void;
 }) {
-  // Anchoring needs this epoch's deposit-key root attested; say so before the relay reverts.
-  const blocked =
-    config.live && liveness.kind !== "live" && liveness.kind !== "unknown"
-      ? describeLiveness(liveness)
-      : null;
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -296,11 +297,14 @@ export function Capture({
           gateway.
         </p>
       )}
-      {blocked && (
-        <p className="error" data-testid="blocked">
-          Captures will not anchor yet: {blocked}.
-        </p>
-      )}
+      <ActivationCard
+        session={session}
+        config={config}
+        client={client}
+        liveness={liveness}
+        onActivated={onActivated}
+        what="Captures"
+      />
       {error && <p className="error">{error}</p>}
 
       {landed.length > 0 && (

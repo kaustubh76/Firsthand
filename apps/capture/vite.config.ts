@@ -26,5 +26,6 @@ export default defineConfig({
   ],
   // The committed deploy tree (deploy/capture) is built without maps to keep the diff small.
   build: { target: "es2022", sourcemap: process.env["FH_SOURCEMAP"] !== "false" },
-  server: { port: 5173 },
+  // The Evidence tab imports experiments/results/*.json from the repo root.
+  server: { port: 5173, fs: { allow: [".", "../../experiments/results"] } },
 });

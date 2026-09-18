@@ -9,13 +9,17 @@ timeline since the enrol block), the Lineage Manifest exported and verified in-b
 **Recall:** a demo buyer agent in the same browser — funds itself from the MockUSDC faucet double
 through the selector-scoped relay, registers a card, accepts terms; you grant; it pays per query
 over x402 (on-chain settlement, receipt, your USDC delta); you withdraw; the same query is refused.
+**Evidence:** H1/H2/H3, S2 and S4 numbers read from `experiments/results` at build time — the
+sign flip on H1, BTX marked not measurable, the H3 signature re-proof shown as the regression it is.
 **Verify:** no locker needed — paste a Lineage Manifest and it is verified against the chain
 (origin signatures, Merkle inclusion, anchoring, finality), or look up a passport the gateway hosts.
 **Access requests:** an outside buyer (`firsthand_request_access` in the MCP) hands the human a
 link `?grant=<card>&pub=<x25519>&ns=<n>&from=<label>`; the Locker shows it, one passkey tap grants.
 The Recall tab also exports the **buyer's** compliance file from the served query. A localStorage
 journal keeps this browser's history (evidence is rebuilt from the gateway after a reload); the
-status strip says when this epoch needs a fresh attestation; every hash links to the explorer.
+status strip says when this epoch needs a fresh attestation and the Capture/Recall tabs offer the
+activation right there; the Consent Ledger merges the gateway's window with the local journal;
+every hash links to the explorer.
 
 **Hosted:** <https://firsthand-capture.vercel.app> (against <https://firsthand-gateway.vercel.app>).
 `?gateway=https://…` points the same build at another gateway and is remembered; `?gateway=`

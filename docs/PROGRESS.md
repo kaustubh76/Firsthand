@@ -313,3 +313,26 @@ tier on anvil and on Monad testnet:
 
 **Still not built:** Envio handlers, the external x402 facilitator, the docs site, BTX (not on
 testnet), the MCP↔PWA PRF handoff, and buyer-side USDC funding inside `firsthand_request_access`.
+
+### Update — the judge's path, and the evidence on screen (18 Sep 2026, evening)
+
+- **Activation where the judge stands.** Capture and Recall show an activation card (enroll +
+  attest, two relayed transactions) instead of pointing at another tab; it stays with its
+  transaction links once done. Epoch rollover shows "Attest this epoch" the same way.
+- **Consent Ledger beyond the scan window.** Gateway events are merged with the local journal by
+  transaction hash — chain rows carry block numbers, journal-only rows read *local record* — so a
+  judge who returns hours later still sees the whole history.
+- **Evidence tab** (Readme §19's last beat): H1 gas per batch/passport on a vanilla EVM and on
+  Monad with the sign flip stated (+1.9 % / −4.2 %), H2 per arm with BTX marked *not measurable*,
+  H3 Merkle-only 1.93 s vs 31 s full re-proof reported as the regression, S2 and S4. Every number
+  is read from `experiments/results/*.json` at build time and pinned by a unit test to the README's
+  figures. Reachable without a locker, like Verify.
+- **The MCP buyer funds itself:** `firsthand_request_access` mints from the faucet double through
+  the selector-scoped relay when discovery says the gateway relays it, and says why when it does
+  not — an agent goes from "give me a passport id" to "paid and exported" with no MON and no USDC.
+- Gateway landing page and discovery (`app`) point at the capture app; `docs/SECURITY.md` §8
+  describes the hosted surface: what the relayer float bounds, what the Blob store holds, what the
+  browser and an access-request link carry.
+
+The browser tier now activates from the Capture card and reads the Evidence tab; passes on anvil,
+Monad testnet and the live links.

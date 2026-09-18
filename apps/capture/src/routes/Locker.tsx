@@ -11,11 +11,13 @@ import {
 } from "@firsthand/sdk/browser";
 import { useCallback, useEffect, useState } from "react";
 import { Hex, Tx } from "../components/Tx.js";
+import { activate as activateLocker, reattest as reattestLocker } from "../lib/activation.js";
 import { formatUsdc } from "../lib/agent.js";
 import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
 import { fetchReceipts, fetchTimeline } from "../lib/ledger.js";
+import { mergeLedger } from "../lib/ledgerMerge.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { dismissRequest, type GrantRequest } from "../lib/requests.js";
@@ -91,33 +93,16 @@ export function LockerView({
 
   const activate = () =>
     run("activate", async () => {
-      const enrolled = await session.enroll();
-      // attest reads the principal enrol wrote, so it must wait for inclusion — relaying returns as
-      // soon as the gateway accepts the transaction, not when it lands.
-      await waitForTx?.(enrolled.txHash);
-      const attested = await session.attest();
-      await waitForTx?.(attested.txHash);
-      let enrolBlock: string | undefined;
-      if (client.publicClient) {
-        const receipt = await client.publicClient.getTransactionReceipt({ hash: enrolled.txHash });
-        enrolBlock = receipt.blockNumber.toString();
-      }
-      mutate((j) => {
-        j.enrolTx = enrolled.txHash;
-        j.attestTx = attested.txHash;
-        if (enrolBlock) j.enrolBlock = enrolBlock;
-      });
+      await activateLocker(session, client);
+      setJournal(loadJournal(principalId));
       onActivated();
       await refreshLedger();
     });
 
   const reattest = () =>
     run("attest", async () => {
-      const attested = await session.attest();
-      await waitForTx?.(attested.txHash);
-      mutate((j) => {
-        j.attestTx = attested.txHash;
-      });
+      await reattestLocker(session, client);
+      setJournal(loadJournal(principalId));
       onActivated();
       await refreshLedger();
     });
@@ -426,24 +411,37 @@ export function LockerView({
         </button>
       </p>
       {ledgerError && <p className="error">{ledgerError}</p>}
-      {events === null ? (
-        <p className="hint">{config.live ? "reading…" : "unavailable offline"}</p>
-      ) : events.length === 0 ? (
-        <p className="hint">no events in range</p>
-      ) : (
-        <table className="ledger" data-testid="ledger">
-          <tbody>
-            {events.map((e) => (
-              <tr key={`${e.kind}-${e.txHash ?? e.blockNumber}-${e.grantId ?? ""}`}>
-                <td>{e.kind}</td>
-                <td>block {e.blockNumber.toString()}</td>
-                <td>{e.grantId ? <Hex value={e.grantId} n={6} /> : ""}</td>
-                <td>{e.txHash ? <Tx hash={e.txHash} chainId={config.chainId} /> : ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {(() => {
+        const rows = mergeLedger(principalId, events ?? [], journal);
+        if (events === null && rows.length === 0) {
+          return <p className="hint">{config.live ? "reading…" : "unavailable offline"}</p>;
+        }
+        if (rows.length === 0) return <p className="hint">no events yet</p>;
+        return (
+          <table className="ledger" data-testid="ledger">
+            <tbody>
+              {rows.map((e) => (
+                <tr key={`${e.kind}-${e.txHash ?? e.grantId ?? ""}`} data-source={e.source}>
+                  <td>{e.kind}</td>
+                  <td>
+                    {e.blockNumber === null ? (
+                      <span className="hint">local record</span>
+                    ) : (
+                      `block ${e.blockNumber.toString()}`
+                    )}
+                  </td>
+                  <td>{e.grantId ? <Hex value={e.grantId} n={6} /> : ""}</td>
+                  <td>{e.txHash ? <Tx hash={e.txHash} chainId={config.chainId} /> : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })()}
+      <p className="hint">
+        The gateway reads a bounded window of blocks per request; rows marked <em>local record</em>
+        are this browser's own transactions from beyond that window.
+      </p>
 
       <h2>Lineage Manifest</h2>
       <p className="hint">

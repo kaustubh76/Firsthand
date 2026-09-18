@@ -10,7 +10,8 @@ This page gets you from `git clone` to watching that happen. Target: **under 10 
 > All three verbs from one link, on Monad testnet: create a passkey → *Locker → Activate on chain*
 > → *Capture* a note, a photo or a ChatGPT export → *Recall* runs a buyer agent that pays per query,
 > then you withdraw consent and watch the same query refused → *Locker* shows the Consent Ledger and
-> verifies the Lineage Manifest. Every hash links to the explorer. The browser holds no key and pays
+> verifies the Lineage Manifest → *Verify* checks any manifest against the chain, *Evidence* shows
+> the measured H1/H2/H3 numbers. Every hash links to the explorer. The browser holds no key and pays
 > no gas (hosted gateway <https://firsthand-gateway.vercel.app>). Needs a passkey-capable browser —
 > the PRF extension is what derives every key.
 

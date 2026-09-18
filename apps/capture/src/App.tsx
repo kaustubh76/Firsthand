@@ -7,11 +7,12 @@ import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
 import { absorbRequestFromUrl, type GrantRequest } from "./lib/requests.js";
 import { Capture } from "./routes/Capture.js";
 import { Enroll } from "./routes/Enroll.js";
+import { Evidence } from "./routes/Evidence.js";
 import { LockerView } from "./routes/Locker.js";
 import { Recall } from "./routes/Recall.js";
 import { Verify } from "./routes/Verify.js";
 
-type Route = "capture" | "locker" | "recall" | "verify";
+type Route = "capture" | "locker" | "recall" | "verify" | "evidence";
 
 const hostOf = (url: string | null): string => {
   try {
@@ -92,20 +93,25 @@ export function App() {
       No locker needed to{" "}
       <button type="button" className="inline" onClick={() => setRoute("verify")}>
         verify a manifest or a passport
+      </button>{" "}
+      or to read{" "}
+      <button type="button" className="inline" onClick={() => setRoute("evidence")}>
+        the measured evidence
       </button>
       .
     </p>
   );
-  const publicVerify = config && client && route === "verify" && session === null && (
-    <main>
-      {header}
-      <button type="button" className="inline" onClick={() => setRoute("capture")}>
-        ← back
-      </button>
-      <Verify config={config} client={client} />
-    </main>
-  );
-  if (publicVerify) return publicVerify;
+  const publicRoute =
+    config && client && session === null && (route === "verify" || route === "evidence") ? (
+      <main>
+        {header}
+        <button type="button" className="inline" onClick={() => setRoute("capture")}>
+          ← back
+        </button>
+        {route === "verify" ? <Verify config={config} client={client} /> : <Evidence />}
+      </main>
+    ) : null;
+  if (publicRoute) return publicRoute;
   if (!config || !client) {
     return (
       <main>
@@ -153,14 +159,22 @@ export function App() {
     <main>
       {header}
       <nav>
-        {(["capture", "locker", "recall", "verify"] as const).map((r) => (
+        {(["capture", "locker", "recall", "verify", "evidence"] as const).map((r) => (
           <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>
             {r}
             {r === "locker" && requests.length > 0 ? ` (${requests.length})` : ""}
           </button>
         ))}
       </nav>
-      {route === "capture" && <Capture session={session} config={config} liveness={liveness} />}
+      {route === "capture" && (
+        <Capture
+          session={session}
+          config={config}
+          client={client}
+          liveness={liveness}
+          onActivated={() => void refreshLiveness()}
+        />
+      )}
       {route === "locker" && (
         <LockerView
           session={session}
@@ -173,9 +187,16 @@ export function App() {
         />
       )}
       {route === "recall" && (
-        <Recall session={session} config={config} client={client} liveness={liveness} />
+        <Recall
+          session={session}
+          config={config}
+          client={client}
+          liveness={liveness}
+          onActivated={() => void refreshLiveness()}
+        />
       )}
       {route === "verify" && <Verify config={config} client={client} />}
+      {route === "evidence" && <Evidence />}
     </main>
   );
 }

@@ -156,11 +156,17 @@ async function main() {
     await page.locator("nav").waitFor({ timeout: 20_000 });
     ok("session unlocked — nav rendered");
 
-    step("activate on chain (enroll + attest over the relay)");
-    await page.getByRole("button", { name: "locker" }).click();
-    await page.getByRole("button", { name: /Activate on chain/ }).click();
-    await page.getByText(/^enrolled/).waitFor({ timeout: 120_000 });
-    ok((await page.getByText(/^enrolled/).textContent())?.slice(0, 90) ?? "");
+    step("activate on chain from where the judge is (the Capture tab's card)");
+    const card = page.getByTestId("activation");
+    await card.waitFor({ timeout: 60_000 });
+    await card.getByRole("button", { name: /Activate on chain/ }).click();
+    await card.getByText(/^enrolled/).waitFor({ timeout: 120_000 });
+    ok((await card.getByText(/^enrolled/).textContent())?.slice(0, 90) ?? "");
+    await page
+      .locator(".status")
+      .filter({ hasText: /attested for epoch/ })
+      .waitFor({ timeout: 60_000 });
+    ok("status strip: attested for this epoch; the card is gone");
 
     step("capture a note → passport → anchor → publish");
     await page.getByRole("button", { name: "capture" }).click();
@@ -301,6 +307,18 @@ async function main() {
       .getByText(/anchored at block/)
       .waitFor({ timeout: 60_000 });
     ok("passport lookup shows origin, terms and the anchor block");
+
+    step("evidence: H1/H2/H3 on screen, from experiments/results");
+    await page.locator("nav").getByRole("button", { name: "evidence" }).click();
+    const evidence = page.getByTestId("evidence");
+    await evidence.waitFor({ timeout: 10_000 });
+    const deltas = await evidence.getByTestId("h1-delta").allTextContents();
+    if (!deltas.some((d) => d.startsWith("+")) || !deltas.some((d) => d.startsWith("-"))) {
+      throw new Error(`H1 sign flip not shown: ${deltas.join(", ")}`);
+    }
+    await evidence.getByText("not measurable").waitFor({ timeout: 5_000 });
+    await evidence.getByTestId("s4").waitFor({ timeout: 5_000 });
+    ok(`H1 paged vs baseline: ${deltas.join(" · ")} · BTX marked not measurable · S4 shown`);
 
     step("external demand: a buyer outside the browser asks, the human approves, the buyer pays");
     const chain = disco.chainId === "31337" ? anvil : monadTestnet;

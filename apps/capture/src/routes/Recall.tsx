@@ -8,6 +8,7 @@ import {
   verifyManifest,
 } from "@firsthand/sdk/browser";
 import { useMemo, useState } from "react";
+import { ActivationCard } from "../components/ActivationCard.js";
 import { Hex, Tx } from "../components/Tx.js";
 import {
   type DemoAgent,
@@ -75,11 +76,13 @@ export function Recall({
   config,
   client,
   liveness,
+  onActivated,
 }: {
   session: LockerSession;
   config: AppConfig;
   client: CaptureClient;
   liveness: Liveness;
+  onActivated: () => void;
 }) {
   const principalId = session.locker.principalId;
   const [journal, setJournal] = useState<Journal>(() => loadJournal(principalId));
@@ -345,11 +348,14 @@ export function Recall({
           for.
         </p>
       )}
-      {blocked && (
-        <p className="error" data-testid="blocked">
-          {blocked}.
-        </p>
-      )}
+      <ActivationCard
+        session={session}
+        config={config}
+        client={client}
+        liveness={liveness}
+        onActivated={onActivated}
+        what="The recall"
+      />
       {config.live && !config.faucet && (
         <p className="hint">
           This gateway does not relay the faucet mint, so the demo buyer can only run if it already

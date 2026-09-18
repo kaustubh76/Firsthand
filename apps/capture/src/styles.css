@@ -164,3 +164,21 @@ code {
 .status[data-live="false"] {
   border-color: #ff7b7b;
 }
+.card {
+  border: 1px solid #3a3a48;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: #101018;
+}
+.ledger th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem 0.15rem 0;
+  opacity: 0.8;
+}
+.ledger {
+  font-size: 0.92em;
+  overflow-x: auto;
+  display: block;
+}

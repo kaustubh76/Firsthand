@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addressUrl, short, txUrl } from "./explorer.js";
 import { loadJournal, updateJournal } from "./journal.js";
+import { mergeLedger } from "./ledgerMerge.js";
+import { describeLiveness, livenessOf } from "./liveness.js";
 import { canonicalJson, mediaCap, metaHashOf } from "./media.js";
+import { parseGrantRequest, requestLink } from "./requests.js";
 
 const store = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -65,8 +68,7 @@ describe("explorer", () => {
 });
 
 describe("grant requests", () => {
-  it("parses only well-formed links and builds them back", async () => {
-    const { parseGrantRequest, requestLink } = await import("./requests.js");
+  it("parses only well-formed links and builds them back", () => {
     const card = `0x${"ca".repeat(32)}` as const;
     const pub = `0x${"9b".repeat(32)}` as const;
     const link = requestLink("https://app.example/", { card, pub, ns: 1, label: "Qwen buyer" });
@@ -80,8 +82,7 @@ describe("grant requests", () => {
 });
 
 describe("liveness", () => {
-  it("maps the chain's view to what the human must do next", async () => {
-    const { describeLiveness, livenessOf } = await import("./liveness.js");
+  it("maps the chain's view to what the human must do next", () => {
     expect(livenessOf(null, 5n)).toEqual({ kind: "not-enrolled" });
     expect(livenessOf({ lastAttestedEpoch: 5n, thawEpoch: 0n }, 5n)).toEqual({
       kind: "live",
@@ -99,5 +100,63 @@ describe("liveness", () => {
     expect(describeLiveness({ kind: "attest-needed", epoch: 5n, lastAttested: 4n })).toMatch(
       /Re-attest/,
     );
+  });
+});
+
+describe("ledger merge", () => {
+  it("prefers chain rows, fills the rest from the journal, never lists a tx twice", () => {
+    const p = `0x${"11".repeat(32)}` as const;
+    const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as const;
+    const journal = {
+      enrolTx: tx(1),
+      attestTx: tx(2),
+      deposits: [],
+      receipts: [],
+      grants: [
+        {
+          grantId: tx(0x99),
+          granteeCard: tx(0xca),
+          ns: 0,
+          termsHash: tx(0x7e),
+          txHash: tx(3),
+          at: 0,
+          rescindTx: tx(4),
+        },
+      ],
+    };
+    const chain = [
+      {
+        kind: "enrolled" as const,
+        principalId: p,
+        grantId: null,
+        blockNumber: 10n,
+        timestamp: 0n,
+        txHash: tx(1),
+      },
+      {
+        kind: "granted" as const,
+        principalId: p,
+        grantId: tx(0x99),
+        blockNumber: 12n,
+        timestamp: 0n,
+        txHash: tx(3),
+      },
+      {
+        kind: "granted" as const,
+        principalId: tx(0x55),
+        grantId: tx(0x98),
+        blockNumber: 13n,
+        timestamp: 0n,
+        txHash: tx(9),
+      },
+    ];
+    const rows = mergeLedger(p, chain, journal);
+    expect(rows.map((r) => [r.kind, r.source, r.blockNumber])).toEqual([
+      ["enrolled", "chain", 10n],
+      ["granted", "chain", 12n],
+      ["attested", "local", null],
+      ["rescinded", "local", null],
+    ]);
+    expect(rows.filter((r) => r.txHash === tx(1))).toHaveLength(1);
   });
 });

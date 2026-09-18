@@ -163,7 +163,8 @@ const openBuyer = () => {
           account,
           hexToBytes(config.GRANTEE_SEED_HEX as `0x${string}`),
         ),
-        grantManager: config.GRANT_MANAGER.toLowerCase() as Address,
+        // The deployment file wins over the transcribed env addresses, as it does for the locker.
+        grantManager: client.options.addresses.grantManager,
         chainId: config.CHAIN_ID,
         transport,
       }),
@@ -188,10 +189,7 @@ const server = createMcpServer({
     : {}),
   ...(config.GATEWAY_URL ? { gatewayUrl: config.GATEWAY_URL } : {}),
   buyer: openBuyer,
-  passportDomain: {
-    chainId: config.CHAIN_ID,
-    verifyingContract: config.PASSPORT_ANCHORS.toLowerCase() as Address,
-  },
+  passportDomain: client.options.domain,
 });
 await server.connect(new StdioServerTransport());
 logger.info("firsthand-mcp ready on stdio");

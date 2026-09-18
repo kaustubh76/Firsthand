@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { AnchorWriter } from "@firsthand/adapters";
+import type { AnchorWriter, TxTransport } from "@firsthand/adapters";
 import {
   type Address,
   AttestationClass,
@@ -26,7 +26,7 @@ import {
   verifyManifest,
 } from "@firsthand/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { PublicClient } from "viem";
+import { encodeFunctionData, type PublicClient, parseAbi } from "viem";
 import {
   AcceptTermsInputSchema,
   AttestInputSchema,
@@ -61,6 +61,8 @@ export interface McpDeps {
   readonly anchors?: Pick<AnchorWriter, "isAnchored" | "anchorBlock">;
   /** Waits for a relayed transaction to land, so dependent calls do not simulate against thin air. */
   readonly waitForTx?: (hash: Bytes32) => Promise<void>;
+  /** The transport every relayed call rides; the faucet mint goes through it when the gateway allows. */
+  readonly transport?: TxTransport;
 }
 
 const CLASS = {
@@ -85,6 +87,61 @@ function failure(error: unknown) {
     ? { error: error.code, message: error.message, context: error.context }
     : { error: "FH_INTERNAL", message: (error as Error).message };
   return { ...text(body), isError: true };
+}
+
+const usdcAbi = parseAbi([
+  "function mint(address to, uint256 value)",
+  "function balanceOf(address) view returns (uint256)",
+]);
+
+/**
+ * A buyer that cannot pay is not a buyer. On chains where the USDC is the MockUSDC faucet double
+ * the gateway relays exactly `mint` (selector-scoped, published in discovery), so the agent funds
+ * itself with a hundred queries' worth; anywhere else this says why it did not.
+ */
+async function fundBuyer(
+  deps: McpDeps,
+  owner: Address,
+  price: bigint,
+): Promise<{ funded: boolean; txHash?: Bytes32; balanceUnits?: string; reason?: string }> {
+  if (!deps.gatewayUrl || !deps.publicClient || !deps.transport) {
+    return { funded: false, reason: "no gateway/reader/transport to fund through" };
+  }
+  try {
+    const disco = (await (await fetch(`${deps.gatewayUrl}/.well-known/firsthand.json`)).json()) as {
+      x402?: { asset?: string };
+      relay?: { allow?: string[] };
+    };
+    const usdc = disco.x402?.asset?.toLowerCase() as Address | undefined;
+    if (!usdc) return { funded: false, reason: "discovery names no payment asset" };
+    const balance = (await deps.publicClient.readContract({
+      address: usdc,
+      abi: usdcAbi,
+      functionName: "balanceOf",
+      args: [owner],
+    })) as bigint;
+    if (balance >= price * 10n)
+      return { funded: false, balanceUnits: balance.toString(), reason: "already funded" };
+    if (!(disco.relay?.allow ?? []).includes(`${usdc}:0x40c10f19`)) {
+      return {
+        funded: false,
+        balanceUnits: balance.toString(),
+        reason: "this gateway does not relay the faucet mint (not a MockUSDC deployment)",
+      };
+    }
+    const ref = await deps.transport.send({
+      to: usdc,
+      data: encodeFunctionData({ abi: usdcAbi, functionName: "mint", args: [owner, price * 100n] }),
+    });
+    await deps.waitForTx?.(ref.hash as Bytes32);
+    return {
+      funded: true,
+      txHash: ref.hash as Bytes32,
+      balanceUnits: (balance + price * 100n).toString(),
+    };
+  } catch (error) {
+    return { funded: false, reason: (error as Error).message };
+  }
 }
 
 /** Builds the MCP server with the three verbs plus `firsthand_status`. */
@@ -469,6 +526,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
         const accept = buyer.acceptTerms(sidecar.principalId, sidecar.terms);
         const accepted = await accept.send();
         await deps.waitForTx?.(accepted.txHash);
+        const funding = await fundBuyer(deps, buyer.owner, sidecar.terms.price);
         const q = new URLSearchParams({
           grant: buyer.cardId,
           pub: buyer.encryptionPubKey,
@@ -489,6 +547,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
           approvalLink: `${input.appUrl.replace(/\/+$/, "")}/?${q.toString()}`,
           registerCardTx: card.txHash,
           acceptTermsTx: accepted.txHash,
+          funding,
           next: "Send approvalLink to the human. Once they approve, firsthand_query works with the grantId of the epoch they granted in (the Locker shows it); the wrap is published by the app.",
         });
       } catch (error) {

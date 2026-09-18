@@ -41,8 +41,9 @@ RPC_URL=https://testnet-rpc.monad.xyz  DEPLOYMENTS_FILE=$PWD/deployments/10143.j
    Lineage Manifest — origin signature, Merkle proof, anchor and receipt per asset — verified
    against the chain before it is handed back.
 
-The buyer needs MockUSDC for step 4: on testnet the token is the faucet double, and the gateway
-relays its `mint` (selector-scoped) — `firsthand_request_access` does not mint; send
-`mint(<owner>, 100000)` through `POST /v1/relay` or ask the human to run the Recall tab once.
+The buyer needs MockUSDC for step 4: on testnet the token is the faucet double and the gateway
+relays its `mint` (selector-scoped, published in discovery), so `firsthand_request_access` funds
+the agent with a hundred queries' worth itself and reports `funding.txHash` — or says why it could
+not (a real stablecoin deployment does not relay `mint`).
 
 If the human withdraws consent, step 4 answers `FH_GRANT_RESCINDED` (HTTP 403): no data, no charge.

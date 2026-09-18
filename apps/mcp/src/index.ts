@@ -178,6 +178,7 @@ const server = createMcpServer({
   logger,
   canBroadcast: transport.kind !== "memory",
   canAnchor: deployment !== null && (relayerClients?.walletClient !== undefined || relayed),
+  transport,
   ...(readerClients
     ? {
         publicClient: readerClients.publicClient as never,

@@ -103,8 +103,15 @@ const GRAPH = {
   "firsthand-capture": {
     // Adapters is a runtime dependency: the PWA needs the relay transport and the on-chain reader.
     // It imports `@firsthand/adapters/client`, never the root entry, which pulls node built-ins.
-    internal: ["@firsthand/sdk", "@firsthand/crypto", "@firsthand/core", "@firsthand/adapters"],
-    external: ["react", "react-dom"],
+    internal: [
+      "@firsthand/sdk",
+      "@firsthand/crypto",
+      "@firsthand/core",
+      "@firsthand/adapters",
+      "@firsthand/importers",
+    ],
+    // viem for the demo buyer's EVM account and USDC reads — the same viem the adapters use.
+    external: ["react", "react-dom", "viem"],
   },
   "@firsthand/experiments": {
     // Runs on a developer machine with throw-away keys; the S4 on-chain arm forges deposit signatures.

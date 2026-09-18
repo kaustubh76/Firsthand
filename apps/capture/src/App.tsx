@@ -6,9 +6,9 @@ import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
 import { Capture } from "./routes/Capture.js";
 import { Enroll } from "./routes/Enroll.js";
 import { LockerView } from "./routes/Locker.js";
-import { Rescind } from "./routes/Rescind.js";
+import { Recall } from "./routes/Recall.js";
 
-type Route = "capture" | "locker" | "rescind";
+type Route = "capture" | "locker" | "recall";
 
 const hostOf = (url: string | null): string => {
   try {
@@ -53,55 +53,71 @@ export function App() {
           : `offline · ${config.reason}`}
     </p>
   );
+  const header = (
+    <header className="masthead">
+      <div>
+        <span className="brand">FIRSTHAND</span>
+        <span className="tagline">
+          the data locker that can prove what's inside it — deposit · query · rescind
+        </span>
+      </div>
+      {status}
+    </header>
+  );
   if (!config || !client) {
     return (
-      <section>
-        <h1>FIRSTHAND</h1>
-        <p>Loading…</p>
-        {status}
-      </section>
+      <main>
+        {header}
+        <section>
+          <p>Loading…</p>
+        </section>
+      </main>
     );
   }
   if (credentialId === null) {
     return (
-      <>
+      <main>
+        {header}
         <Enroll
           onEnrolled={(id) => {
             setCredentialId(id);
             void unlock(id);
           }}
         />
-        {status}
-      </>
+      </main>
     );
   }
   if (session === null) {
     return (
-      <section>
-        <h1>Unlock</h1>
-        <button type="button" onClick={() => unlock(credentialId)}>
-          Tap passkey
-        </button>
-        {error && <p className="error">{error}</p>}
-        {status}
-      </section>
+      <main>
+        {header}
+        <section>
+          <h1>Unlock</h1>
+          <p className="lede">
+            Your locker's keys derive from the passkey's PRF output on every unlock; nothing is
+            stored but the credential id.
+          </p>
+          <button type="button" onClick={() => unlock(credentialId)}>
+            Tap passkey
+          </button>
+          {error && <p className="error">{error}</p>}
+        </section>
+      </main>
     );
   }
   return (
     <main>
-      {status}
+      {header}
       <nav>
-        {(["capture", "locker", "rescind"] as const).map((r) => (
+        {(["capture", "locker", "recall"] as const).map((r) => (
           <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>
             {r}
           </button>
         ))}
       </nav>
       {route === "capture" && <Capture session={session} config={config} />}
-      {route === "locker" && (
-        <LockerView session={session} config={config} waitForTx={client.waitForTx} />
-      )}
-      {route === "rescind" && <Rescind session={session} />}
+      {route === "locker" && <LockerView session={session} config={config} client={client} />}
+      {route === "recall" && <Recall session={session} config={config} client={client} />}
     </main>
   );
 }

@@ -116,6 +116,9 @@ importers:
       '@firsthand/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
+      '@firsthand/importers':
+        specifier: workspace:*
+        version: link:../../packages/importers
       '@firsthand/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -125,6 +128,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.0(react@19.3.0)
+      viem:
+        specifier: 'catalog:'
+        version: 2.56.3(typescript@5.9.3)(zod@4.6.2)
     devDependencies:
       '@types/react':
         specifier: 'catalog:'

@@ -1,3 +1,4 @@
+import type { AnchorWriter } from "@firsthand/adapters/client";
 import {
   anvil,
   createChainClients,
@@ -12,10 +13,16 @@ import {
 import type { Bytes32 } from "@firsthand/core";
 import type { PrfSource } from "@firsthand/crypto";
 import { FirsthandClient, type LockerSession } from "@firsthand/sdk/browser";
+import type { PublicClient } from "viem";
 import type { AppConfig } from "./config.js";
+import { NS } from "./terms.js";
 
 export interface CaptureClient {
   readonly client: FirsthandClient;
+  /** Live mode only: the relay every write rides, the key-less reader, and the anchors reader. */
+  readonly relay: HttpRelayTransport | null;
+  readonly publicClient: PublicClient | null;
+  readonly anchors: AnchorWriter;
   /**
    * Waits for a relayed transaction to be mined. Relaying returns as soon as the gateway accepts the
    * transaction, so dependent calls — attest after enroll, anchor after attest — must wait, or they
@@ -64,12 +71,15 @@ export function createClient(config: AppConfig): CaptureClient {
       principalRegistry: config.principalRegistry,
     },
     namespaces: [
-      { ns: 0, label: "captures" },
-      { ns: 1, label: "notes" },
+      { ns: NS.captures, label: "captures" },
+      { ns: NS.imports, label: "imports" },
     ],
   });
   return {
     client,
+    relay: live ? (transport as HttpRelayTransport) : null,
+    publicClient: (publicClient as PublicClient | null) ?? null,
+    anchors,
     waitForTx: publicClient
       ? async (hash) => {
           await publicClient.waitForTransactionReceipt({ hash });

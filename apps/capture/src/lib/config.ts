@@ -16,6 +16,10 @@ export interface AppConfig {
   readonly epochs: { genesis: bigint; length: bigint };
   readonly anchorsLayout: "baseline" | "paged";
   readonly relayEnabled: boolean;
+  /** The payment asset buyers sign for (x402); on testnet the MockUSDC faucet double. */
+  readonly usdc: Address | null;
+  /** True when the gateway relays MockUSDC.mint — a demo buyer can fund itself. */
+  readonly faucet: boolean;
   /** True when the app can actually reach a chain; false means memory doubles (offline dev). */
   readonly live: boolean;
   /** Why `live` is false, in words a judge can act on. `null` when live. */
@@ -29,7 +33,8 @@ interface Discovery {
   chainId?: string;
   rpcUrl?: string | null;
   anchorsLayout?: "baseline" | "paged" | null;
-  relay?: { enabled?: boolean };
+  relay?: { enabled?: boolean; allow?: string[] };
+  x402?: { asset?: string };
   contracts?: Record<string, string> | null;
   epochs?: { genesis: string; length: string } | null;
 }
@@ -76,6 +81,8 @@ function fallback(): AppConfig {
     },
     anchorsLayout: "baseline",
     relayEnabled: false,
+    usdc: null,
+    faucet: false,
     live: false,
     reason: "no gateway configured — set VITE_GATEWAY_URL or open with ?gateway=https://…",
   };
@@ -99,6 +106,9 @@ export async function loadConfig(): Promise<AppConfig> {
     }
     const relay = d.relay?.enabled === true;
     const rpcUrl = d.rpcUrl ?? base.rpcUrl;
+    const usdc = (d.x402?.asset?.toLowerCase() ?? null) as Address | null;
+    // Selector-scoped allow entries read `<address>:<selector>`; mint(address,uint256) is 0x40c10f19.
+    const faucet = usdc !== null && (d.relay?.allow ?? []).some((a) => a === `${usdc}:0x40c10f19`);
     return {
       gatewayUrl,
       rpcUrl: d.rpcUrl ?? base.rpcUrl,
@@ -110,6 +120,8 @@ export async function loadConfig(): Promise<AppConfig> {
       epochs: { genesis: BigInt(d.epochs.genesis), length: BigInt(d.epochs.length) },
       anchorsLayout: d.anchorsLayout ?? "baseline",
       relayEnabled: relay,
+      usdc,
+      faucet,
       // Anchoring needs both a relay to write through and an RPC to read receipts from.
       live: relay && Boolean(rpcUrl),
       reason: relay

@@ -30,6 +30,10 @@ export function Enroll({ onEnrolled }: { onEnrolled: (credentialId: Uint8Array) 
   return (
     <section>
       <h1>Enrol</h1>
+      <p className="lede">
+        One passkey is the root of everything: deposit keys, vault keys, the principal on chain. No
+        biometrics leave the device, no issuer, no seed phrase.
+      </p>
       <p>{status}</p>
       <button type="button" onClick={handleEnrol} disabled={busy || !prfSupported()}>
         {busy ? "Waiting for passkey…" : "Create passkey"}

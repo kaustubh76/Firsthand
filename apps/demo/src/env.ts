@@ -71,8 +71,10 @@ export async function startGateway(
       MONAD_RPC_URL: env.rpcUrl,
       SETTLEMENT_MODE: "onchain",
       RELAYER_PRIVATE_KEY: env.relayerKey,
-      // Keyless browsers (the capture PWA's e2e rides this helper) write through the relay.
+      // Keyless browsers (the capture PWA's e2e rides this helper) write through the relay; both
+      // chains the demo knows carry the MockUSDC faucet double, so its mint relays too.
       RELAY_ENABLED: "true",
+      RELAY_FAUCET_MINT: "true",
       RATE_LIMIT_CAPACITY: "1000",
       PUBLIC_URL: url,
     },

@@ -103,7 +103,10 @@ async function main() {
   const pageErrors: string[] = [];
   page.on("pageerror", (e) => pageErrors.push(e.message));
   page.on("console", (m) => {
-    if (m.type() === "error") pageErrors.push(m.text());
+    // 402 and 403 are the protocol talking (x402 offer, refusal after rescission), not bugs.
+    if (m.type() === "error" && !/Failed to load resource: .* (402|403)/.test(m.text())) {
+      pageErrors.push(m.text());
+    }
   });
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable", { enableUI: false });
@@ -141,24 +144,93 @@ async function main() {
     await page.getByText(/^enrolled/).waitFor({ timeout: 120_000 });
     ok((await page.getByText(/^enrolled/).textContent())?.slice(0, 90) ?? "");
 
-    step("capture → passport → anchor → publish");
+    step("capture a note → passport → anchor → publish");
     await page.getByRole("button", { name: "capture" }).click();
     await page
       .getByPlaceholder("What did you observe?")
       .fill("e2e: the hallway light flickers at 3am");
     await page.getByRole("button", { name: "Stamp passport" }).click();
-    await page.getByText("published").waitFor({ timeout: 120_000 });
-    const passportId = (await page.locator("dd code").first().textContent()) ?? "";
+    const landed = page.getByTestId("landed");
+    await landed.getByText("published").waitFor({ timeout: 120_000 });
+    const passportId = (await landed.locator("code").first().getAttribute("title")) ?? "";
     if (!/^0x[0-9a-f]{64}$/.test(passportId)) throw new Error(`bad passport id ${passportId}`);
     ok(`passport ${passportId}`);
     const served = await fetch(`${gatewayUrl}/v1/passports/${passportId}`);
     if (served.status !== 200) throw new Error(`gateway serves passport with ${served.status}`);
     ok("gateway serves the sidecar (GET /v1/passports/:id → 200)");
 
-    step("rescind view renders");
-    await page.getByRole("button", { name: "rescind" }).click();
-    await page.locator("h1", { hasText: /rescind/i }).waitFor({ timeout: 5_000 });
-    ok("rescind screen visible");
+    step("capture a photo (bytes datum, mime committed in the attestation)");
+    await page.getByRole("tab", { name: "Photo / clip" }).click();
+    await page.getByTestId("media-input").setInputFiles({
+      name: "icon.png",
+      mimeType: "image/png",
+      buffer: readFileSync(join(root, "apps", "capture", "public", "icon-192.png")),
+    });
+    await page.getByRole("button", { name: "Stamp passport" }).click();
+    await landed.getByText(/icon\.png · image\/png/).waitFor({ timeout: 120_000 });
+    await landed.getByText("published").waitFor({ timeout: 120_000 });
+    ok("photo passport anchored and published");
+
+    step("import a ChatGPT export (one passport per conversation)");
+    await page.getByRole("tab", { name: "Import export" }).click();
+    await page.getByTestId("import-input").setInputFiles({
+      name: "conversations.json",
+      mimeType: "application/json",
+      buffer: readFileSync(
+        join(root, "packages", "importers", "test", "fixtures", "chatgpt-two.json"),
+      ),
+    });
+    await page.getByRole("button", { name: /Mint one passport per conversation/ }).click();
+    await page.getByText(/conversations? minted/).waitFor({ timeout: 120_000 });
+    await landed.getByText("Trip planning").waitFor({ timeout: 120_000 });
+    ok((await page.getByText(/conversations? minted/).textContent()) ?? "");
+
+    step("the refusal: a scraped datum is turned away on origin proof");
+    await page.getByText("The refusal — try to launder a scraped datum").click();
+    await page.getByRole("button", { name: "Inject a scraped datum" }).click();
+    const refusal = page.getByTestId("refusal");
+    await refusal.waitFor({ timeout: 30_000 });
+    const refusalText = (await refusal.textContent()) ?? "";
+    if (!refusalText.startsWith("FH_REFUSED_ORIGIN")) throw new Error(`unexpected: ${refusalText}`);
+    ok(refusalText);
+
+    step("recall: agent → grant → paid query → withdraw → refused");
+    await page.getByRole("button", { name: "recall" }).click();
+    await page.getByTestId("run-recall").click();
+    for (const id of ["buyer", "grant", "query", "rescind", "refused"] as const) {
+      const li = page.getByTestId(`step-${id}`);
+      const deadline = Date.now() + 240_000;
+      let status = await li.getAttribute("data-status");
+      while (status !== "done" && status !== "failed" && Date.now() < deadline) {
+        await page.waitForTimeout(500);
+        status = await li.getAttribute("data-status");
+      }
+      if (status !== "done") {
+        throw new Error(`recall step ${id} ended ${status}: ${await li.textContent()}`);
+      }
+      ok(`${id}: ${(await li.locator(".line").allTextContents()).join(" | ").slice(0, 160)}`);
+    }
+    const refused = (await page.getByTestId("refused").textContent()) ?? "";
+    if (!refused.includes("FH_GRANT_RESCINDED"))
+      throw new Error(`refusal code missing: ${refused}`);
+    const earned = (await page.getByTestId("step-query").textContent()) ?? "";
+    if (!/you earned 0\.001 USDC/.test(earned)) throw new Error(`payout not visible: ${earned}`);
+
+    step("locker: grants, consent ledger, lineage manifest");
+    await page.getByRole("button", { name: "locker" }).click();
+    await page.getByTestId("grants").getByText("withdrawn").waitFor({ timeout: 10_000 });
+    const ledger = page.getByTestId("ledger");
+    await ledger.waitFor({ timeout: 60_000 });
+    for (const kind of ["enrolled", "attested", "granted", "rescinded"]) {
+      await ledger.getByText(kind, { exact: true }).first().waitFor({ timeout: 60_000 });
+    }
+    ok("ledger shows enrolled · attested · granted · rescinded");
+    await page.getByRole("button", { name: "Export + verify manifest" }).click();
+    const manifest = page.getByTestId("manifest");
+    await manifest.waitFor({ timeout: 60_000 });
+    const verdict = (await manifest.textContent()) ?? "";
+    if (!verdict.startsWith("verifies")) throw new Error(`manifest: ${verdict}`);
+    ok(`manifest ${verdict}`);
 
     if (pageErrors.length > 0) throw new Error(`page errors:\n  ${pageErrors.join("\n  ")}`);
     await page.screenshot({ path: join(out, "final.png"), fullPage: true });

@@ -15,9 +15,13 @@ export default defineConfig({
         theme_color: "#0b0b0f",
         background_color: "#0b0b0f",
         display: "standalone",
-        icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml" }],
+        icons: [
+          { src: "icon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        ],
       },
-      workbox: { globPatterns: ["**/*.{js,css,html,svg}"] },
+      workbox: { globPatterns: ["**/*.{js,css,html,svg,png}"] },
     }),
   ],
   // The committed deploy tree (deploy/capture) is built without maps to keep the diff small.

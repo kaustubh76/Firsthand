@@ -7,8 +7,108 @@
 body {
   margin: 0;
   padding: 1rem;
-  max-width: 40rem;
+  max-width: 44rem;
   margin-inline: auto;
+}
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #22222c;
+  margin-bottom: 1rem;
+}
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-right: 0.6rem;
+}
+.tagline {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+h1 {
+  font-size: 1.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.25rem;
+  opacity: 0.9;
+}
+.lede {
+  opacity: 0.8;
+  margin-top: 0;
+}
+.segmented {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.75rem 0;
+}
+.segmented button[aria-selected="true"] {
+  background: #e7e7ef;
+  color: #0b0b0f;
+}
+button.inline {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.85em;
+}
+.preview {
+  display: block;
+  max-height: 10rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+}
+.landed li,
+.steps li {
+  margin: 0.6rem 0;
+}
+.steps {
+  padding-left: 1.2rem;
+}
+.steps li .badge {
+  margin-left: 0.5rem;
+  font-size: 0.75em;
+  opacity: 0.7;
+}
+.steps li[data-status="done"] .badge {
+  color: #6fdc8c;
+  opacity: 1;
+}
+.steps li[data-status="failed"] .badge {
+  color: #ff7b7b;
+  opacity: 1;
+}
+.steps li[data-status="running"] .badge {
+  color: #ffd27b;
+  opacity: 1;
+}
+.line {
+  margin: 0.15rem 0;
+}
+.ledger td {
+  padding: 0.15rem 0.6rem 0.15rem 0;
+  vertical-align: top;
+}
+.tx {
+  color: #9fc4ff;
+  text-decoration: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+.field {
+  display: block;
+  margin: 0.5rem 0;
+}
+details.refusal {
+  margin-top: 1.5rem;
+  border-top: 1px solid #22222c;
+  padding-top: 0.75rem;
+}
+details.refusal summary {
+  cursor: pointer;
 }
 nav {
   display: flex;
@@ -56,6 +156,7 @@ code {
   opacity: 0.75;
   border-left: 3px solid #3a3a48;
   padding-left: 0.5rem;
+  margin: 0;
 }
 .status[data-live="true"] {
   border-color: #6fdc8c;

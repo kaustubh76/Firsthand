@@ -29,6 +29,7 @@ const defaults: Record<string, string> = {
   RATE_LIMIT_REFILL_PER_SECOND: "0.2",
   ...(env["RELAYER_PRIVATE_KEY"] ? { SETTLEMENT_MODE: "onchain" } : {}),
   ...(env["BLOB_READ_WRITE_TOKEN"] ? { BLOB_STORE: "vercel", CATALOG: "vercel" } : {}),
+  CAPTURE_URL: "https://firsthand-capture.vercel.app",
   ...(env["VERCEL_PROJECT_PRODUCTION_URL"]
     ? { PUBLIC_URL: `https://${env["VERCEL_PROJECT_PRODUCTION_URL"]}` }
     : {}),

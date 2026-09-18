@@ -150,6 +150,15 @@ describe("gateway", () => {
     expect(landing.status).toBe(200);
     expect(landing.headers.get("content-type")).toContain("text/html");
     expect(await landing.text()).toContain("/.well-known/firsthand.json");
+    // With an app configured, the landing page and discovery point at it.
+    const withApp = createGateway(loadConfig({ CAPTURE_URL: "https://app.example" }), {
+      logger: noopLogger,
+    });
+    expect(await (await withApp.app.request("/")).text()).toContain("https://app.example");
+    expect(
+      ((await (await withApp.app.request("/.well-known/firsthand.json")).json()) as { app: string })
+        .app,
+    ).toBe("https://app.example");
 
     // Relay is off unless asked for, and refuses anything outside the deployment's authority
     // contracts — an open relay would be a free-gas faucet.

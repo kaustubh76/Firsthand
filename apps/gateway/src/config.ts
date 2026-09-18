@@ -64,6 +64,8 @@ export const GatewayConfigSchema = z.object({
    * so a permissive default costs nothing.
    */
   CORS_ORIGINS: z.string().default("*"),
+  /** The capture app this gateway serves; linked from the landing page and discovery. */
+  CAPTURE_URL: z.string().url().optional(),
 
   /** `vercel` keeps blobs and passports in Vercel Blob — durable across serverless invocations. */
   BLOB_STORE: z.enum(["memory", "fs", "vercel"]).default("memory"),

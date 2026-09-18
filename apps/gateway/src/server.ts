@@ -302,8 +302,13 @@ export function createGateway(
 <p>This host serves <strong>ciphertext and public proofs only</strong>. It holds no key material: it
 cannot read what it serves, and it re-runs <code>verify()</code> against the chain on every request.</p>
 <h2>Start here</h2>
-<ul>
-  <li><a href="/.well-known/firsthand.json">/.well-known/firsthand.json</a> — discovery: addresses, epochs, payment terms</li>
+<ul>${
+      config.CAPTURE_URL
+        ? `
+  <li><a href="${config.CAPTURE_URL}">${config.CAPTURE_URL}</a> — the capture app: passkey → capture → paid query → withdraw consent, and a Verify tab that needs no locker</li>`
+        : ""
+    }
+  <li><a href="/.well-known/firsthand.json">/.well-known/firsthand.json</a> — discovery: addresses, epochs, payment terms, relay, limits</li>
   <li><a href="/healthz">/healthz</a> — liveness</li>
 </ul>
 <h2>Endpoints</h2>
@@ -358,6 +363,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         : { enabled: false },
       // Clients size their captures to this: ciphertext (plaintext + AEAD overhead) must fit.
       limits: { maxUploadBytes: config.MAX_UPLOAD_BYTES },
+      app: config.CAPTURE_URL ?? null,
       endpoints: {
         query: "/v1/query/:grantId/:passportId",
         relay: "POST /v1/relay",

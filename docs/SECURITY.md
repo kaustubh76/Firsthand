@@ -100,7 +100,34 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
   the next `RoyaltyRouter.settle` on a rescinded grant reverts (`GrantNotLive`) before any transfer.
 - No transition ever re-releases a wrapped key; re-granting needs a fresh grant.
 
-## 8. Reporting
+## 8. The hosted surface (Vercel, Monad testnet)
+
+- **What the public gateway holds:** one secret, the relayer key (a dedicated key with a small
+  MON float; never the deployer, never a user key) and the Blob store token. It holds no user key
+  material and cannot: every relayed call carries the user's P-256 signature in calldata and no
+  entry point reads `msg.sender` (ADR-0001/0009). Compromise of the relayer costs its float, not
+  anyone's data or consent.
+- **What bounds the float:** the relay accepts only the four authority contracts plus, on
+  MockUSDC deployments, exactly `mint(address,uint256)` on the token (selector-scoped — a faucet
+  double, never a real stablecoin); value must be zero; every call is simulated before gas is
+  spent; the relay has its own per-IP token bucket (per instance — a pre-filter, not the
+  guarantee). A determined party can still drain the float across IPs; the answer is a refill, and
+  nothing on chain references the relayer, so it can be rotated at will.
+- **What the Blob store contains:** ciphertext, wrapped DEKs and signed public sidecars — the same
+  bytes `/v1/blobs` and `/v1/passports` serve to anyone. Objects are content-addressed and re-hashed
+  on read (`ObjectBlobStore`); a tampered object is refused, not served.
+- **What the browser holds:** the passkey credential id (not the key — the PRF output is derived
+  on every unlock and zeroised), a local journal of public identifiers and transaction hashes,
+  and — for the demo buyer on the Recall tab — a throwaway secp256k1/X25519 pair in localStorage.
+  That pair is testnet demo material by design; an agent that buys for real keeps its keys in its
+  own MCP process (`BUYER_PRIVATE_KEY`, `GRANTEE_SEED_HEX`).
+- **What an access-request link carries:** a card id, an X25519 public key, a namespace and a
+  label — all public. Approving it is a passkey-signed grant; a hostile link can only ask.
+- **Upload bounds:** the function accepts bodies to `limits.maxUploadBytes` (4 MiB hosted;
+  Vercel rejects larger bodies before the code runs) and the audit routes scan at most
+  `LEDGER_MAX_SCAN_BLOCKS` per request, so one caller cannot turn a request into unbounded RPC work.
+
+## 9. Reporting
 
 Email the maintainer with steps to reproduce. Expect an acknowledgement within 72 hours during the
 build window.

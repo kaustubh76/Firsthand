@@ -356,6 +356,8 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       relay: relay
         ? { enabled: true, endpoint: "POST /v1/relay", allow: relay.allowList }
         : { enabled: false },
+      // Clients size their captures to this: ciphertext (plaintext + AEAD overhead) must fit.
+      limits: { maxUploadBytes: config.MAX_UPLOAD_BYTES },
       endpoints: {
         query: "/v1/query/:grantId/:passportId",
         relay: "POST /v1/relay",

@@ -22,6 +22,7 @@ describe("gateway", () => {
     expect(await wk.json()).toMatchObject({
       protocol: "firsthand",
       verbs: ["deposit", "query", "rescind"],
+      limits: { maxUploadBytes: 8 * 1024 * 1024 },
     });
     expect(health.headers.get("x-firsthand-gateway")).toBe("0.1.0");
   });

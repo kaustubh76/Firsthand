@@ -214,6 +214,11 @@ describe("x402 header codec", () => {
     expect(decodePaymentHeader(null)).toBeNull();
     expect(decodePaymentHeader("not base64 json")).toBeNull();
     expect(decodePaymentHeader(Buffer.from("{}").toString("base64"))).toBeNull();
+    // Browser-portable: the same header Node's Buffer would produce, with non-ASCII intact.
+    const exotic = { ...payload(2), payload: { ...payload(2).payload, note: "ünïcode ✓" } };
+    const encoded = encodePaymentHeader(exotic as never);
+    expect(encoded).toBe(Buffer.from(JSON.stringify(exotic), "utf8").toString("base64"));
+    expect(decodePaymentHeader(encoded)).toMatchObject({ x402Version: 1 });
   });
 });
 

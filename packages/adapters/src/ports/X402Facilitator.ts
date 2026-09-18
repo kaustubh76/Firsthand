@@ -63,13 +63,25 @@ export interface X402Facilitator {
   settle(payload: PaymentPayload, requirements: PaymentRequirements): Promise<SettleResponse>;
 }
 
+// Base64 without `Buffer`: this codec runs in the buyer's browser as well as in the gateway, and
+// `Buffer` does not exist there (the browser tier found it as "Buffer is not defined" mid-query).
+const toBase64 = (text: string): string => {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+};
+const fromBase64 = (b64: string): string => {
+  const binary = atob(b64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+
 /** Decodes the `X-PAYMENT` header (base64 JSON) into a validated payload; `null` when malformed. */
 export function decodePaymentHeader(header: string | null | undefined): PaymentPayload | null {
   if (!header) return null;
   try {
-    const parsed = PaymentPayloadSchema.safeParse(
-      JSON.parse(Buffer.from(header, "base64").toString("utf8")),
-    );
+    const parsed = PaymentPayloadSchema.safeParse(JSON.parse(fromBase64(header)));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -77,7 +89,7 @@ export function decodePaymentHeader(header: string | null | undefined): PaymentP
 }
 
 export function encodePaymentHeader(payload: PaymentPayload): string {
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+  return toBase64(JSON.stringify(payload));
 }
 
 export type { Hex as X402Hex };

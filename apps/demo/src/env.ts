@@ -138,6 +138,7 @@ async function localEnv(root: string): Promise<DemoEnv> {
 
   if (!existsSync(deploymentsFile) || !(await codeAt(deploymentsFile))) {
     console.log("   deploying contracts to the local chain…");
+    const started = Date.now();
     await run(
       "forge",
       ["script", "script/Deploy.s.sol", "--rpc-url", anvilDefaults.rpcUrl, "--broadcast"],
@@ -148,6 +149,16 @@ async function localEnv(root: string): Promise<DemoEnv> {
           DEPLOYER_PRIVATE_KEY: anvilDefaults.deployer,
           DEPLOY_MOCK_USDC: "true",
         },
+      },
+      // forge occasionally finishes the broadcast and never exits (seen 2026-09-18 on 1.1.0-dev);
+      // the deployment file it writes is the real signal that the chain is ready.
+      async () => {
+        try {
+          const { statSync } = await import("node:fs");
+          return statSync(deploymentsFile).mtimeMs > started && (await codeAt(deploymentsFile));
+        } catch {
+          return false;
+        }
       },
     );
   }
@@ -220,12 +231,38 @@ async function waitUp(url: string, timeoutMs: number): Promise<boolean> {
   return false;
 }
 
-function run(cmd: string, args: readonly string[], opts: { cwd: string; env: NodeJS.ProcessEnv }) {
+/**
+ * Runs a command to completion — or, when `doneWhen` is given, until that predicate holds, after
+ * which the process is killed and treated as finished (for tools that do their work and then hang).
+ */
+function run(
+  cmd: string,
+  args: readonly string[],
+  opts: { cwd: string; env: NodeJS.ProcessEnv },
+  doneWhen?: () => Promise<boolean>,
+) {
   return new Promise<void>((resolve, reject) => {
     const p = spawn(cmd, [...args], { ...opts, stdio: "ignore" });
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearInterval(timer);
+      error ? reject(error) : resolve();
+    };
+    const timer = doneWhen
+      ? setInterval(async () => {
+          if (await doneWhen()) {
+            p.kill();
+            finish();
+          }
+        }, 1000)
+      : null;
     p.on("error", (e) =>
-      reject(new Error(`${cmd} failed to start (${e.message}) — is Foundry installed?`)),
+      finish(new Error(`${cmd} failed to start (${e.message}) — is Foundry installed?`)),
     );
-    p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+    p.on("exit", (code) =>
+      code === 0 || settled ? finish() : finish(new Error(`${cmd} exited ${code}`)),
+    );
   });
 }

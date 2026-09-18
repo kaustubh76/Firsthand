@@ -38,8 +38,10 @@ npx vercel@59 deploy --prod --yes
 Deployment protection was switched off on both projects (`PATCH /v9/projects/:id`
 `{"ssoProtection":null}`) so deployment URLs open without a Vercel login.
 
-Everything else — chain id, the deployment document, `RELAY_ENABLED`, the vercel stores, on-chain
-settlement, rate limits, `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to
+Everything else — chain id, the deployment document, `RELAY_ENABLED`, `RELAY_FAUCET_MINT` (the
+MockUSDC faucet double's `mint` rides the relay, selector-scoped, so a keyless demo buyer can fund
+itself), `LEDGER_MAX_SCAN_BLOCKS` (20 000), the vercel stores, on-chain settlement, rate limits (the
+relay has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to
 an explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
 (the dedicated hosted relayer `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C`, small float) and
 `BLOB_READ_WRITE_TOKEN` (injected by the store connection).
@@ -52,7 +54,7 @@ curl -s $GW/healthz                       # {"ok":true,"settlement":"onchain","b
 curl -s $GW/.well-known/firsthand.json    # relay.enabled true, contracts of deployments/10143.json
 curl -s $GW/v1/relay/capabilities         # 200, relayer 0x0DbD…, the four allow-listed contracts
 
-# The browser proof against the live links (real relayed transactions on Monad testnet):
+# The browser proof against the live links — the whole judge script, real transactions on Monad testnet:
 E2E_GATEWAY_URL=$GW E2E_APP_URL=https://firsthand-capture.vercel.app pnpm --filter firsthand-capture e2e
 ```
 
@@ -65,7 +67,8 @@ redeploy — verified by redeploying and re-fetching.
 - The relay spends the relayer's gas on request. It is allow-listed to the four authority contracts,
   refuses non-zero value, simulates first, and the hosted defaults rate-limit to 20 requests with a
   0.2/s refill per IP (per warm instance — the chain-side counters remain the source of truth).
-- One full enrol → attest → anchor loop costs ≈ 0.05 MON; 5 MON ≈ 100 loops.
+- The full judge script (enrol, attest, three anchors, faucet mint, card, terms, grant, settle,
+  rescind — 12 relayed transactions) costs ≈ 0.08 MON; a capture alone ≈ 0.05 MON.
   Refill: send testnet MON to the relayer address above. Rotate: `npx vercel@59 env rm
   RELAYER_PRIVATE_KEY production` then `env add` a new one and redeploy — nothing on chain
   references the relayer.

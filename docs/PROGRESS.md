@@ -251,3 +251,37 @@ discovery gives up after 8 s with a reason instead of hanging on "Loading…".
 <https://firsthand-gateway.vercel.app> — deployed from the committed trees with the Vercel CLI
 (`pnpm deploy:hosted`), durable passports in Vercel Blob, a dedicated small-float relayer. The browser
 tier passes against the live URLs: real relayed transactions on Monad testnet from a public link.
+
+### Update — the whole judge script from one link (18 Sep 2026)
+
+<https://firsthand-capture.vercel.app> now performs all three verbs against Monad testnet, from a
+browser that holds no key and pays no gas:
+
+- **deposit** — a note, a photo/clip from the camera (mime/size/name committed in the attestation's
+  `metaHash`), or a ChatGPT/Claude export (one passport per conversation, refusals collected), each
+  anchored through the relay and published to the gateway. And the refusal, on screen: a well-formed
+  passport signed by another locker's key is turned away with `FH_REFUSED_ORIGIN` before anything is
+  sealed — the S4 gate a judge can press.
+- **query** — a demo buyer agent in the same browser funds itself from the MockUSDC faucet double
+  (the relay now carries exactly `mint(address,uint256)` on the token, selector-scoped), registers
+  its card, accepts the terms by preimage; the human grants; the agent pays per query over x402, the
+  gateway settles on chain and writes a receipt, and the page shows the plaintext, the receipt, the
+  settle transaction and the payee's USDC delta.
+- **rescind** — one passkey-signed transaction from the Recall screen or from any grant in the
+  Locker; the same query is then refused with `FH_GRANT_RESCINDED` (HTTP 403), no data, no charge.
+  (The previous Rescind screen only ever posted a commit and never revealed — consent had not
+  actually been ending from the PWA. Direct rescission is the path now.)
+- **Consent Ledger** in the Locker — enrolled · attested · granted · rescinded with block numbers,
+  read from logs by the gateway since the principal's enrol block (`?fromBlock=` on the audit routes,
+  bounded by `LEDGER_MAX_SCAN_BLOCKS`), merged with a local journal so history outlives the scan
+  window. **Lineage Manifest** exported and verified in-browser against the chain, downloadable.
+- Every hash links to `testnet.monadexplorer.com`; a masthead and one-sentence copy per action.
+
+The browser tier now drives that entire script — note → photo → import → refusal → recall → ledger
+→ manifest — and passes on anvil, on Monad testnet, and against the live links. It caught a second
+browser-only bug on the way: the x402 header codec used `Buffer`, so the first paid query from a
+page died with "Buffer is not defined". Portable base64 now.
+
+**Still not built:** Envio handlers (the logs-backed ledger serves the demo), the external x402
+facilitator (memory verification + on-chain settlement is what runs), the docs site, media beyond
+6 MiB, the BTX rescission path (not on Monad testnet), and the MCP↔PWA PRF handoff.

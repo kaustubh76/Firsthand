@@ -3,17 +3,45 @@
 // is COMMITTED: Vercel builds it from git as a plain four-dependency npm project, so every push
 // redeploys without the builder ever touching the monorepo, Foundry or the Node-26 engine gate.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "..", "..", "deploy", "gateway");
 
-execFileSync("pnpm", ["exec", "tsup", "--config", "tsup.vercel.config.ts"], {
-  cwd: root,
-  stdio: "inherit",
-});
+// The tree is emptied on every build, but its Vercel project link (`.vercel/`, git-ignored) must
+// survive — without it the next `vercel deploy` would create a project named after the directory.
+function preserveLink(out, build) {
+  const link = join(out, ".vercel");
+  const stash = `${out}.vercel-link`;
+  const had = existsSync(link);
+  if (had) cpSync(link, stash, { recursive: true });
+  try {
+    build();
+  } finally {
+    if (had) {
+      rmSync(link, { recursive: true, force: true });
+      cpSync(stash, link, { recursive: true });
+      rmSync(stash, { recursive: true, force: true });
+    }
+  }
+}
+
+preserveLink(out, () =>
+  execFileSync("pnpm", ["exec", "tsup", "--config", "tsup.vercel.config.ts"], {
+    cwd: root,
+    stdio: "inherit",
+  }),
+);
 const bundle = join(out, "api", "index.js");
 if (!existsSync(bundle)) throw new Error(`bundle missing: ${bundle}`);
 

@@ -3,7 +3,7 @@
 // Vercel serves it from git with no build step (the monorepo build needs Foundry, which the builder
 // lacks). Pass the hosted gateway as FH_HOSTED_GATEWAY_URL; `?gateway=` overrides it at runtime.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,11 +11,31 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "..", "..", "deploy", "capture");
 const gateway = process.env["FH_HOSTED_GATEWAY_URL"] ?? "https://firsthand-gateway.vercel.app";
 
-execFileSync("pnpm", ["exec", "vite", "build", "--outDir", out, "--emptyOutDir"], {
-  cwd: root,
-  stdio: "inherit",
-  env: { ...process.env, VITE_GATEWAY_URL: gateway, FH_SOURCEMAP: "false" },
-});
+// The tree is emptied on every build, but its Vercel project link (`.vercel/`, git-ignored) must
+// survive — without it the next `vercel deploy` would create a project named after the directory.
+function preserveLink(out, build) {
+  const link = join(out, ".vercel");
+  const stash = `${out}.vercel-link`;
+  const had = existsSync(link);
+  if (had) cpSync(link, stash, { recursive: true });
+  try {
+    build();
+  } finally {
+    if (had) {
+      rmSync(link, { recursive: true, force: true });
+      cpSync(stash, link, { recursive: true });
+      rmSync(stash, { recursive: true, force: true });
+    }
+  }
+}
+
+preserveLink(out, () =>
+  execFileSync("pnpm", ["exec", "vite", "build", "--outDir", out, "--emptyOutDir"], {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, VITE_GATEWAY_URL: gateway, FH_SOURCEMAP: "false" },
+  }),
+);
 if (!existsSync(join(out, "index.html"))) throw new Error("vite produced no index.html");
 
 writeFileSync(

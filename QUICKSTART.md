@@ -7,11 +7,12 @@ can withdraw consent — after which the same query is refused.
 This page gets you from `git clone` to watching that happen. Target: **under 10 minutes.**
 
 > **No install needed — open the live app:** <https://firsthand-capture.vercel.app>
-> Create a passkey, *Activate on chain*, stamp a note: it is anchored on Monad testnet through the
-> hosted gateway <https://firsthand-gateway.vercel.app> (discovery at
-> [`/.well-known/firsthand.json`](https://firsthand-gateway.vercel.app/.well-known/firsthand.json)).
-> The browser holds no key and pays no gas. Needs a passkey-capable browser (Chrome, Safari,
-> Android/iOS) — the PRF extension is what derives every key.
+> All three verbs from one link, on Monad testnet: create a passkey → *Locker → Activate on chain*
+> → *Capture* a note, a photo or a ChatGPT export → *Recall* runs a buyer agent that pays per query,
+> then you withdraw consent and watch the same query refused → *Locker* shows the Consent Ledger and
+> verifies the Lineage Manifest. Every hash links to the explorer. The browser holds no key and pays
+> no gas (hosted gateway <https://firsthand-gateway.vercel.app>). Needs a passkey-capable browser —
+> the PRF extension is what derives every key.
 
 ## Prerequisites
 

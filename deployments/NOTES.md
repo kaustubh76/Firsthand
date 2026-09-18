@@ -45,11 +45,14 @@ by the gates.
 | Capture PWA | <https://firsthand-capture.vercel.app> | `deploy/capture` |
 | Gateway | <https://firsthand-gateway.vercel.app> | `deploy/gateway` |
 
-Live since **2026-09-17**. Proven with the browser tier against the live URLs: a virtual passkey
-enrolled, activated through the hosted relay (enroll tx
-`0x0fdf21680fb1e10ba297e716a8b696ca4a3d1e97a7d542a12a5571bfc351a30b`, block 63315847), captured,
-anchored and published; the sidecar was served again after a fresh deployment (Vercel Blob).
-Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`).
+Live since **2026-09-17**; all three verbs since **2026-09-18**. Proven with the browser tier
+against the live URLs on Monad testnet: passkey → enroll + attest through the hosted relay → note,
+photo and import passports anchored and published → refusal → demo buyer funded from the faucet
+double, card, terms → grant (`0xa2870bdd39…86ff097b5d`) → paid query settled on chain
+(`0x510b5d9365…f84ffc54c3`, 0.001 USDC to the deposit key) → rescission (`0xd68e2b1c4e…bec5d81471`)
+→ the same query refused `FH_GRANT_RESCINDED` → ledger and manifest verified. Sidecars survive
+redeploys (Vercel Blob). Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`). One full script
+≈ 0.08 MON of relayer gas.
 
 ## Caveats a reviewer should know
 

@@ -1,7 +1,15 @@
 # firsthand-capture
 
-Minimal PWA: enrol a passkey with the WebAuthn `prf` extension, tap to unlock the locker, stamp a
-capture with a `DEVICE_CAPTURE` passport, anchor batches on chain, post a rescission.
+The three verbs from one link. **Capture:** a note, a photo/clip from the camera (bytes datum;
+mime, size and name committed via `metaHash`), or a ChatGPT/Claude export (one passport per
+conversation) — minted under the passkey, sealed client-side, anchored through the relay, published
+to the gateway; plus the refusal (a passport signed by another locker's key → `FH_REFUSED_ORIGIN`).
+**Locker:** activation, deposits, grants with one-tap direct rescission, the Consent Ledger (gateway
+timeline since the enrol block), the Lineage Manifest exported and verified in-browser.
+**Recall:** a demo buyer agent in the same browser — funds itself from the MockUSDC faucet double
+through the selector-scoped relay, registers a card, accepts terms; you grant; it pays per query
+over x402 (on-chain settlement, receipt, your USDC delta); you withdraw; the same query is refused.
+A localStorage journal keeps this browser's history; every hash links to the explorer.
 
 **Hosted:** <https://firsthand-capture.vercel.app> (against <https://firsthand-gateway.vercel.app>).
 `?gateway=https://…` points the same build at another gateway and is remembered; `?gateway=`

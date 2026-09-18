@@ -1,7 +1,16 @@
 import { type Bytes32, keccak256Hex } from "@firsthand/core";
 
-/** Ciphertext must fit the gateway's 8 MiB upload cap with AEAD overhead; keep a clear margin. */
-export const MAX_MEDIA_BYTES = 6 * 1024 * 1024;
+/** Without a published limit, assume the self-hosted default (8 MiB) with a clear margin. */
+export const DEFAULT_MEDIA_BYTES = 6 * 1024 * 1024;
+/** Sealing adds a header, a nonce and an AEAD tag; leave room for them under the gateway's cap. */
+const SEAL_OVERHEAD = 4 * 1024;
+
+/** The largest capture this gateway will take: its published limit minus the sealing overhead. */
+export function mediaCap(maxUploadBytes: number | null): number {
+  return maxUploadBytes === null
+    ? DEFAULT_MEDIA_BYTES
+    : Math.max(64 * 1024, maxUploadBytes - SEAL_OVERHEAD);
+}
 
 export interface MediaMeta {
   readonly mime: string;
@@ -20,10 +29,13 @@ export function metaHashOf(meta: MediaMeta): Bytes32 {
   return keccak256Hex(new TextEncoder().encode(canonicalJson({ ...meta })));
 }
 
-export async function readMedia(file: File): Promise<{ bytes: Uint8Array; meta: MediaMeta }> {
-  if (file.size > MAX_MEDIA_BYTES) {
+export async function readMedia(
+  file: File,
+  cap: number = DEFAULT_MEDIA_BYTES,
+): Promise<{ bytes: Uint8Array; meta: MediaMeta }> {
+  if (file.size > cap) {
     throw new Error(
-      `${file.name} is ${(file.size / 1_048_576).toFixed(1)} MiB; captures are capped at ${MAX_MEDIA_BYTES / 1_048_576} MiB so the sealed blob fits the gateway`,
+      `${file.name} is ${(file.size / 1_048_576).toFixed(1)} MiB; this gateway takes captures up to ${(cap / 1_048_576).toFixed(1)} MiB so the sealed blob fits`,
     );
   }
   const bytes = new Uint8Array(await file.arrayBuffer());

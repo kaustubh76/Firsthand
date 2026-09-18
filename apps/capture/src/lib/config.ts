@@ -13,6 +13,7 @@ export interface AppConfig {
   readonly grantManager: Address;
   readonly rescissions: Address;
   readonly principalRegistry: Address;
+  readonly receiptLedger: Address;
   readonly epochs: { genesis: bigint; length: bigint };
   readonly anchorsLayout: "baseline" | "paged";
   readonly relayEnabled: boolean;
@@ -20,6 +21,8 @@ export interface AppConfig {
   readonly usdc: Address | null;
   /** True when the gateway relays MockUSDC.mint — a demo buyer can fund itself. */
   readonly faucet: boolean;
+  /** Largest ciphertext the gateway accepts; captures are sized under it (null: unknown). */
+  readonly maxUploadBytes: number | null;
   /** True when the app can actually reach a chain; false means memory doubles (offline dev). */
   readonly live: boolean;
   /** Why `live` is false, in words a judge can act on. `null` when live. */
@@ -35,6 +38,7 @@ interface Discovery {
   anchorsLayout?: "baseline" | "paged" | null;
   relay?: { enabled?: boolean; allow?: string[] };
   x402?: { asset?: string };
+  limits?: { maxUploadBytes?: number };
   contracts?: Record<string, string> | null;
   epochs?: { genesis: string; length: string } | null;
 }
@@ -75,6 +79,7 @@ function fallback(): AppConfig {
     grantManager: (env("VITE_GRANT_MANAGER") ?? ZERO) as Address,
     rescissions: (env("VITE_RESCISSIONS") ?? ZERO) as Address,
     principalRegistry: (env("VITE_PRINCIPAL_REGISTRY") ?? ZERO) as Address,
+    receiptLedger: ZERO,
     epochs: {
       genesis: BigInt(env("VITE_EPOCH_GENESIS") ?? "0"),
       length: BigInt(env("VITE_EPOCH_LENGTH") ?? "604800"),
@@ -83,6 +88,7 @@ function fallback(): AppConfig {
     relayEnabled: false,
     usdc: null,
     faucet: false,
+    maxUploadBytes: null,
     live: false,
     reason: "no gateway configured — set VITE_GATEWAY_URL or open with ?gateway=https://…",
   };
@@ -117,11 +123,13 @@ export async function loadConfig(): Promise<AppConfig> {
       grantManager: c["GrantManager"] as Address,
       rescissions: c["Rescissions"] as Address,
       principalRegistry: c["PrincipalRegistry"] as Address,
+      receiptLedger: (c["ReceiptLedger"] ?? ZERO) as Address,
       epochs: { genesis: BigInt(d.epochs.genesis), length: BigInt(d.epochs.length) },
       anchorsLayout: d.anchorsLayout ?? "baseline",
       relayEnabled: relay,
       usdc,
       faucet,
+      maxUploadBytes: typeof d.limits?.maxUploadBytes === "number" ? d.limits.maxUploadBytes : null,
       // Anchoring needs both a relay to write through and an RPC to read receipts from.
       live: relay && Boolean(rpcUrl),
       reason: relay

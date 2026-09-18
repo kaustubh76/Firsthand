@@ -40,9 +40,11 @@ Deployment protection was switched off on both projects (`PATCH /v9/projects/:id
 
 Everything else — chain id, the deployment document, `RELAY_ENABLED`, `RELAY_FAUCET_MINT` (the
 MockUSDC faucet double's `mint` rides the relay, selector-scoped, so a keyless demo buyer can fund
-itself), `LEDGER_MAX_SCAN_BLOCKS` (20 000), the vercel stores, on-chain settlement, rate limits (the
-relay has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to
-an explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
+itself), `LEDGER_MAX_SCAN_BLOCKS` (20 000), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above
+~4.5 MB before the function runs; measured 5 MB → 413; discovery publishes `limits.maxUploadBytes`
+and the PWA sizes captures under it), the vercel stores, on-chain settlement, rate limits (the relay
+has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to an
+explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
 (the dedicated hosted relayer `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C`, small float) and
 `BLOB_READ_WRITE_TOKEN` (injected by the store connection).
 

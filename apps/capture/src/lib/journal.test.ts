@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addressUrl, short, txUrl } from "./explorer.js";
 import { loadJournal, updateJournal } from "./journal.js";
-import { canonicalJson, metaHashOf } from "./media.js";
+import { canonicalJson, mediaCap, metaHashOf } from "./media.js";
 
 const store = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -47,11 +47,57 @@ describe("media metaHash", () => {
   });
 });
 
+describe("media cap", () => {
+  it("follows the gateway's published limit, minus sealing overhead, with a floor", () => {
+    expect(mediaCap(null)).toBe(6 * 1024 * 1024);
+    expect(mediaCap(4 * 1024 * 1024)).toBe(4 * 1024 * 1024 - 4 * 1024);
+    expect(mediaCap(1000)).toBe(64 * 1024);
+  });
+});
+
 describe("explorer", () => {
   it("links Monad testnet and nothing else", () => {
     expect(txUrl(10143n, "0xabc")).toBe("https://testnet.monadexplorer.com/tx/0xabc");
     expect(addressUrl(10143n, "0xabc")).toBe("https://testnet.monadexplorer.com/address/0xabc");
     expect(txUrl(31337n, "0xabc")).toBeNull();
     expect(short(`0x${"ab".repeat(32)}`, 4)).toBe("0xabab…abab");
+  });
+});
+
+describe("grant requests", () => {
+  it("parses only well-formed links and builds them back", async () => {
+    const { parseGrantRequest, requestLink } = await import("./requests.js");
+    const card = `0x${"ca".repeat(32)}` as const;
+    const pub = `0x${"9b".repeat(32)}` as const;
+    const link = requestLink("https://app.example/", { card, pub, ns: 1, label: "Qwen buyer" });
+    expect(link).toContain("?grant=0xca");
+    const parsed = parseGrantRequest(new URL(link).search);
+    expect(parsed).toMatchObject({ card, pub, ns: 1, label: "Qwen buyer" });
+    expect(parseGrantRequest("?grant=0x12&pub=0x34")).toBeNull();
+    expect(parseGrantRequest(`?grant=${card}&pub=${pub}&ns=99`)).toBeNull();
+    expect(parseGrantRequest("")).toBeNull();
+  });
+});
+
+describe("liveness", () => {
+  it("maps the chain's view to what the human must do next", async () => {
+    const { describeLiveness, livenessOf } = await import("./liveness.js");
+    expect(livenessOf(null, 5n)).toEqual({ kind: "not-enrolled" });
+    expect(livenessOf({ lastAttestedEpoch: 5n, thawEpoch: 0n }, 5n)).toEqual({
+      kind: "live",
+      epoch: 5n,
+    });
+    expect(livenessOf({ lastAttestedEpoch: 4n, thawEpoch: 0n }, 5n)).toEqual({
+      kind: "attest-needed",
+      epoch: 5n,
+      lastAttested: 4n,
+    });
+    expect(livenessOf({ lastAttestedEpoch: 5n, thawEpoch: 7n }, 5n)).toEqual({
+      kind: "frozen",
+      thawEpoch: 7n,
+    });
+    expect(describeLiveness({ kind: "attest-needed", epoch: 5n, lastAttested: 4n })).toMatch(
+      /Re-attest/,
+    );
   });
 });

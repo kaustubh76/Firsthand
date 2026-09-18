@@ -285,3 +285,31 @@ page died with "Buffer is not defined". Portable base64 now.
 **Still not built:** Envio handlers (the logs-backed ledger serves the demo), the external x402
 facilitator (memory verification + on-chain settlement is what runs), the docs site, media beyond
 6 MiB, the BTX rescission path (not on Monad testnet), and the MCP↔PWA PRF handoff.
+
+### Update — verifiable demand, the buyer's file, durability (18 Sep 2026, later)
+
+What README §1 promises beyond the three verbs, now on the public link and proven by the browser
+tier on anvil and on Monad testnet:
+
+- **The buyer's compliance file.** `manifestFromQueries` (SDK) builds a Lineage Manifest from what
+  a paid query returns — sidecar + receipt per asset, anchor block from the chain — and
+  `manifestFromSidecars` rebuilds the seller's from the gateway's public objects. The Recall tab
+  hands the buyer its verified file; the Locker's export now survives a reload (it no longer depends
+  on in-memory batches). The MCP gains `firsthand_export_manifest`.
+- **Verifiable demand from outside the browser.** `firsthand_request_access` (MCP) reads a
+  passport's sidecar, registers the agent's card, accepts the exact terms on chain — all through
+  the gateway's relay, the agent holds no gas — and returns an approval link. The human opens it,
+  the Locker shows "*agent* asks for namespace *n*", one passkey tap grants and publishes the wrap;
+  the agent pays and exports. The e2e runs this handshake with a Node-side buyer against the page.
+- **Verify, for anyone.** A tab that needs no locker: paste a manifest → verified against the
+  chain (a tampered proof fails with `MERKLE_INVALID`); look up a passport id → origin, terms,
+  anchor block.
+- **Durability and honesty.** Earnings (receipts, USDC total) in the Locker; the status strip says
+  when this epoch needs a fresh attestation instead of letting an anchor revert; the gateway
+  publishes `limits.maxUploadBytes` (hosted 4 MiB — Vercel returns 413 above ~4.5 MB, measured)
+  and the PWA sizes captures under it.
+- SDK: a key-less client built from a deployment now anchors through its explicit transport, so the
+  MCP works as seller *and* buyer against the hosted gateway with only `GATEWAY_URL` + `RPC_URL`.
+
+**Still not built:** Envio handlers, the external x402 facilitator, the docs site, BTX (not on
+testnet), the MCP↔PWA PRF handoff, and buyer-side USDC funding inside `firsthand_request_access`.

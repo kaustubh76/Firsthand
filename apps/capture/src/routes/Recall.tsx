@@ -1,5 +1,12 @@
 import { type Bytes32, hashTerms } from "@firsthand/core";
-import { type LockerSession, publishWrap, type QueryResult } from "@firsthand/sdk/browser";
+import {
+  type LockerSession,
+  manifestFromQueries,
+  publishWrap,
+  type QueryResult,
+  serialiseManifest,
+  verifyManifest,
+} from "@firsthand/sdk/browser";
 import { useMemo, useState } from "react";
 import { Hex, Tx } from "../components/Tx.js";
 import {
@@ -11,7 +18,9 @@ import {
   usdcBalance,
 } from "../lib/agent.js";
 import type { AppConfig } from "../lib/config.js";
+import { downloadJson } from "../lib/download.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
+import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
 
@@ -65,10 +74,12 @@ export function Recall({
   session,
   config,
   client,
+  liveness,
 }: {
   session: LockerSession;
   config: AppConfig;
   client: CaptureClient;
+  liveness: Liveness;
 }) {
   const principalId = session.locker.principalId;
   const [journal, setJournal] = useState<Journal>(() => loadJournal(principalId));
@@ -79,13 +90,22 @@ export function Recall({
   const [steps, setSteps] = useState<Record<StepId, StepState>>(idle);
   const [running, setRunning] = useState(false);
   const [grantId, setGrantId] = useState<Bytes32 | null>(null);
+  const [buyerFile, setBuyerFile] = useState<{ text: string; ok: boolean; assets: number } | null>(
+    null,
+  );
   const agent: DemoAgent | null = useMemo(
     () => (client.relay ? openAgent(config, client.relay) : null),
     [client.relay, config],
   );
 
   const target = published.find((d) => d.passportId === passportId) ?? null;
-  const ready = Boolean(config.live && agent && client.publicClient && config.usdc && target);
+  const blocked =
+    config.live && liveness.kind !== "live" && liveness.kind !== "unknown"
+      ? describeLiveness(liveness)
+      : null;
+  const ready = Boolean(
+    config.live && agent && client.publicClient && config.usdc && target && !blocked,
+  );
   const waitForTx = client.waitForTx;
   const gatewayUrl = config.gatewayUrl as string;
   const domain = session.locker.domain;
@@ -125,6 +145,7 @@ export function Recall({
     setRunning(true);
     setSteps(idle());
     setGrantId(null);
+    setBuyerFile(null);
     let grant: Bytes32 | null = null;
     let query: QueryResult | null = null;
 
@@ -238,6 +259,29 @@ export function Recall({
         "query",
         <>you earned {formatUsdc(after - before)}, split on chain to your deposit key</>,
       );
+      // The buyer walks away with its compliance file: sidecar + receipt per served query, verified
+      // against the chain before it is handed over. No locker, no gateway call.
+      const file = await manifestFromQueries({
+        domain,
+        results: [opened.result],
+        anchors: client.anchors,
+        payer: agent.address,
+        finalityDepth: 0,
+      });
+      const headBlock = await publicClient.getBlockNumber({ cacheTime: 0 });
+      const verdict = await verifyManifest(file, { anchors: client.anchors, headBlock });
+      setBuyerFile({
+        text: serialiseManifest(file),
+        ok: verdict.ok,
+        assets: verdict.assets.length,
+      });
+      say(
+        "query",
+        <span data-testid="buyer-file">
+          buyer's Lineage Manifest: {verdict.assets.length} asset with its receipt —{" "}
+          {verdict.ok ? "verifies" : "FAILS"}
+        </span>,
+      );
       mutate((j) =>
         j.receipts.unshift({
           receiptId: opened.result.receipt.receiptId,
@@ -301,6 +345,11 @@ export function Recall({
           for.
         </p>
       )}
+      {blocked && (
+        <p className="error" data-testid="blocked">
+          {blocked}.
+        </p>
+      )}
       {config.live && !config.faucet && (
         <p className="hint">
           This gateway does not relay the faucet mint, so the demo buyer can only run if it already
@@ -325,6 +374,21 @@ export function Recall({
       {grantId && (
         <p className="hint">
           grant <Hex value={grantId} n={6} /> — also listed under Locker → Grants
+        </p>
+      )}
+      {buyerFile && (
+        <p className="hint">
+          <button
+            type="button"
+            className="inline"
+            onClick={() =>
+              downloadJson(`buyer-lineage-${(grantId ?? "").slice(2, 10)}.json`, buyerFile.text)
+            }
+          >
+            download the buyer's compliance file
+          </button>{" "}
+          ({buyerFile.assets} asset, {buyerFile.ok ? "verified" : "unverified"}) — paste it into
+          Verify to check it yourself.
         </p>
       )}
       <ol className="steps">

@@ -1,7 +1,22 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { extname, join, normalize } from "node:path";
+import {
+  anvil,
+  createChainClients,
+  HttpRelayTransport,
+  monadTestnet,
+  OnchainAnchorWriter,
+} from "@firsthand/adapters/client";
+import { type Address, type Bytes32, parseSidecar } from "@firsthand/core";
+import {
+  BuyerSession,
+  createBuyerKeys,
+  manifestFromQueries,
+  verifyManifest,
+} from "@firsthand/sdk/browser";
 import { chromium } from "playwright";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { repoRoot, resolveEnv, startGateway } from "../../demo/src/env.js";
 
 /**
@@ -80,6 +95,9 @@ async function main() {
   const disco = (await (await fetch(`${gatewayUrl}/.well-known/firsthand.json`)).json()) as {
     relay?: { enabled?: boolean };
     chainId?: string;
+    rpcUrl?: string;
+    contracts: Record<string, Address>;
+    x402: { asset: Address };
   };
   if (disco.relay?.enabled !== true)
     throw new Error("gateway has no relay — the PWA would be offline");
@@ -152,11 +170,12 @@ async function main() {
     await page.getByRole("button", { name: "Stamp passport" }).click();
     const landed = page.getByTestId("landed");
     await landed.getByText("published").waitFor({ timeout: 120_000 });
-    const passportId = (await landed.locator("code").first().getAttribute("title")) ?? "";
+    const passportId = ((await landed.locator("code").first().getAttribute("title")) ??
+      "") as Bytes32;
     if (!/^0x[0-9a-f]{64}$/.test(passportId)) throw new Error(`bad passport id ${passportId}`);
     ok(`passport ${passportId}`);
-    const served = await fetch(`${gatewayUrl}/v1/passports/${passportId}`);
-    if (served.status !== 200) throw new Error(`gateway serves passport with ${served.status}`);
+    const hosted = await fetch(`${gatewayUrl}/v1/passports/${passportId}`);
+    if (hosted.status !== 200) throw new Error(`gateway serves passport with ${hosted.status}`);
     ok("gateway serves the sidecar (GET /v1/passports/:id → 200)");
 
     step("capture a photo (bytes datum, mime committed in the attestation)");
@@ -225,12 +244,148 @@ async function main() {
       await ledger.getByText(kind, { exact: true }).first().waitFor({ timeout: 60_000 });
     }
     ok("ledger shows enrolled · attested · granted · rescinded");
+    const earnings = page.getByTestId("earnings");
+    await earnings.filter({ hasText: /1 receipt/ }).waitFor({ timeout: 60_000 });
+    ok(`earnings: ${((await earnings.textContent()) ?? "").slice(0, 60)}`);
     await page.getByRole("button", { name: "Export + verify manifest" }).click();
     const manifest = page.getByTestId("manifest");
     await manifest.waitFor({ timeout: 60_000 });
     const verdict = (await manifest.textContent()) ?? "";
     if (!verdict.startsWith("verifies")) throw new Error(`manifest: ${verdict}`);
     ok(`manifest ${verdict}`);
+    const downloading = page.waitForEvent("download");
+    await page.getByRole("button", { name: "download JSON" }).click();
+    const sellerFile = readFileSync((await (await downloading).path()) ?? "", "utf8");
+    if (!sellerFile.includes('"version": 1'))
+      throw new Error("downloaded manifest is not a manifest");
+    ok(`downloaded the seller's manifest (${sellerFile.length} bytes)`);
+
+    step("reload: the passkey unlocks the same locker, evidence rebuilt from the gateway");
+    await page.reload();
+    await page.getByRole("button", { name: "Tap passkey" }).click();
+    await page.locator("nav").waitFor({ timeout: 20_000 });
+    await page
+      .locator(".status")
+      .filter({ hasText: /attested for epoch/ })
+      .waitFor({ timeout: 60_000 });
+    ok(`status: ${await page.locator(".status").textContent()}`);
+    await page.getByRole("button", { name: "locker" }).click();
+    await page.getByTestId("grants").getByText("withdrawn").waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Export + verify manifest" }).click();
+    await page.getByTestId("manifest").waitFor({ timeout: 60_000 });
+    const rebuilt = (await page.getByTestId("manifest").textContent()) ?? "";
+    if (!rebuilt.startsWith("verifies")) throw new Error(`rebuilt manifest: ${rebuilt}`);
+    ok(`manifest after reload ${rebuilt.slice(0, 40)}`);
+
+    step("verify: anyone checks a manifest against the chain — and a tampered one fails");
+    await page.locator("nav").getByRole("button", { name: "verify" }).click();
+    await page.getByTestId("manifest-text").fill(sellerFile);
+    await page.getByRole("button", { name: "Verify against the chain" }).click();
+    const verdictBox = page.getByTestId("verdict");
+    await verdictBox.waitFor({ timeout: 60_000 });
+    if ((await verdictBox.getAttribute("data-ok")) !== "true") {
+      throw new Error(`verify: ${await verdictBox.textContent()}`);
+    }
+    ok("seller's manifest verifies in the Verify tab");
+    const tampered = JSON.parse(sellerFile) as { assets: { proof: { index: number } }[] };
+    if (tampered.assets[0])
+      tampered.assets[0].proof.index = (tampered.assets[0].proof.index + 1) % 8;
+    await page.getByTestId("manifest-text").fill(JSON.stringify(tampered));
+    await page.getByRole("button", { name: "Verify against the chain" }).click();
+    await verdictBox.filter({ hasText: /FAILS|MERKLE_INVALID/ }).waitFor({ timeout: 60_000 });
+    ok("a tampered proof FAILS");
+    await page.getByTestId("passport-input").fill(passportId);
+    await page.getByRole("button", { name: "Look up" }).click();
+    await page
+      .getByTestId("passport-view")
+      .getByText(/anchored at block/)
+      .waitFor({ timeout: 60_000 });
+    ok("passport lookup shows origin, terms and the anchor block");
+
+    step("external demand: a buyer outside the browser asks, the human approves, the buyer pays");
+    const chain = disco.chainId === "31337" ? anvil : monadTestnet;
+    const chainId = BigInt(disco.chainId as string);
+    const anchorsAddress = disco.contracts["PassportAnchors"] as Address;
+    const domain = { chainId, verifyingContract: anchorsAddress };
+    const reader = createChainClients({ rpcUrl: disco.rpcUrl as string, chain });
+    const relay = new HttpRelayTransport({ baseUrl: gatewayUrl });
+    const key = generatePrivateKey();
+    const account = privateKeyToAccount(key);
+    const outsider = new BuyerSession({
+      keys: createBuyerKeys(
+        Uint8Array.from(key.slice(2).match(/.{2}/g) ?? [], (b) => Number.parseInt(b, 16)),
+        account,
+        crypto.getRandomValues(new Uint8Array(32)),
+      ),
+      grantManager: disco.contracts["GrantManager"] as Address,
+      chainId,
+      transport: relay,
+    });
+    const wait = (hash: Bytes32) => reader.publicClient.waitForTransactionReceipt({ hash });
+    // The same handshake firsthand_request_access performs: sidecar → card → terms → link.
+    const sidecar = parseSidecar(
+      await (await fetch(`${gatewayUrl}/v1/passports/${passportId}`)).json(),
+    );
+    await wait((await outsider.registerCard()).txHash);
+    const accept = outsider.acceptTerms(sidecar.principalId, sidecar.terms);
+    await wait((await accept.send()).txHash);
+    // It has no USDC yet: fund it through the same faucet mint the demo agent used.
+    const { encodeFunctionData, parseAbi } = await import("viem");
+    const usdc = disco.x402.asset;
+    const minted = await relay.send({
+      to: usdc,
+      data: encodeFunctionData({
+        abi: parseAbi(["function mint(address to, uint256 value)"]),
+        functionName: "mint",
+        args: [account.address, 100_000n],
+      }),
+    });
+    await wait(minted.hash as Bytes32);
+    const link = `${appUrl}/?grant=${outsider.cardId}&pub=${outsider.encryptionPubKey}&ns=${sidecar.ns}&from=${encodeURIComponent("Outside agent (e2e)")}&gateway=${encodeURIComponent(gatewayUrl)}`;
+    ok(`approval link built (card ${outsider.cardId.slice(0, 10)}…)`);
+    await page.goto(link);
+    await page.getByRole("button", { name: "Tap passkey" }).click();
+    const requests = page.getByTestId("requests");
+    await requests.getByText("Outside agent (e2e)").waitFor({ timeout: 20_000 });
+    await requests.getByRole("button", { name: "Approve with passkey" }).click();
+    const grantsList = page.getByTestId("grants");
+    await grantsList
+      .locator("li")
+      .filter({ hasText: outsider.cardId.slice(2, 8) })
+      .waitFor({ timeout: 120_000 });
+    const grantRow = grantsList
+      .locator("li")
+      .filter({ hasText: outsider.cardId.slice(2, 8) })
+      .first();
+    const outsiderGrant = (await grantRow.locator("code").first().getAttribute("title")) as Bytes32;
+    ok(`human approved — grant ${outsiderGrant.slice(0, 12)}…`);
+    const served = await outsider.queryAndOpen(
+      { gatewayUrl, grantId: outsiderGrant, passportId },
+      domain,
+    );
+    const opened = new TextDecoder().decode(served.plaintext);
+    if (!opened.includes("hallway light")) throw new Error(`outsider opened: ${opened}`);
+    ok(`outsider paid and opened: “${opened}”`);
+    const anchorsReader = new OnchainAnchorWriter({
+      address: anchorsAddress,
+      layout: "baseline",
+      publicClient: reader.publicClient,
+    });
+    const buyersFile = await manifestFromQueries({
+      domain,
+      results: [served.result],
+      anchors: anchorsReader,
+      payer: account.address.toLowerCase() as Address,
+      finalityDepth: 0,
+    });
+    const buyersVerdict = await verifyManifest(buyersFile, {
+      anchors: anchorsReader,
+      headBlock: await reader.publicClient.getBlockNumber({ cacheTime: 0 }),
+    });
+    if (!buyersVerdict.ok) throw new Error("the outsider's manifest does not verify");
+    ok(
+      `outsider's compliance file verifies (${buyersVerdict.assets.length} asset, receipt ${served.result.receipt.receiptId.slice(0, 10)}…)`,
+    );
 
     if (pageErrors.length > 0) throw new Error(`page errors:\n  ${pageErrors.join("\n  ")}`);
     await page.screenshot({ path: join(out, "final.png"), fullPage: true });

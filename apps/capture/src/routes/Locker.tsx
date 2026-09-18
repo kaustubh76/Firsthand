@@ -1,19 +1,26 @@
 import type { ConsentEvent, ReceiptView } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
+import { hashTerms } from "@firsthand/core";
 import {
-  exportManifest,
   type LockerSession,
   type ManifestVerdict,
+  manifestFromSidecars,
+  publishWrap,
   serialiseManifest,
   verifyManifest,
 } from "@firsthand/sdk/browser";
 import { useCallback, useEffect, useState } from "react";
 import { Hex, Tx } from "../components/Tx.js";
+import { formatUsdc } from "../lib/agent.js";
 import type { AppConfig } from "../lib/config.js";
+import { downloadJson } from "../lib/download.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
 import { fetchReceipts, fetchTimeline } from "../lib/ledger.js";
+import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
-import { NS } from "../lib/terms.js";
+import { dismissRequest, type GrantRequest } from "../lib/requests.js";
+import { fetchSidecar } from "../lib/sidecars.js";
+import { NS, PRICE_UNITS, termsFor } from "../lib/terms.js";
 
 /**
  * The locker's own view: activation on chain, what has been anchored, the Consent Ledger (what the
@@ -25,10 +32,18 @@ export function LockerView({
   session,
   config,
   client,
+  liveness,
+  onActivated,
+  requests,
+  onRequests,
 }: {
   session: LockerSession;
   config: AppConfig;
   client: CaptureClient;
+  liveness: Liveness;
+  onActivated: () => void;
+  requests: GrantRequest[];
+  onRequests: (list: GrantRequest[]) => void;
 }) {
   const principalId = session.locker.principalId;
   const [journal, setJournal] = useState<Journal>(() => loadJournal(principalId));
@@ -37,6 +52,11 @@ export function LockerView({
   const [events, setEvents] = useState<ConsentEvent[] | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [manifest, setManifest] = useState<{ text: string; verdict: ManifestVerdict } | null>(null);
+  const [earnings, setEarnings] = useState<{
+    count: number;
+    total: bigint;
+    rows: { tx: string; grantId: string; block: bigint }[];
+  } | null>(null);
   const batches = session.batcher.flushed();
   const waitForTx = client.waitForTx;
 
@@ -87,8 +107,66 @@ export function LockerView({
         j.attestTx = attested.txHash;
         if (enrolBlock) j.enrolBlock = enrolBlock;
       });
+      onActivated();
       await refreshLedger();
     });
+
+  const reattest = () =>
+    run("attest", async () => {
+      const attested = await session.attest();
+      await waitForTx?.(attested.txHash);
+      mutate((j) => {
+        j.attestTx = attested.txHash;
+      });
+      onActivated();
+      await refreshLedger();
+    });
+
+  const approve = (r: GrantRequest) =>
+    run(`approve:${r.card}`, async () => {
+      if (!config.gatewayUrl) throw new Error("no gateway");
+      const termsHash = hashTerms(termsFor(session, r.ns));
+      // Grant, wait for inclusion, then hand the gateway the wrap: its ingest checks the grant on
+      // chain, and a relayed transaction is accepted long before it is mined.
+      const { plan, sent } = await session.grant({
+        granteeCard: r.card,
+        granteeEncryptionPubKey: r.pub,
+        ns: r.ns,
+        termsHash,
+        term: 4n,
+      });
+      await waitForTx?.(sent.txHash);
+      await publishWrap({ gatewayUrl: config.gatewayUrl }, plan.grantId, plan.wrap);
+      mutate((j) =>
+        j.grants.unshift({
+          grantId: plan.grantId,
+          granteeCard: r.card,
+          ns: r.ns,
+          termsHash,
+          txHash: sent.txHash,
+          at: Date.now(),
+        }),
+      );
+      onRequests(dismissRequest(r.card, r.ns));
+      await refreshLedger();
+    });
+
+  const refreshEarnings = useCallback(async () => {
+    if (!config.live || !config.gatewayUrl) return;
+    const j = loadJournal(principalId);
+    const from = j.enrolBlock ? BigInt(j.enrolBlock) : undefined;
+    const rows: { tx: string; grantId: string; block: bigint }[] = [];
+    for (const g of j.grants) {
+      for (const r of await fetchReceipts(config.gatewayUrl, g.grantId, from)) {
+        rows.push({ tx: r.txHash, grantId: r.grantId, block: r.blockNumber });
+      }
+    }
+    setEarnings({ count: rows.length, total: PRICE_UNITS * BigInt(rows.length), rows });
+  }, [config.live, config.gatewayUrl, principalId]);
+
+  useEffect(() => {
+    void refreshEarnings();
+  }, [refreshEarnings]);
 
   const withdraw = (grantId: Bytes32) =>
     run(`rescind:${grantId}`, async () => {
@@ -104,20 +182,30 @@ export function LockerView({
 
   const buildManifest = () =>
     run("manifest", async () => {
+      if (!config.gatewayUrl) throw new Error("no gateway");
+      // Rebuilt from what the gateway publishes, not from this session's memory: the same file a
+      // buyer could assemble, and it survives a reload.
       const receipts = new Map<Bytes32, ReceiptView>();
-      if (config.live && config.gatewayUrl) {
-        for (const g of journal.grants) {
-          for (const r of await fetchReceipts(config.gatewayUrl, g.grantId)) {
-            const entry = journal.receipts.find((x) => x.receiptId === r.receiptId);
-            if (entry) receipts.set(entry.passportId, r);
-          }
+      const from = journal.enrolBlock ? BigInt(journal.enrolBlock) : undefined;
+      for (const g of journal.grants) {
+        for (const r of await fetchReceipts(config.gatewayUrl, g.grantId, from)) {
+          const entry = journal.receipts.find((x) => x.receiptId === r.receiptId);
+          if (entry) receipts.set(entry.passportId, r);
         }
       }
-      const m = exportManifest({
+      const sidecars = [];
+      for (const d of journal.deposits) {
+        if (d.ns !== NS.captures || !d.published) continue;
+        const sc = await fetchSidecar(config.gatewayUrl, d.passportId);
+        if (sc) sidecars.push(sc);
+      }
+      if (sidecars.length === 0) throw new Error("no published captures to export yet");
+      const m = await manifestFromSidecars({
         domain: session.locker.domain,
         principalId,
         ns: NS.captures,
-        batches: batches.filter((b) => b.ns === NS.captures),
+        sidecars,
+        anchors: client.anchors,
         receipts,
         finalityDepth: 0,
       });
@@ -129,13 +217,7 @@ export function LockerView({
     });
 
   const download = () => {
-    if (!manifest) return;
-    const blob = new Blob([manifest.text], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `lineage-${principalId.slice(2, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    if (manifest) downloadJson(`lineage-${principalId.slice(2, 10)}.json`, manifest.text);
   };
 
   const rescindedIds = new Set(
@@ -166,13 +248,20 @@ export function LockerView({
         A passport can only be anchored under an attested deposit key, so activation — enroll the
         principal, attest this epoch's keys — comes first. Two relayed transactions.
       </p>
-      <button type="button" disabled={!config.live || busy !== null} onClick={activate}>
-        {busy === "activate"
-          ? "Activating…"
-          : activated
-            ? "Re-attest this epoch"
-            : "Activate on chain (enroll + attest)"}
-      </button>
+      {liveness.kind !== "unknown" && (
+        <p className="hint" data-testid="liveness">
+          {describeLiveness(liveness)}
+        </p>
+      )}
+      {liveness.kind === "attest-needed" || (liveness.kind === "live" && activated) ? (
+        <button type="button" disabled={!config.live || busy !== null} onClick={reattest}>
+          {busy === "attest" ? "Attesting…" : "Re-attest this epoch"}
+        </button>
+      ) : (
+        <button type="button" disabled={!config.live || busy !== null} onClick={activate}>
+          {busy === "activate" ? "Activating…" : "Activate on chain (enroll + attest)"}
+        </button>
+      )}
       {journal.enrolTx && journal.attestTx && (
         <p>
           <Tx hash={journal.enrolTx} chainId={config.chainId} label="enrolled" /> ·{" "}
@@ -230,6 +319,40 @@ export function LockerView({
         </ul>
       )}
 
+      {requests.length > 0 && (
+        <>
+          <h2>Access requests</h2>
+          <p className="hint">
+            A buyer asked for access by sending you a link. Approving is one passkey-signed grant
+            under your terms ({formatUsdc(PRICE_UNITS)} per query); the vault key is sealed to their
+            card, the gateway gets only the wrap.
+          </p>
+          <ul data-testid="requests">
+            {requests.map((r) => (
+              <li key={`${r.card}-${r.ns}`}>
+                <strong>{r.label}</strong> asks for namespace {r.ns} · card{" "}
+                <Hex value={r.card} n={6} />{" "}
+                <button
+                  type="button"
+                  className="inline"
+                  disabled={!config.live || busy !== null || liveness.kind !== "live"}
+                  onClick={() => approve(r)}
+                >
+                  {busy === `approve:${r.card}` ? "Granting…" : "Approve with passkey"}
+                </button>{" "}
+                <button
+                  type="button"
+                  className="inline"
+                  onClick={() => onRequests(dismissRequest(r.card, r.ns))}
+                >
+                  dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <h2>Grants</h2>
       <p className="hint">
         Consent, per buyer card and namespace. Withdrawing it is one passkey-signed transaction; the
@@ -272,6 +395,28 @@ export function LockerView({
         </ul>
       )}
 
+      <h2>Earnings</h2>
+      <p className="hint">
+        Every paid query leaves a receipt on chain; the RoyaltyRouter splits the price to your
+        deposit key at settlement.{" "}
+        <button type="button" className="inline" onClick={() => void refreshEarnings()}>
+          refresh
+        </button>
+      </p>
+      {earnings === null ? (
+        <p className="hint">{config.live ? "reading…" : "unavailable offline"}</p>
+      ) : (
+        <p data-testid="earnings">
+          {earnings.count} receipt{earnings.count === 1 ? "" : "s"} · {formatUsdc(earnings.total)}
+          {earnings.rows.slice(0, 5).map((r) => (
+            <span key={r.tx}>
+              {" "}
+              · <Tx hash={r.tx} chainId={config.chainId} label={`block ${r.block}`} />
+            </span>
+          ))}
+        </p>
+      )}
+
       <h2>Consent Ledger</h2>
       <p className="hint">
         What the chain says about this principal, read from event logs by the gateway
@@ -308,7 +453,7 @@ export function LockerView({
       <button
         type="button"
         onClick={buildManifest}
-        disabled={batches.length === 0 || busy !== null}
+        disabled={!config.live || journal.deposits.length === 0 || busy !== null}
       >
         {busy === "manifest" ? "Verifying…" : "Export + verify manifest"}
       </button>

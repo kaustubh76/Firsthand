@@ -27,6 +27,7 @@ export type {
   ConsentEventKind,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
+export type { GrantView, PrincipalLivenessView } from "../ports/GrantReader.js";
 export type {
   PreparedTx,
   TransportCapabilities,

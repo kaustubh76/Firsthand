@@ -10,7 +10,8 @@ import { useState } from "react";
 import { Hex, Tx } from "../components/Tx.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Landed, land } from "../lib/deposits.js";
-import { MAX_MEDIA_BYTES, metaHashOf, readMedia } from "../lib/media.js";
+import { describeLiveness, type Liveness } from "../lib/liveness.js";
+import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
 import { NS, termsFor } from "../lib/terms.js";
 
 type Mode = "text" | "media" | "import";
@@ -25,7 +26,20 @@ const now = () => BigInt(Math.floor(Date.now() / 1000));
  * datum signed by someone else's key is turned away at the door — that is what makes a locker worth
  * something to a buyer.
  */
-export function Capture({ session, config }: { session: LockerSession; config: AppConfig }) {
+export function Capture({
+  session,
+  config,
+  liveness,
+}: {
+  session: LockerSession;
+  config: AppConfig;
+  liveness: Liveness;
+}) {
+  // Anchoring needs this epoch's deposit-key root attested; say so before the relay reverts.
+  const blocked =
+    config.live && liveness.kind !== "live" && liveness.kind !== "unknown"
+      ? describeLiveness(liveness)
+      : null;
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -73,7 +87,7 @@ export function Capture({ session, config }: { session: LockerSession; config: A
     run("Sealing + anchoring", async () => {
       if (!file) return;
       const ns = NS.captures;
-      const { bytes, meta } = await readMedia(file);
+      const { bytes, meta } = await readMedia(file, mediaCap(config.maxUploadBytes));
       // The bytes are the datum; mime, size and name are committed through metaHash so a buyer can
       // check what kind of capture this was without the gateway ever learning it.
       const result = await session.deposit({
@@ -236,8 +250,9 @@ export function Capture({ session, config }: { session: LockerSession; config: A
             {busy ?? "Stamp passport"}
           </button>
           <p className="hint">
-            Captures up to {MAX_MEDIA_BYTES / 1_048_576} MiB. The bytes are sealed client-side;
-            mime, size and name are committed in the attestation, never sent in clear.
+            Captures up to {(mediaCap(config.maxUploadBytes) / 1_048_576).toFixed(1)} MiB on this
+            gateway. The bytes are sealed client-side; mime, size and name are committed in the
+            attestation, never sent in clear.
           </p>
         </>
       )}
@@ -279,6 +294,11 @@ export function Capture({ session, config }: { session: LockerSession; config: A
           Offline: passports are minted and sealed locally but never anchored, so no buyer can fetch
           them ({config.reason}). Open the app with <code>?gateway=https://…</code> to use another
           gateway.
+        </p>
+      )}
+      {blocked && (
+        <p className="error" data-testid="blocked">
+          Captures will not anchor yet: {blocked}.
         </p>
       )}
       {error && <p className="error">{error}</p>}

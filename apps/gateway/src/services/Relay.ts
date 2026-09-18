@@ -14,26 +14,45 @@ import type { PrivateKeyAccount } from "viem/accounts";
  * authority contracts, value must be zero, and every call is simulated first so a revert costs the
  * relayer nothing and returns the decoded reason to the caller.
  */
+/**
+ * An allow-list entry: a whole contract (every entry point authorises by signature), or one
+ * contract restricted to named 4-byte selectors — how the testnet faucet double's `mint` rides the
+ * relay without the relay becoming a general USDC transaction service.
+ */
+export type RelayAllow =
+  | Address
+  | { readonly address: Address; readonly selectors: readonly `0x${string}`[] };
+
 export interface RelayOptions {
   readonly publicClient: PublicClient<Transport, Chain>;
   readonly walletClient: WalletClient<Transport, Chain, PrivateKeyAccount>;
   /** Contracts a relayed call may target — the four with signature-authorised entry points. */
-  readonly allow: readonly Address[];
+  readonly allow: readonly RelayAllow[];
   readonly logger: Logger;
   readonly now?: () => number;
 }
 
 export class Relay {
   readonly #o: RelayOptions;
-  readonly #allow: ReadonlySet<string>;
+  /** address → null (any selector) or the permitted selectors. */
+  readonly #allow: ReadonlyMap<string, ReadonlySet<string> | null>;
 
   constructor(options: RelayOptions) {
     this.#o = options;
-    this.#allow = new Set(options.allow.map((a) => a.toLowerCase()));
+    this.#allow = new Map(
+      options.allow.map((entry) =>
+        typeof entry === "string"
+          ? [entry.toLowerCase(), null]
+          : [entry.address.toLowerCase(), new Set(entry.selectors.map((s) => s.toLowerCase()))],
+      ),
+    );
   }
 
+  /** Addresses, with `:selector` suffixes where an entry is selector-scoped — what discovery publishes. */
   get allowList(): readonly string[] {
-    return [...this.#allow];
+    return [...this.#allow].flatMap(([address, selectors]) =>
+      selectors === null ? [address] : [...selectors].map((s) => `${address}:${s}`),
+    );
   }
 
   capabilities() {
@@ -47,9 +66,16 @@ export class Relay {
 
   async send(tx: PreparedTx): Promise<TxRef> {
     const to = tx.to.toLowerCase() as Address;
-    if (!this.#allow.has(to)) {
+    const selectors = this.#allow.get(to);
+    if (selectors === undefined) {
       throw new ValidationError("relay: target is not a FIRSTHAND authority contract", {
         context: { to, allow: this.allowList },
+      });
+    }
+    const selector = tx.data.slice(0, 10).toLowerCase();
+    if (selectors !== null && !selectors.has(selector)) {
+      throw new ValidationError("relay: this entry point is not relayable on that contract", {
+        context: { to, selector, allow: this.allowList },
       });
     }
     if (tx.value !== undefined && tx.value !== 0n) {

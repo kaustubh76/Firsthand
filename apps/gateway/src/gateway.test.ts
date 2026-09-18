@@ -187,6 +187,55 @@ describe("gateway", () => {
     expect(withValue.status).toBe(400);
     // Relay disabled → the route says so rather than 404ing like an unknown path.
     expect((await relayed.app.request("/v1/relay/capabilities")).status).toBe(404);
+
+    // The faucet double's mint rides the relay only when asked for, and only that selector: a
+    // keyless browser can fund a demo buyer, but the relay is still not a USDC transaction service.
+    const faucet = createGateway(
+      loadConfig({
+        DEPLOYMENTS_FILE: file,
+        CHAIN_ID: "31337",
+        MONAD_RPC_URL: "http://127.0.0.1:1",
+        RELAYER_PRIVATE_KEY: `0x${"01".repeat(32)}`,
+        RELAY_ENABLED: "true",
+        RELAY_FAUCET_MINT: "true",
+        RATE_LIMIT_CAPACITY: "2",
+        RATE_LIMIT_REFILL_PER_SECOND: "0",
+      }),
+      { logger: noopLogger },
+    );
+    const usdc = `0x${"b0".repeat(20)}`;
+    expect(faucet.relay?.allowList).toContain(`${usdc}:0x40c10f19`); // mint(address,uint256)
+    const relayTo = (to: string, data: string) =>
+      faucet.app.request("/v1/relay", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "10.0.0.7" },
+        body: JSON.stringify({ to, data }),
+      });
+    const transfer = await relayTo(usdc, `0xa9059cbb${"00".repeat(64)}`); // transfer(address,uint256)
+    expect(transfer.status).toBe(400);
+    expect(((await transfer.json()) as { detail: string }).detail).toMatch(/not relayable/);
+    // A permitted selector gets past the allow-list to the simulation (which fails: no node here).
+    const mint = await relayTo(usdc, `0x40c10f19${"00".repeat(64)}`);
+    expect(mint.status).not.toBe(400);
+    expect(((await mint.json()) as { code: string }).code).toBe("FH_CHAIN");
+    // The relay has its own bucket: capacity 2, no refill — the third call from one IP is 429.
+    const limited = await relayTo(usdc, `0x40c10f19${"00".repeat(64)}`);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeDefined();
+    // Without the flag the token is not on the list at all.
+    expect(withRelay.relay?.allowList.some((a) => a.startsWith(usdc))).toBe(false);
+  });
+
+  it("bounds ?fromBlock= on the audit routes and rejects garbage", async () => {
+    // Memory mode has no chain head, so the value passes through unclamped; the format is still checked.
+    const gw = createGateway(loadConfig({}), { logger: noopLogger });
+    const bad = await gw.app.request(`/v1/principals/${b32}/timeline?fromBlock=abc`);
+    expect(bad.status).toBe(400);
+    const ok = await gw.app.request(`/v1/principals/${b32}/timeline?fromBlock=12`);
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ principalId: b32, events: [] });
+    const receipts = await gw.app.request(`/v1/grants/${b32}/receipts?fromBlock=0`);
+    expect(receipts.status).toBe(200);
   });
 
   it("boots from DEPLOYMENT_JSON on hosts with no disk, and answers browsers cross-origin", async () => {

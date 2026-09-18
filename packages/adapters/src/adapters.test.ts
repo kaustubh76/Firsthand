@@ -280,6 +280,25 @@ describe("MemoryErc8004Registry / MemoryConsentLedger", () => {
       "enrolled",
       "rescinded",
     ]);
+    // A scan bound cuts history the same way the log-backed ledger's window does.
+    expect((await ledger.consentTimeline(b32(7), { fromBlock: 10n })).map((e) => e.kind)).toEqual([
+      "rescinded",
+    ]);
+    expect(await ledger.receiptsForGrant(b32(2), { fromBlock: 1_000n })).toEqual([]);
+    // `granted` carries who and under what, so a viewer can withdraw it without another lookup.
+    ledger.addEvent({
+      kind: "granted",
+      principalId: b32(7),
+      grantId: b32(3),
+      blockNumber: 5n,
+      timestamp: 5n,
+      txHash: b32(4),
+      granteeCard: b32(0xca),
+      ns: 1,
+      termsHash: b32(0x7e),
+    });
+    const granted = (await ledger.consentTimeline(b32(7))).find((e) => e.kind === "granted");
+    expect(granted).toMatchObject({ granteeCard: b32(0xca), ns: 1, termsHash: b32(0x7e) });
   });
 });
 

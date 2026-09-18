@@ -3,6 +3,7 @@ import type {
   AnchorView,
   ConsentEvent,
   ConsentLedger,
+  LedgerScan,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
 import { Recorder } from "./Recorder.js";
@@ -26,22 +27,37 @@ export class MemoryConsentLedger extends Recorder implements ConsentLedger {
     this.events.push(e);
   }
 
-  async receiptsForGrant(grantId: Bytes32): Promise<readonly ReceiptView[]> {
-    this.record("receiptsForGrant", grantId);
-    return this.receipts.filter((r) => r.grantId === grantId);
+  /** The memory double honours the same scan bound the log-backed ledger does. */
+  #since<T extends { blockNumber: bigint }>(rows: readonly T[], scan?: LedgerScan): T[] {
+    const from = scan?.fromBlock;
+    return rows.filter((r) => from === undefined || r.blockNumber >= from);
   }
 
-  async anchorsFor(principalId: Bytes32, ns: number): Promise<readonly AnchorView[]> {
-    this.record("anchorsFor", principalId, ns);
-    return this.anchors.filter(
-      (a) => a.ns === ns && this.#anchorOwner.get(a.batchRoot) === principalId,
+  async receiptsForGrant(grantId: Bytes32, scan?: LedgerScan): Promise<readonly ReceiptView[]> {
+    this.record("receiptsForGrant", grantId);
+    return this.#since(
+      this.receipts.filter((r) => r.grantId === grantId),
+      scan,
     );
   }
 
-  async consentTimeline(principalId: Bytes32): Promise<readonly ConsentEvent[]> {
+  async anchorsFor(
+    principalId: Bytes32,
+    ns: number,
+    scan?: LedgerScan,
+  ): Promise<readonly AnchorView[]> {
+    this.record("anchorsFor", principalId, ns);
+    return this.#since(
+      this.anchors.filter((a) => a.ns === ns && this.#anchorOwner.get(a.batchRoot) === principalId),
+      scan,
+    );
+  }
+
+  async consentTimeline(principalId: Bytes32, scan?: LedgerScan): Promise<readonly ConsentEvent[]> {
     this.record("consentTimeline", principalId);
-    return this.events
-      .filter((e) => e.principalId === principalId)
-      .sort((a, b) => Number(a.blockNumber - b.blockNumber));
+    return this.#since(
+      this.events.filter((e) => e.principalId === principalId),
+      scan,
+    ).sort((a, b) => Number(a.blockNumber - b.blockNumber));
   }
 }

@@ -4,6 +4,7 @@ import type {
   AnchorView,
   ConsentEvent,
   ConsentLedger,
+  LedgerScan,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
 
@@ -76,11 +77,12 @@ export class LogsConsentLedger implements ConsentLedger {
    */
   async #scan<T>(
     query: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>,
+    scan?: LedgerScan,
   ): Promise<T[]> {
     // cacheTime 0: viem caches block numbers for ~4 s, which would hide a rescission that just landed.
     const head = await this.#paced(() => this.#o.publicClient.getBlockNumber({ cacheTime: 0 }));
     const lookback = this.#o.lookbackBlocks ?? 500n;
-    const from = this.#o.fromBlock ?? (head > lookback ? head - lookback : 0n);
+    const from = scan?.fromBlock ?? this.#o.fromBlock ?? (head > lookback ? head - lookback : 0n);
     const max = this.#o.maxRange ?? 100n;
     const windows: [bigint, bigint][] = [];
     for (let start = from; start <= head; start += max) {
@@ -122,15 +124,17 @@ export class LogsConsentLedger implements ConsentLedger {
     return run;
   }
 
-  async receiptsForGrant(grantId: Bytes32): Promise<readonly ReceiptView[]> {
-    const logs = await this.#scan((fromBlock, toBlock) =>
-      this.#o.publicClient.getLogs({
-        address: this.#o.receiptLedger,
-        event: EVENTS.receipt,
-        args: { grantId },
-        fromBlock,
-        toBlock,
-      }),
+  async receiptsForGrant(grantId: Bytes32, scan?: LedgerScan): Promise<readonly ReceiptView[]> {
+    const logs = await this.#scan(
+      (fromBlock, toBlock) =>
+        this.#o.publicClient.getLogs({
+          address: this.#o.receiptLedger,
+          event: EVENTS.receipt,
+          args: { grantId },
+          fromBlock,
+          toBlock,
+        }),
+      scan,
     );
     return logs.map((l) => ({
       receiptId: l.args.receiptId as Bytes32,
@@ -144,15 +148,21 @@ export class LogsConsentLedger implements ConsentLedger {
     }));
   }
 
-  async anchorsFor(principalId: Bytes32, ns: number): Promise<readonly AnchorView[]> {
-    const logs = await this.#scan((fromBlock, toBlock) =>
-      this.#o.publicClient.getLogs({
-        address: this.#o.passportAnchors,
-        event: EVENTS.anchored,
-        args: { principalId, ns },
-        fromBlock,
-        toBlock,
-      }),
+  async anchorsFor(
+    principalId: Bytes32,
+    ns: number,
+    scan?: LedgerScan,
+  ): Promise<readonly AnchorView[]> {
+    const logs = await this.#scan(
+      (fromBlock, toBlock) =>
+        this.#o.publicClient.getLogs({
+          address: this.#o.passportAnchors,
+          event: EVENTS.anchored,
+          args: { principalId, ns },
+          fromBlock,
+          toBlock,
+        }),
+      scan,
     );
     return logs.map((l) => ({
       batchRoot: l.args.batchRoot as Bytes32,
@@ -170,46 +180,54 @@ export class LogsConsentLedger implements ConsentLedger {
    * so consent ends earlier than the reveal that recorded it — the timeline reports the effective
    * block, not the log's own.
    */
-  async consentTimeline(principalId: Bytes32): Promise<readonly ConsentEvent[]> {
+  async consentTimeline(principalId: Bytes32, scan?: LedgerScan): Promise<readonly ConsentEvent[]> {
     const [enrolled, attested, granted] = await Promise.all([
-      this.#scan((fromBlock, toBlock) =>
-        this.#o.publicClient.getLogs({
-          address: this.#o.principalRegistry,
-          event: EVENTS.enrolled,
-          args: { principalId },
-          fromBlock,
-          toBlock,
-        }),
+      this.#scan(
+        (fromBlock, toBlock) =>
+          this.#o.publicClient.getLogs({
+            address: this.#o.principalRegistry,
+            event: EVENTS.enrolled,
+            args: { principalId },
+            fromBlock,
+            toBlock,
+          }),
+        scan,
       ),
-      this.#scan((fromBlock, toBlock) =>
-        this.#o.publicClient.getLogs({
-          address: this.#o.principalRegistry,
-          event: EVENTS.attested,
-          args: { principalId },
-          fromBlock,
-          toBlock,
-        }),
+      this.#scan(
+        (fromBlock, toBlock) =>
+          this.#o.publicClient.getLogs({
+            address: this.#o.principalRegistry,
+            event: EVENTS.attested,
+            args: { principalId },
+            fromBlock,
+            toBlock,
+          }),
+        scan,
       ),
-      this.#scan((fromBlock, toBlock) =>
-        this.#o.publicClient.getLogs({
-          address: this.#o.grantManager,
-          event: EVENTS.granted,
-          args: { principalId },
-          fromBlock,
-          toBlock,
-        }),
+      this.#scan(
+        (fromBlock, toBlock) =>
+          this.#o.publicClient.getLogs({
+            address: this.#o.grantManager,
+            event: EVENTS.granted,
+            args: { principalId },
+            fromBlock,
+            toBlock,
+          }),
+        scan,
       ),
     ]);
     const grantIds = granted.map((l) => l.args.grantId as Bytes32);
     const rescinded = grantIds.length
-      ? await this.#scan((fromBlock, toBlock) =>
-          this.#o.publicClient.getLogs({
-            address: this.#o.grantManager,
-            event: EVENTS.rescinded,
-            args: { grantId: grantIds },
-            fromBlock,
-            toBlock,
-          }),
+      ? await this.#scan(
+          (fromBlock, toBlock) =>
+            this.#o.publicClient.getLogs({
+              address: this.#o.grantManager,
+              event: EVENTS.rescinded,
+              args: { grantId: grantIds },
+              fromBlock,
+              toBlock,
+            }),
+          scan,
         )
       : [];
 
@@ -220,15 +238,20 @@ export class LogsConsentLedger implements ConsentLedger {
       ...attested.map((l) =>
         this.#event("attested", principalId, null, l.blockNumber, l.transactionHash),
       ),
-      ...granted.map((l) =>
-        this.#event(
-          "granted",
-          principalId,
-          (l.args as { grantId: Bytes32 }).grantId,
-          l.blockNumber,
-          l.transactionHash,
-        ),
-      ),
+      ...granted.map((l) => {
+        const a = l.args as {
+          grantId: Bytes32;
+          granteeCard: Bytes32;
+          ns: number;
+          termsHash: Bytes32;
+        };
+        return {
+          ...this.#event("granted", principalId, a.grantId, l.blockNumber, l.transactionHash),
+          granteeCard: a.granteeCard,
+          ns: Number(a.ns),
+          termsHash: a.termsHash,
+        };
+      }),
       ...rescinded.map((l) => {
         const a = l.args as { grantId: Bytes32; effectiveBlock: bigint };
         return this.#event(

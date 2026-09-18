@@ -29,6 +29,12 @@ export const GatewayConfigSchema = z.object({
    * key — the capture PWA. Off by default: it spends the relayer's gas on request.
    */
   RELAY_ENABLED: z.coerce.boolean().default(false),
+  /**
+   * Also relay `mint` on the deployment's USDC. Only meaningful where that token is the MockUSDC
+   * faucet double (local chains, Monad testnet): it lets a keyless browser fund a demo buyer. Never
+   * set this against a real stablecoin — mint would simply revert, but the intent is wrong.
+   */
+  RELAY_FAUCET_MINT: z.coerce.boolean().default(false),
   /** Deployment block: where the Consent Ledger starts scanning logs. Scanning from 0 is slow. */
   LEDGER_FROM_BLOCK: z.coerce.bigint().optional(),
   /** How far back the log-backed ledger scans when LEDGER_FROM_BLOCK is unset. */
@@ -37,6 +43,8 @@ export const GatewayConfigSchema = z.object({
   LEDGER_MAX_RANGE: z.coerce.bigint().default(100n),
   /** Minimum ms between log requests; Monad's public RPC caps throughput at 25/s. */
   LEDGER_MIN_REQUEST_INTERVAL_MS: z.coerce.number().int().min(0).default(50),
+  /** Furthest back a caller's `?fromBlock=` may reach on the audit routes (bounds one request's RPC work). */
+  LEDGER_MAX_SCAN_BLOCKS: z.coerce.bigint().default(5_000n),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
 

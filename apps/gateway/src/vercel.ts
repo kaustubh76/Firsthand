@@ -14,8 +14,13 @@ const defaults: Record<string, string> = {
   CHAIN_ID: String(monadTestnet.chainId),
   DEPLOYMENT_JSON: JSON.stringify(monadTestnet),
   LOG_JSON: "true",
-  // The relay is the point of hosting: keyless browsers cannot anchor without it.
+  // The relay is the point of hosting: keyless browsers cannot anchor without it. On testnet the
+  // USDC is the MockUSDC faucet double, so its `mint` relays too — a demo buyer funds itself.
   RELAY_ENABLED: "true",
+  RELAY_FAUCET_MINT: "true",
+  // A judge's own history: ?fromBlock= may reach back 20 000 blocks (~2.2 h at 0.4 s), ≤ 200 paced
+  // eth_getLogs calls, inside the function's 60 s.
+  LEDGER_MAX_SCAN_BLOCKS: "20000",
   // A stranger looping on the relay burns the relayer float, so the public defaults are tight.
   RATE_LIMIT_CAPACITY: "20",
   RATE_LIMIT_REFILL_PER_SECOND: "0.2",

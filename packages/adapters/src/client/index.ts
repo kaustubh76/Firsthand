@@ -22,6 +22,12 @@ export type {
 } from "../ports/AnchorWriter.js";
 export type { BlobRef, BlobStore } from "../ports/BlobStore.js";
 export type {
+  AnchorView,
+  ConsentEvent,
+  ConsentEventKind,
+  ReceiptView,
+} from "../ports/ConsentLedger.js";
+export type {
   PreparedTx,
   TransportCapabilities,
   TransportKind,

@@ -31,6 +31,7 @@ export type {
   ConsentEvent,
   ConsentEventKind,
   ConsentLedger,
+  LedgerScan,
   ReceiptView,
 } from "./ports/ConsentLedger.js";
 export type { Erc8004Registry } from "./ports/Erc8004Registry.js";

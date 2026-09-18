@@ -6,6 +6,7 @@ import {
   FsBlobStore,
   FsPassportCatalog,
   type GrantReader,
+  type LedgerScan,
   LogsConsentLedger,
   MemoryAnchorWriter,
   MemoryBlobStore,
@@ -25,6 +26,7 @@ import {
   type Settlement,
   type X402Facilitator,
 } from "@firsthand/adapters";
+import { MockUSDCAbi } from "@firsthand/contracts/abi";
 import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/contracts/deployments";
 import {
   type Address,
@@ -42,6 +44,7 @@ import {
 } from "@firsthand/runtime";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { toFunctionSelector } from "viem";
 import type { GatewayConfig } from "./config.js";
 import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
@@ -50,6 +53,11 @@ import { Relay } from "./services/Relay.js";
 import { createVercelBlobClient } from "./storage/vercelBlob.js";
 
 export { type GatewayConfig, loadConfig } from "./config.js";
+
+/** `mint(address,uint256)` on the MockUSDC faucet double — the only USDC entry point the relay may carry. */
+const MOCK_USDC_MINT = toFunctionSelector(
+  MockUSDCAbi.find((f) => f.type === "function" && f.name === "mint") as never,
+);
 
 import { Serving } from "./services/Serving.js";
 
@@ -150,6 +158,7 @@ export function createGateway(
   let relay: Relay | null = null;
   let deployment: Deployment | null = null;
   let ledger: ConsentLedger | null = null;
+  let chainHead: (() => Promise<bigint>) | null = null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
     const d = readDeployment(config);
@@ -165,6 +174,7 @@ export function createGateway(
     passportAnchors = d.PassportAnchors.toLowerCase() as Address;
     payTo = d.RoyaltyRouter.toLowerCase() as Address;
     usdc = d.USDC.toLowerCase() as Address;
+    chainHead = () => clients.publicClient.getBlockNumber({ cacheTime: 0 });
     anchors = new OnchainAnchorWriter({
       address: passportAnchors,
       layout: d.anchorsLayout,
@@ -190,7 +200,9 @@ export function createGateway(
       minRequestIntervalMs: config.LEDGER_MIN_REQUEST_INTERVAL_MS,
     });
     if (clients.walletClient && config.RELAY_ENABLED) {
-      // Only the four contracts whose entry points authorise by signature rather than msg.sender.
+      // Only the four contracts whose entry points authorise by signature rather than msg.sender —
+      // plus, on chains where the USDC is the MockUSDC faucet double, its permissionless `mint`, so
+      // a keyless browser can fund a demo buyer. Selector-scoped: nothing else on the token relays.
       relay = new Relay({
         publicClient: clients.publicClient,
         walletClient: clients.walletClient,
@@ -199,6 +211,7 @@ export function createGateway(
           passportAnchors,
           d.GrantManager.toLowerCase() as Address,
           d.Rescissions.toLowerCase() as Address,
+          ...(config.RELAY_FAUCET_MINT ? [{ address: usdc, selectors: [MOCK_USDC_MINT] }] : []),
         ],
         logger,
       });
@@ -233,6 +246,12 @@ export function createGateway(
   const domain: Eip712Domain = { chainId: config.CHAIN_ID, verifyingContract: passportAnchors };
   const serving = new Serving({ anchors, blobs, catalog, grants, settlement, domain, logger });
   const limiter = new MemoryTokenBucketLimiter({
+    capacity: config.RATE_LIMIT_CAPACITY,
+    refillPerSecond: config.RATE_LIMIT_REFILL_PER_SECOND,
+  });
+  // The relay spends the relayer's gas on request; its own bucket so a loop on it cannot starve
+  // the serving path and vice versa.
+  const relayLimiter = new MemoryTokenBucketLimiter({
     capacity: config.RATE_LIMIT_CAPACITY,
     refillPerSecond: config.RATE_LIMIT_REFILL_PER_SECOND,
   });
@@ -481,24 +500,51 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
   const jsonSafe = <T>(value: T): unknown =>
     JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
 
+  /**
+   * `?fromBlock=` lets a caller that knows where its history starts (the block its principal was
+   * enrolled in) ask for exactly that, instead of the default recent-activity lookback. Bounded by
+   * LEDGER_MAX_SCAN_BLOCKS so one request cannot turn into thousands of paced RPC calls.
+   */
+  const scanOf = async (raw: string | undefined): Promise<LedgerScan | undefined> => {
+    if (raw === undefined) return undefined;
+    if (!/^\d{1,12}$/.test(raw)) throw new ValidationError("fromBlock must be a block number");
+    const fromBlock = BigInt(raw);
+    if (!chainHead) return { fromBlock };
+    const head = await chainHead();
+    const floor = head > config.LEDGER_MAX_SCAN_BLOCKS ? head - config.LEDGER_MAX_SCAN_BLOCKS : 0n;
+    return { fromBlock: fromBlock < floor ? floor : fromBlock };
+  };
+
   app.get("/v1/grants/:grantId/receipts", async (c) => {
     const grantId = parseId(c.req.param("grantId"), "grantId");
-    return c.json(jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId) }));
+    const scan = await scanOf(c.req.query("fromBlock"));
+    return c.json(
+      jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId, scan) }),
+    );
   });
 
   app.get("/v1/principals/:principalId/anchors", async (c) => {
     const principalId = parseId(c.req.param("principalId"), "principalId");
     const ns = Number(c.req.query("ns") ?? "0");
     if (!Number.isInteger(ns) || ns < 0 || ns > 15) throw new ValidationError("ns must be 0..15");
+    const scan = await scanOf(c.req.query("fromBlock"));
     return c.json(
-      jsonSafe({ principalId, ns, anchors: await requireLedger().anchorsFor(principalId, ns) }),
+      jsonSafe({
+        principalId,
+        ns,
+        anchors: await requireLedger().anchorsFor(principalId, ns, scan),
+      }),
     );
   });
 
   app.get("/v1/principals/:principalId/timeline", async (c) => {
     const principalId = parseId(c.req.param("principalId"), "principalId");
+    const scan = await scanOf(c.req.query("fromBlock"));
     return c.json(
-      jsonSafe({ principalId, events: await requireLedger().consentTimeline(principalId) }),
+      jsonSafe({
+        principalId,
+        events: await requireLedger().consentTimeline(principalId, scan),
+      }),
     );
   });
 
@@ -512,23 +558,27 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       : c.json({ error: "relay is not enabled on this gateway" }, 404),
   );
 
-  app.post("/v1/relay", async (c) => {
-    if (!relay) return c.json({ code: "FH_CONFIG", error: "relay is not enabled" }, 404);
-    const body = (await c.req.json().catch(() => null)) as {
-      to?: string;
-      data?: string;
-      value?: string;
-      gas?: string;
-    } | null;
-    if (!body?.to || !body.data) throw new ValidationError("relay: to and data are required");
-    const ref = await relay.send({
-      to: parseAddress(body.to),
-      data: body.data as `0x${string}`,
-      ...(body.value === undefined ? {} : { value: BigInt(body.value) }),
-      ...(body.gas === undefined ? {} : { gas: BigInt(body.gas) }),
-    });
-    return c.json(ref, 201);
-  });
+  app.post(
+    "/v1/relay",
+    rateLimit(relayLimiter, (_h, ip) => ip),
+    async (c) => {
+      if (!relay) return c.json({ code: "FH_CONFIG", error: "relay is not enabled" }, 404);
+      const body = (await c.req.json().catch(() => null)) as {
+        to?: string;
+        data?: string;
+        value?: string;
+        gas?: string;
+      } | null;
+      if (!body?.to || !body.data) throw new ValidationError("relay: to and data are required");
+      const ref = await relay.send({
+        to: parseAddress(body.to),
+        data: body.data as `0x${string}`,
+        ...(body.value === undefined ? {} : { value: BigInt(body.value) }),
+        ...(body.gas === undefined ? {} : { gas: BigInt(body.gas) }),
+      });
+      return c.json(ref, 201);
+    },
+  );
 
   return { app, logger, shutdown, serving, domain, memory, relay, ledger: requireLedger() };
 }

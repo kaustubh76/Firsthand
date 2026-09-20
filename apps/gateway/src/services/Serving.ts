@@ -49,6 +49,11 @@ export interface ServingDeps {
   readonly reputation?: {
     readonly registry: Erc8004Registry & Erc8004Writer;
     readonly publicUrl: string;
+    /**
+     * Keeps background work alive after the response on hosts that freeze the process once it
+     * has answered (serverless): Vercel's `waitUntil`. Defaults to fire-and-forget.
+     */
+    readonly defer?: (work: Promise<unknown>) => void;
   };
 }
 
@@ -227,8 +232,10 @@ export class Serving {
       receipt: settled.receiptId,
     });
     if (request.agentId !== undefined) {
-      // Off the response path: the buyer has its data; the feedback lands when it lands.
-      void this.#feedback(request.agentId, request.grantId, settled.receiptId);
+      // Off the response path: the buyer has its data; the feedback lands when it lands. A
+      // serverless host must be told to keep the process alive for it (deps.reputation.defer).
+      const work = this.#feedback(request.agentId, request.grantId, settled.receiptId);
+      (this.#d.reputation?.defer ?? (() => undefined))(work);
     }
     return {
       passportId: request.passportId,

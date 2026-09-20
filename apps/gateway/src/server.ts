@@ -121,6 +121,8 @@ export function createGateway(
     /** Tests: an ERC-8004 double in place of the chain's registries (memory mode has none). */
     erc8004?: Erc8004Registry & Erc8004Writer;
     relayerAddress?: Address;
+    /** Serverless hosts: keep post-response work (reputation feedback) alive — Vercel's waitUntil. */
+    defer?: (work: Promise<unknown>) => void;
   } = {},
 ): GatewayApp {
   const logger =
@@ -279,7 +281,13 @@ export function createGateway(
     domain,
     logger,
     ...(erc8004 && config.ERC8004_FEEDBACK && relayerAddress
-      ? { reputation: { registry: erc8004, publicUrl: config.PUBLIC_URL } }
+      ? {
+          reputation: {
+            registry: erc8004,
+            publicUrl: config.PUBLIC_URL,
+            ...(overrides.defer ? { defer: overrides.defer } : {}),
+          },
+        }
       : {}),
   });
   const limiter = new MemoryTokenBucketLimiter({

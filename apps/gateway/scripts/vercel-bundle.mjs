@@ -63,7 +63,10 @@ writeFileSync(
       type: "module",
       engines: { node: "22.x" },
       dependencies: Object.fromEntries(
-        ["hono", "viem", "zod", "@vercel/blob"].map((name) => [name, pinned(name)]),
+        ["hono", "viem", "zod", "@vercel/blob", "@vercel/functions"].map((name) => [
+          name,
+          pinned(name),
+        ]),
       ),
     },
     null,

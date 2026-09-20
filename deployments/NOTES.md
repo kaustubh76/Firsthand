@@ -38,9 +38,9 @@ the relayer).
 
 | Role | Address | Funding |
 |---|---|---|
-| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) |
+| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`; **0.31 MON on 2026-09-20 evening, refill** |
 | Buyer | `0xE73b48c4d667aAe87cEf56624F5EDB7ba9A1CcD5` | **none** — it only signs; the relayer submits |
-| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float (~1 MON); refill from the faucet |
+| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float (~1 MON); refill from the faucet — **0.56 MON on 2026-09-20 evening, refill before judging** |
 
 The hosted relayer is deliberately a separate key with a small float: the public relay spends its
 gas on request, so a stranger looping on it can only ever drain that float, never the deployer.

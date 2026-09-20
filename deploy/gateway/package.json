@@ -9,6 +9,7 @@
     "hono": "4.13.7",
     "viem": "2.56.3",
     "zod": "4.6.2",
-    "@vercel/blob": "2.8.0"
+    "@vercel/blob": "2.8.0",
+    "@vercel/functions": "3.9.8"
   }
 }

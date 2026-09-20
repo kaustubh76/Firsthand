@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import monadTestnet from "../../../deployments/10143.json" with { type: "json" };
 import { loadConfig } from "./config.js";
 import { createGateway } from "./server.js";
@@ -38,7 +39,9 @@ const defaults: Record<string, string> = {
 };
 for (const [key, value] of Object.entries(defaults)) env[key] ??= value;
 
-const gateway = createGateway(loadConfig());
+// Vercel freezes the function once it has answered; work after the response (ERC-8004 feedback)
+// survives only through waitUntil.
+const gateway = createGateway(loadConfig(), { defer: waitUntil });
 const missing = [
   ...(env["RELAYER_PRIVATE_KEY"] ? [] : ["RELAYER_PRIVATE_KEY (relay + on-chain settlement)"]),
   ...(env["BLOB_READ_WRITE_TOKEN"] ? [] : ["BLOB_READ_WRITE_TOKEN (durable blobs + passports)"]),

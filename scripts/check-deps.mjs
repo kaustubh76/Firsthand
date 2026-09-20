@@ -74,7 +74,7 @@ const GRAPH = {
       "@firsthand/sdk",
       "@firsthand/contracts",
     ],
-    external: ["hono", "@hono/node-server", "@vercel/blob", "viem", "zod"],
+    external: ["hono", "@hono/node-server", "@vercel/blob", "@vercel/functions", "viem", "zod"],
     // Hard rule: the serving path never holds key material (ADR-0001, README §4/§12).
     forbidden: ["@firsthand/crypto"],
   },

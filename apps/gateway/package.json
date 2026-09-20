@@ -25,6 +25,7 @@
     "@firsthand/sdk": "workspace:*",
     "@hono/node-server": "catalog:",
     "@vercel/blob": "catalog:",
+    "@vercel/functions": "catalog:",
     "hono": "catalog:",
     "viem": "catalog:",
     "zod": "catalog:"

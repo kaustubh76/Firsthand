@@ -12,7 +12,7 @@ export default defineConfig({
   platform: "node",
   target: "node22",
   noExternal: [/^@firsthand\//],
-  external: ["hono", "viem", "zod", "@vercel/blob"],
+  external: ["hono", "viem", "zod", "@vercel/blob", "@vercel/functions"],
   splitting: false,
   sourcemap: false,
   // Whitespace and syntax only: identifiers stay readable in runtime stack traces.

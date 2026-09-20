@@ -49,8 +49,29 @@ export interface Discovery {
   readonly app?: string | null;
 }
 
+/**
+ * Node's fetch reuses keep-alive sockets a serverless host may have closed; the symptom is a bare
+ * "fetch failed" on an otherwise healthy endpoint. Reads are retried on any network error; writes
+ * only when the connection could not be made at all (nothing was sent).
+ */
+const NOT_SENT = new Set(["ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND", "UND_ERR_CONNECT_TIMEOUT"]);
+export const resilientFetch: typeof fetch = async (input, init) => {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const idempotent = method === "GET" || method === "HEAD";
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      const code = ((error as Error & { cause?: { code?: string } }).cause?.code ?? "") as string;
+      const retry = attempt < 2 && (idempotent || NOT_SENT.has(code));
+      if (!retry) throw error;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+};
+
 export async function discover(gatewayUrl: string): Promise<Discovery> {
-  const res = await fetch(`${gatewayUrl.replace(/\/+$/, "")}/.well-known/firsthand.json`);
+  const res = await resilientFetch(`${gatewayUrl.replace(/\/+$/, "")}/.well-known/firsthand.json`);
   if (!res.ok) throw new Error(`discovery failed: ${res.status}`);
   return (await res.json()) as Discovery;
 }
@@ -68,7 +89,7 @@ export async function listPassports(
   ns?: number,
 ): Promise<ListedPassport[]> {
   const q = ns === undefined ? "" : `?ns=${ns}`;
-  const res = await fetch(`${gatewayUrl}/v1/principals/${principalId}/passports${q}`);
+  const res = await resilientFetch(`${gatewayUrl}/v1/principals/${principalId}/passports${q}`);
   if (!res.ok) throw new Error(`listing failed: ${res.status}`);
   return ((await res.json()) as { passports: ListedPassport[] }).passports;
 }
@@ -77,7 +98,7 @@ export async function fetchSidecar(
   gatewayUrl: string,
   passportId: Bytes32,
 ): Promise<PassportSidecar> {
-  const res = await fetch(`${gatewayUrl}/v1/passports/${passportId}`);
+  const res = await resilientFetch(`${gatewayUrl}/v1/passports/${passportId}`);
   if (!res.ok) throw new Error(`the gateway does not host ${passportId} (${res.status})`);
   return parseSidecar(await res.json());
 }
@@ -105,13 +126,14 @@ export function openBuyer(
   if (!disco.contracts || !disco.rpcUrl) throw new Error("this gateway runs in memory mode");
   const chain = disco.chainId === "31337" ? anvil : monadTestnet;
   const reader = createChainClients({ rpcUrl: disco.rpcUrl, chain, privateKey });
-  const relay = new HttpRelayTransport({ baseUrl: gatewayUrl });
+  const relay = new HttpRelayTransport({ baseUrl: gatewayUrl, fetch: resilientFetch });
   const account = privateKeyToAccount(privateKey);
   const session = new BuyerSession({
     keys: createBuyerKeys(hexBytes(privateKey), account, granteeSeed),
     grantManager: disco.contracts["GrantManager"] as Address,
     chainId: BigInt(disco.chainId),
     transport: relay,
+    fetch: resilientFetch,
   });
   return {
     session,
@@ -329,7 +351,7 @@ export async function reputation(
   gatewayUrl: string,
   agentId: bigint,
 ): Promise<{ paidQueriesHere: string; firsthandFeedbackAll: string; owner: string } | null> {
-  const res = await fetch(`${gatewayUrl}/v1/agents/${agentId}`);
+  const res = await resilientFetch(`${gatewayUrl}/v1/agents/${agentId}`);
   if (!res.ok) return null;
   const body = (await res.json()) as {
     owner: string;

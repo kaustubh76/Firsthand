@@ -36,6 +36,9 @@ catalogs:
     '@vercel/blob':
       specifier: 2.8.0
       version: 2.8.0
+    '@vercel/functions':
+      specifier: 3.9.8
+      version: 3.9.8
     '@vitejs/plugin-react':
       specifier: 5.2.0
       version: 5.2.0
@@ -201,7 +204,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.27.7)(terser@5.51.2)(tsx@4.23.13))
+        version: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13))
 
   apps/gateway:
     dependencies:
@@ -226,6 +229,9 @@ importers:
       '@vercel/blob':
         specifier: 'catalog:'
         version: 2.8.0
+      '@vercel/functions':
+        specifier: 'catalog:'
+        version: 3.9.8(ws@8.21.0)
       hono:
         specifier: 'catalog:'
         version: 4.13.7
@@ -253,7 +259,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13))
+        version: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.27.7)(terser@5.51.2)(tsx@4.23.13))
 
   apps/mcp:
     dependencies:
@@ -1960,6 +1966,18 @@ packages:
   '@vercel/cli-exec@1.0.1':
     resolution: {integrity: sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==}
     engines: {node: '>= 18'}
+
+  '@vercel/functions@3.9.8':
+    resolution: {integrity: sha512-ISnh/3ACFkWZhtwvRz7H1uG+A/7nr6lY1H9bd7s1SQv9GU0aBpBraI5hnmylUumperdwL+9QGme2s4L06VRw9g==}
+    engines: {node: '>= 20'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-web-identity': '*'
+      ws: '>=8'
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-web-identity':
+        optional: true
+      ws:
+        optional: true
 
   '@vercel/oidc@3.8.8':
     resolution: {integrity: sha512-aeq4/sgVh80zO6j2H+7FRfsG6NOXBrvzV1EEO8IdXPEJgwHIPakP+BFq3QmprsEQ18bIimds07kvaYhm2lehtg==}
@@ -4962,6 +4980,12 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
+  '@vercel/functions@3.9.8(ws@8.21.0)':
+    dependencies:
+      '@vercel/oidc': 3.8.8
+    optionalDependencies:
+      ws: 8.21.0
+
   '@vercel/oidc@3.8.8':
     dependencies:
       '@vercel/cli-config': 0.2.7
@@ -4992,7 +5016,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@7.3.6(@types/node@26.5.1)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.23.13))
+      vitest: 4.1.11(@types/node@26.5.1)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.27.7)(terser@5.51.2)(tsx@4.23.13))
 
   '@vitest/expect@4.1.11':
     dependencies:

@@ -63,6 +63,24 @@ If the human withdraws consent, step 4 answers `FH_GRANT_RESCINDED` (HTTP 403): 
 `class: "device_capture"`) and each namespace's freshness — staleness since its newest anchor,
 README §7.3 — so an agent prices continuing access on something measured.
 
+## The phone's locker, from Claude — a deposit delegation
+
+The passkey cannot be used over stdio, so the app hands this server a *deposit delegation*
+instead. In the capture app: Locker → **Let an agent deposit for you** → pick a namespace → *Issue a
+deposit code* → copy the `fhd1.…` line into the MCP's environment:
+
+```sh
+FIRSTHAND_DELEGATION=fhd1.…   # replaces FIRSTHAND_STATIC_PRF_HEX; GATEWAY_URL + RPC_URL as above
+```
+
+`firsthand_status` then reports `session.kind = "delegated"` with its scope; `firsthand_deposit`
+and `firsthand_import` mint, anchor (through the relay) and publish into that namespace under the
+human's principal — the passports appear in their Locker and in `firsthand_list_passports` for
+their locker link. The code carries the three keys of one namespace-epoch and nothing else: it
+cannot enrol, attest, grant or rescind (`FH_DELEGATION_SCOPE` — "open the app for those"), cannot
+touch another namespace, and expires at the epoch boundary; issue a new one next week. Treat it as
+a bearer secret for that scope (SECURITY.md §3).
+
 ## Exit — a locker moves between gateways
 
 `firsthand_export_locker({ path })` writes everything a gateway holds for a principal (ciphertext,

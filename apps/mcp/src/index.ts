@@ -136,17 +136,27 @@ logger.info("firsthand-mcp", {
 let session: Promise<LockerSession> | null = null;
 const openSession = () => {
   if (session === null) {
-    if (!config.FIRSTHAND_STATIC_PRF_HEX) {
-      throw new ConfigError(
-        "FIRSTHAND_STATIC_PRF_HEX is required for PRF_SOURCE=static (demo/dev only)",
+    if (config.FIRSTHAND_DELEGATION) {
+      // The passkey's locker, deposit-only: one namespace, one epoch, issued by the app.
+      const s = client.openDelegated(config.FIRSTHAND_DELEGATION);
+      logger.info("locker opened from a deposit delegation", {
+        principalId: s.locker.principalId,
+        scope: s.locker.delegated?.describe(),
+      });
+      session = Promise.resolve(s);
+    } else {
+      if (!config.FIRSTHAND_STATIC_PRF_HEX) {
+        throw new ConfigError(
+          "FIRSTHAND_DELEGATION (a deposit code from the app) or FIRSTHAND_STATIC_PRF_HEX (demo/dev only) is required to open a locker",
+        );
+      }
+      session = client.open(
+        new StaticPrfSource(hexToBytes(config.FIRSTHAND_STATIC_PRF_HEX as `0x${string}`), {
+          unsafeAcknowledged: true,
+          warn: (m) => logger.warn(m),
+        }),
       );
     }
-    session = client.open(
-      new StaticPrfSource(hexToBytes(config.FIRSTHAND_STATIC_PRF_HEX as `0x${string}`), {
-        unsafeAcknowledged: true,
-        warn: (m) => logger.warn(m),
-      }),
-    );
   }
   return session;
 };

@@ -32,7 +32,8 @@ import { scalarFromOkm } from "./scalar.js";
  *   k_nonce(ns,e)= HKDF-Expand(PRK, info_nonce(ns,e), 32)→ HMAC key for deterministic nonces
  *
  * Scope is enforced by *which key exists*: a grantee receives `k_ns,e` for specific `(ns, e)`
- * and can derive nothing else. Nothing in this class is serialisable.
+ * and can derive nothing else. Nothing in this class is serialisable — except through `delegate`,
+ * which emits exactly the three secrets of one `(ns, e)` for a deposit-only delegation.
  */
 
 const P256_N = p256.Point.CURVE().n;
@@ -57,6 +58,45 @@ export interface DepositKey {
   readonly address: Address;
 }
 
+/**
+ * What the SDK's locker asks of its keys. `KeyTree` (the passkey's whole tree) and
+ * `DelegatedKeys` (one namespace-epoch, deposit-only) both implement it; the locker cannot tell
+ * them apart except by what they refuse.
+ */
+export interface KeyProvider {
+  authorityKey(): AuthorityKey;
+  vaultKey(ns: number, epoch: bigint): SecretBytes;
+  depositKey(ns: number, epoch: bigint): DepositKey;
+  nonceKey(ns: number, epoch: bigint): SecretBytes;
+  passportNonce(ns: number, epoch: bigint, contentHash: Bytes32): Bytes32;
+  dispose(): void;
+  /**
+   * The epoch's sixteen deposit addresses when the provider knows them without deriving (a
+   * delegation carries them as public data); null means "derive them" — only a full tree can.
+   */
+  depositAddresses?(epoch: bigint): readonly Address[] | null;
+}
+
+/** Public half of a secp256k1 scalar — the deposit key's `publicKey` and `Passport.origin`. */
+export function secpPublicOf(scalar: Uint8Array): { publicKey: `0x${string}`; address: Address } {
+  const publicKey = secp256k1.getPublicKey(scalar, false);
+  return { publicKey: bytesToHex(publicKey), address: addressOfPublicKey(publicKey) };
+}
+
+/** `Passport.nonce = HMAC-SHA256(k_nonce, h)` — deterministic per content (ADR-0005). */
+export function passportNonceWith(nonceKey: Uint8Array, contentHash: Bytes32): Bytes32 {
+  return bytesToHex(hmac(sha256, nonceKey, hexToBytes(contentHash)));
+}
+
+/** What a delegation needs from the tree besides the three secrets: identity and public scope. */
+export interface DelegateInput {
+  readonly ns: number;
+  readonly epoch: bigint;
+  readonly chainId: bigint;
+  /** Unix seconds; the epoch's end. */
+  readonly expiresAt: bigint;
+}
+
 function assertNamespace(ns: number): void {
   if (!Number.isInteger(ns) || ns < 0 || ns >= MAX_NAMESPACES) {
     throw new CryptoError(`namespace index out of range (0..${MAX_NAMESPACES - 1})`, {
@@ -71,7 +111,7 @@ function assertEpoch(epoch: bigint): void {
   }
 }
 
-export class KeyTree {
+export class KeyTree implements KeyProvider {
   readonly #prk: SecretBytes;
 
   private constructor(prk: Uint8Array) {
@@ -132,14 +172,61 @@ export class KeyTree {
     const okm = this.expand(infoDep(ns, epoch), KDF_LENGTH.SCALAR);
     const privateKey = u256be(scalarFromOkm(okm, SECP_N));
     zeroize(okm);
-    const publicKey = secp256k1.getPublicKey(privateKey, false);
+    const { publicKey, address } = secpPublicOf(privateKey);
     return {
       ns,
       epoch,
       privateKey: new SecretBytes(privateKey, `k_dep[${ns},${epoch}]`),
-      publicKey: bytesToHex(publicKey),
-      address: addressOfPublicKey(publicKey),
+      publicKey,
+      address,
     };
+  }
+
+  /**
+   * The one deliberate serialisation of derived secrets: a deposit delegation for `(ns, epoch)` —
+   * `k_dep`, `k_nonce`, `k_ns,e` and the public scope (principal id, the epoch's sixteen deposit
+   * addresses, chain, expiry). Never `k_id`; never another namespace or epoch. The caller hands it
+   * to `encodeDelegation` and to the user's own agent — see `delegation/`.
+   */
+  delegate(input: DelegateInput): {
+    principalId: Bytes32;
+    ns: number;
+    epoch: bigint;
+    chainId: bigint;
+    expiresAt: bigint;
+    depositAddresses: Address[];
+    depositKey: Bytes32;
+    vaultKey: Bytes32;
+    nonceKey: Bytes32;
+  } {
+    assertNamespace(input.ns);
+    assertEpoch(input.epoch);
+    const depositAddresses: Address[] = [];
+    for (let ns = 0; ns < MAX_NAMESPACES; ns++) {
+      const dk = this.depositKey(ns, input.epoch);
+      depositAddresses.push(dk.address);
+      dk.privateKey.dispose();
+    }
+    const dep = this.depositKey(input.ns, input.epoch);
+    const vault = this.vaultKey(input.ns, input.epoch);
+    const nonce = this.nonceKey(input.ns, input.epoch);
+    try {
+      return {
+        principalId: this.authorityKey().commitment,
+        ns: input.ns,
+        epoch: input.epoch,
+        chainId: input.chainId,
+        expiresAt: input.expiresAt,
+        depositAddresses,
+        depositKey: dep.privateKey.use((k) => bytesToHex(k)),
+        vaultKey: vault.use((k) => bytesToHex(k)),
+        nonceKey: nonce.use((k) => bytesToHex(k)),
+      };
+    } finally {
+      dep.privateKey.dispose();
+      vault.dispose();
+      nonce.dispose();
+    }
   }
 
   nonceKey(ns: number, epoch: bigint): SecretBytes {
@@ -156,7 +243,7 @@ export class KeyTree {
     assertBytes32(contentHash, "contentHash");
     const key = this.nonceKey(ns, epoch);
     try {
-      return bytesToHex(key.use((k) => hmac(sha256, k, hexToBytes(contentHash))));
+      return key.use((k) => passportNonceWith(k, contentHash));
     } finally {
       key.dispose();
     }

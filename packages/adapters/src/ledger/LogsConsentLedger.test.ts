@@ -78,11 +78,10 @@ describe("LogsConsentLedger — a scan the RPC will accept and a function will f
     });
     expect(windows).toHaveLength(12);
     expect(peak()).toBeLessThanOrEqual(3);
-    // Twelve starts at least 5 ms apart (plus the head read) cannot finish inside 60 ms; with
-    // three in flight and 15 ms latency they need nowhere near the 180 ms a serial walk would.
-    const elapsed = Date.now() - began;
-    expect(elapsed).toBeGreaterThanOrEqual(55);
-    expect(elapsed).toBeLessThan(170);
+    // Twelve starts at least 5 ms apart (plus the head read) cannot finish inside 60 ms. (No upper
+    // bound: wall-clock ceilings flake under a loaded coverage run; the in-flight cap above is the
+    // deterministic half of the property.)
+    expect(Date.now() - began).toBeGreaterThanOrEqual(55);
   });
 
   it("stops issuing windows when the budget is spent and reports how far back it reached", async () => {

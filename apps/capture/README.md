@@ -19,6 +19,9 @@ link `?grant=<card>&pub=<x25519>&ns=<n>&from=<label>`; the Locker shows it, one 
 (ciphertext, sidecars, grant wraps — no plaintext, no key) as one file; *Re-publish here* takes
 that file onto whatever gateway the app is pointed at (`?gateway=…`), which verifies each object
 against the chain first (README §4 "keys + blobs walk away").
+**Handoff:** Locker → *Let an agent deposit for you* issues a deposit code (`fhd1.…`) for one
+namespace and this epoch — `firsthand-mcp` opens it as `FIRSTHAND_DELEGATION` and deposits into
+this locker under this principal; it cannot grant, rescind or attest (SECURITY.md §3).
 **Freshness and class:** the Verify tab's listing shows each passport's attestation class and each
 namespace's staleness since its newest anchor (README §7.3, a market signal).
 The Recall tab also exports the **buyer's** compliance file from the served query. A localStorage

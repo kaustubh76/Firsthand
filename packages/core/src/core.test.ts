@@ -137,6 +137,7 @@ describe("errors", () => {
       [new ChainError("c"), 502],
       [new ChainError("out of gas", { code: "FH_INSUFFICIENT_FUNDS" }), 503],
       [new CryptoError("k"), 500],
+      [new CryptoError("out of scope", { code: "FH_DELEGATION_SCOPE" }), 403],
     ];
     for (const [err, status] of samples) {
       const pd = toProblemDetails(err);

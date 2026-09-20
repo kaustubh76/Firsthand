@@ -38,6 +38,21 @@ nothing else. Implementation: `packages/crypto/src/kdf/keytree.ts` (ADR-0005).
 Limits: JavaScript cannot guarantee zeroization (engine copies, GC). `zeroize` is best effort;
 WebAuthn PRF output is the only long-lived root and it is evaluated on demand, never stored.
 
+**The one deliberate exception — deposit delegations.** README §12 says derived secrets never
+leave the client; the MCP↔PWA handoff moves *three* of them between two of the user's own
+devices, and says so. `KeyTree.delegate` emits `k_dep(ns,e)`, `k_nonce(ns,e)` and `k_ns,e` for one
+namespace and one epoch, with the public scope (principal id, the epoch's sixteen deposit
+addresses, chain, expiry), as an `fhd1.` code (`encodeDelegation`). Never `k_id`; never another
+`(ns, e)`. `DelegatedKeys` refuses everything outside that scope with `FH_DELEGATION_SCOPE` —
+so an agent holding the code can mint, anchor and publish passports into that namespace under the
+human's principal until the epoch ends (as trusted as an importer), and cannot enrol, attest,
+grant, rescind, read another namespace or outlive its epoch. The code is a bearer secret for that
+scope: the app tells the user to paste it only into their own agent, records only the scope in its
+journal, and the MCP takes it from `FIRSTHAND_DELEGATION`, logs the scope and never the code.
+Pinned by `packages/crypto/src/delegation/delegation.test.ts`, `packages/sdk/src/delegation.test.ts`
+and the browser tier (an agent with no passkey deposits into the page's locker; the same code
+cannot rescind).
+
 ## 4. Rotation semantics
 
 - Keys rotate **per epoch** (7 days) per namespace: `k_ns,e`, `k_dep(ns,e)`, `k_nonce(ns,e)`.

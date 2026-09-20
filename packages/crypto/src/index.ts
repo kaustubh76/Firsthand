@@ -5,6 +5,7 @@
  * decryption. `apps/gateway` (the serving path) is forbidden from depending on it; see
  * scripts/check-deps.mjs and docs/SECURITY.md.
  */
+export * from "./delegation/index.js";
 export * from "./envelope/index.js";
 export * from "./kdf/index.js";
 export * from "./prf/index.js";

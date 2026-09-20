@@ -545,14 +545,28 @@ export function createMcpServer(deps: McpDeps): McpServer {
     "firsthand_status",
     {
       title: "Locker status",
-      description: "Principal id, namespaces, pending and anchored batches.",
+      description:
+        "Principal id, namespaces, pending and anchored batches — and, when this server runs on a deposit delegation from the app, its scope (namespace, epoch, expiry).",
       inputSchema: StatusInputSchema.shape,
     },
     async () => {
       try {
         const session = await deps.session();
+        const delegated = session.locker.delegated;
         return text({
           locker: session.locker.toJSON(),
+          session: delegated
+            ? {
+                kind: "delegated",
+                scope: delegated.describe(),
+                ns: delegated.ns,
+                epoch: delegated.epoch,
+                expiresAt: delegated.expiresAt,
+                can: ["deposit", "import", "export_locker"],
+                cannot:
+                  "enroll · attest · grant · rescind (the passkey keeps those — open the app)",
+              }
+            : { kind: "full" },
           epoch: session.locker.currentEpoch(),
           pending: session.batcher.pendingCount(),
           anchored: session.batcher

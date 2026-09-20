@@ -1,9 +1,24 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { extname, join, normalize } from "node:path";
-import { anvil, createChainClients, monadTestnet } from "@firsthand/adapters/client";
-import type { Address, Bytes32 } from "@firsthand/core";
-import { importLocker, parseBundle } from "@firsthand/sdk";
+import {
+  anvil,
+  createChainClients,
+  HttpRelayTransport,
+  MemoryBlobStore,
+  monadTestnet,
+} from "@firsthand/adapters/client";
+import {
+  type Address,
+  AttestationClass,
+  type Bytes32,
+  LICENSE_FH_1_0,
+  Scope,
+  WAD,
+  ZERO_HASH,
+} from "@firsthand/core";
+import { FirsthandClient, importLocker, parseBundle } from "@firsthand/sdk";
+import { clientOptionsFromDeployment } from "@firsthand/sdk/deployment";
 import { chromium } from "playwright";
 import { generatePrivateKey } from "viem/accounts";
 import {
@@ -584,6 +599,90 @@ async function main() {
       const openedB = new TextDecoder().decode(servedB.plaintext);
       if (!openedB.includes("hallway light")) throw new Error(`gateway B served: ${openedB}`);
       ok(`the outsider paid gateway B with the same grant and opened: “${openedB}”`);
+    }
+
+    step(
+      "the handoff: the page issues a deposit code; an agent with no passkey deposits into the same locker",
+    );
+    // README §10 / PROGRESS "MCP↔PWA PRF handoff". The Locker issues a delegation for the imports
+    // namespace — three keys of one namespace-epoch, no authority key. The Node side opens it the
+    // way firsthand-mcp does (FIRSTHAND_DELEGATION), mints, anchors through the relay and
+    // publishes; the gateway then lists the passport under the human's principal.
+    await page.locator("nav").getByRole("button", { name: "locker" }).click();
+    await page.getByTestId("delegate-ns").selectOption("1");
+    await page.getByTestId("delegate-issue").click();
+    await page.getByTestId("delegation-code").waitFor({ timeout: 10_000 });
+    const delegationCode = (await page.getByTestId("delegation-code").textContent()) ?? "";
+    if (!delegationCode.startsWith("fhd1."))
+      throw new Error(`no delegation code: ${delegationCode}`);
+    ok(`${(await page.getByTestId("delegation-scope").textContent())?.slice(0, 80)}…`);
+    {
+      const deploymentFile = spawned
+        ? spawned.env.deploymentsFile
+        : join(root, "deployments", `${disco.chainId ?? "10143"}.json`);
+      // The deployment file carries checksummed addresses; the SDK's loader lowercases them.
+      const deployment = JSON.parse(readFileSync(deploymentFile, "utf8"), (_k, v) =>
+        typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v) ? v.toLowerCase() : v,
+      ) as Parameters<typeof clientOptionsFromDeployment>[0]["deployment"];
+      const chainClients = createChainClients({
+        rpcUrl: disco.rpcUrl ?? "https://testnet-rpc.monad.xyz",
+        chain: Number(disco.chainId) === 31337 ? anvil : monadTestnet,
+      });
+      const agentClient = new FirsthandClient(
+        clientOptionsFromDeployment({
+          deployment,
+          publicClient: chainClients.publicClient,
+          transport: new HttpRelayTransport({ baseUrl: gatewayUrl }),
+          blobs: new MemoryBlobStore(),
+        }),
+      );
+      const agent = agentClient.openDelegated(delegationCode);
+      if (agent.locker.principalId !== ownPrincipal) {
+        throw new Error(`delegation names ${agent.locker.principalId}, page is ${ownPrincipal}`);
+      }
+      const payee = agent.locker.depositKey(1).address;
+      const agentTerms = {
+        price: 1_000n,
+        licenseId: LICENSE_FH_1_0,
+        scope: Scope.TRAIN | Scope.EVAL,
+        ns: 1,
+        rateLimit: 100,
+        payees: [payee],
+        weights: [WAD],
+      };
+      const deposited = await agent.deposit({
+        ns: 1,
+        datum: { kind: "bytes", bytes: new TextEncoder().encode("e2e: deposited by the agent") },
+        terms: agentTerms,
+        attestation: {
+          class: AttestationClass.IMPORT,
+          capturedAt: BigInt(Math.floor(Date.now() / 1000)),
+          sourceTag: `0x${"a9".repeat(32)}`,
+          deviceClass: ZERO_HASH,
+          metaHash: ZERO_HASH,
+        },
+      });
+      await agent.flush();
+      await agent.publish({ gatewayUrl }, deposited, agentTerms);
+      const mine = await listPassports(gatewayUrl, ownPrincipal as Bytes32, 1);
+      const row = mine.find((p) => p.passportId === deposited.passportId);
+      if (!row) throw new Error("the agent's passport is not listed under the human's principal");
+      if (row.class !== 1)
+        throw new Error(`agent's passport class ${row.class}, expected 1 (import)`);
+      ok(
+        `agent (no passkey) deposited ${deposited.passportId.slice(0, 12)}… into ns 1 of principal ${ownPrincipal.slice(0, 12)}… — anchored through the relay, listed by the gateway`,
+      );
+      // And the scope holds: the same code cannot grant, rescind or touch another namespace.
+      let refused = "";
+      try {
+        agent.planRescind(`0x${"11".repeat(32)}` as Bytes32);
+      } catch (e) {
+        refused = (e as { code?: string }).code ?? "";
+      }
+      if (refused !== "FH_DELEGATION_SCOPE")
+        throw new Error(`rescind with a delegation: ${refused}`);
+      ok("the delegation cannot rescind (FH_DELEGATION_SCOPE) — the passkey keeps consent");
+      agent.close();
     }
 
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");

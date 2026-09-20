@@ -23,6 +23,16 @@ scalar     = (int_be(okm48) mod (n − 1)) + 1                                (F
   credential key (README §7.3 equation). The precompile verifies a plain 32-byte digest; WebAuthn
   assertion parsing on-chain is roadmap.
 
+## Addendum (2026-09-21): deposit delegations
+
+`KeyTree.delegate({ ns, epoch, chainId, expiresAt })` is the tree's one serialisation: the three
+scoped secrets of a single `(ns, e)` — `k_dep`, `k_nonce`, `k_ns,e` — with the public scope, as an
+`fhd1.` code. `DelegatedKeys` implements the same `KeyProvider` interface the SDK's `Locker` runs
+on and refuses every other derivation (`FH_DELEGATION_SCOPE`), which is what makes the
+MCP↔PWA handoff a capability rather than a key export: deposit-only, one namespace, one epoch, no
+authority key. The attested deposit-key set travels as the sixteen public addresses, so a
+delegated locker anchors against exactly the root the passkey attested. See SECURITY.md §3.
+
 ## Verification
 
 Hand vectors derived with OpenSSL 3 (`openssl kdf HKDF`, `openssl pkeyutl -sign`) and `cast`; see

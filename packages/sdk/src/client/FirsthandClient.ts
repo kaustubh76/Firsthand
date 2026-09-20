@@ -61,6 +61,26 @@ export class FirsthandClient {
     return new LockerSession(this, locker);
   }
 
+  /**
+   * Opens a locker over a deposit delegation issued by the app (`fhd1.` code): deposit-only, one
+   * namespace, one epoch; the passkey keeps enrol/attest/grant/rescind.
+   */
+  openDelegated(code: string, decode: { now?: () => bigint } = {}): LockerSession {
+    const locker = Locker.openDelegated(
+      code,
+      {
+        domain: this.options.domain,
+        epochs: this.options.epochs,
+        anchors: this.options.anchors,
+        blobs: this.options.blobs,
+        logger: this.logger,
+        ...(this.options.clock ? { clock: this.options.clock } : {}),
+      },
+      decode,
+    );
+    return new LockerSession(this, locker);
+  }
+
   /** Buyer-side query — no locker needed; see BuyerSession for the full buyer flow. */
   query(request: QueryRequest, deps: QueryDeps) {
     return query(request, deps);

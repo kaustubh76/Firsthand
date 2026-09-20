@@ -39,6 +39,13 @@ export interface ReceiptEntry {
   readonly at: number;
 }
 
+/** A deposit delegation issued from this browser — scope only, never the code itself. */
+export interface DelegationEntry {
+  readonly ns: number;
+  readonly epoch: string;
+  readonly at: number;
+}
+
 export interface Journal {
   enrolBlock?: string;
   enrolTx?: Bytes32;
@@ -46,6 +53,7 @@ export interface Journal {
   deposits: DepositEntry[];
   grants: GrantEntry[];
   receipts: ReceiptEntry[];
+  delegations?: DelegationEntry[];
 }
 
 const KEY = (principalId: string) => `firsthand.journal.${principalId}`;

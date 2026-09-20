@@ -48,13 +48,24 @@ export const McpConfigSchema = z.object({
   EPOCH_LENGTH: z.coerce.bigint().default(604_800n),
   /**
    * PRF source. `static` reads FIRSTHAND_STATIC_PRF_HEX (demo/dev ONLY — not rooted in a passkey).
-   * `webauthn` is not possible over stdio; the capture PWA performs the ceremony and hands the
-   * session to this server in Phase 5.
+   * `webauthn` is not possible over stdio: the capture PWA performs the ceremony and hands this
+   * server a *deposit delegation* instead (FIRSTHAND_DELEGATION) — the passkey's locker, deposit-only.
    */
   PRF_SOURCE: z.enum(["static"]).default("static"),
   FIRSTHAND_STATIC_PRF_HEX: z
     .string()
     .regex(/^0x[0-9a-f]{64}$/)
+    .optional(),
+  /**
+   * A deposit delegation issued by the capture app (Locker → "Let an agent deposit for you"): an
+   * `fhd1.` code carrying the keys of ONE namespace-epoch of the passkey's locker and nothing
+   * else. With it, firsthand_deposit / firsthand_import land in the human's locker under their
+   * principal; enrol, attest, grant and rescind stay with the passkey. Takes precedence over the
+   * static PRF. Expires with its epoch.
+   */
+  FIRSTHAND_DELEGATION: z
+    .string()
+    .regex(/^fhd1\.[A-Za-z0-9_-]+$/)
     .optional(),
   BLOB_DIR: z.string().default("./data/blobs"),
   /** Buyer side (optional): the agent's EVM key (pays + signs terms) and its X25519 seed. */

@@ -8,7 +8,14 @@ import {
   MAX_NAMESPACES,
   ValidationError,
 } from "@firsthand/core";
-import { type AuthorityKey, type DepositKey, KeyTree, type PrfSource } from "@firsthand/crypto";
+import {
+  type AuthorityKey,
+  DelegatedKeys,
+  type DepositKey,
+  type KeyProvider,
+  KeyTree,
+  type PrfSource,
+} from "@firsthand/crypto";
 import { type Logger, noopLogger } from "@firsthand/runtime";
 
 /**
@@ -23,7 +30,10 @@ export interface NamespaceInfo {
 }
 
 export interface LockerOptions {
-  readonly keys: KeyTree;
+  /** The passkey's whole tree, or a deposit-only delegation for one namespace-epoch. */
+  readonly keys: KeyProvider;
+  /** Required when `keys` cannot derive the authority key (a delegation names its principal). */
+  readonly principalId?: Bytes32;
   readonly domain: Eip712Domain;
   readonly epochs: EpochParams;
   readonly anchors: AnchorWriter;
@@ -34,7 +44,7 @@ export interface LockerOptions {
 }
 
 export class Locker {
-  readonly keys: KeyTree;
+  readonly keys: KeyProvider;
   readonly domain: Eip712Domain;
   readonly epochs: EpochParams;
   readonly anchors: AnchorWriter;
@@ -55,7 +65,12 @@ export class Locker {
     this.logger = options.logger ?? noopLogger;
     this.#clock = options.clock ?? (() => BigInt(Math.floor(Date.now() / 1000)));
     for (const ns of options.namespaces ?? [{ ns: 0, label: "default" }]) this.addNamespace(ns);
-    this.principalId = this.authorityKey().commitment;
+    this.principalId = options.principalId ?? this.authorityKey().commitment;
+  }
+
+  /** True when this locker runs on a delegation: deposit-only, one namespace, one epoch. */
+  get delegated(): DelegatedKeys | null {
+    return this.keys instanceof DelegatedKeys ? this.keys : null;
   }
 
   /** The derived P-256 authority key, memoised for the session (scalar is a SecretBytes). */
@@ -74,6 +89,31 @@ export class Locker {
 
   static async open(source: PrfSource, options: Omit<LockerOptions, "keys">): Promise<Locker> {
     return new Locker({ ...options, keys: await KeyTree.fromSource(source) });
+  }
+
+  /**
+   * A locker over a deposit delegation (`fhd1.` code from the app): the same verbs, but only
+   * `deposit`/`publish` into the delegated namespace and epoch can succeed — everything else is
+   * refused by the keys themselves with `FH_DELEGATION_SCOPE`.
+   */
+  static openDelegated(
+    code: string,
+    options: Omit<LockerOptions, "keys" | "principalId">,
+    decode: { now?: () => bigint } = {},
+  ): Locker {
+    const keys = DelegatedKeys.fromCode(code, decode);
+    if (keys.chainId !== options.domain.chainId) {
+      keys.dispose();
+      throw new ValidationError(
+        `delegation is for chain ${keys.chainId}, this deployment is chain ${options.domain.chainId}`,
+      );
+    }
+    return new Locker({
+      ...options,
+      keys,
+      principalId: keys.principalId,
+      namespaces: [{ ns: keys.ns, label: `delegated ns ${keys.ns}` }],
+    });
   }
 
   addNamespace(info: NamespaceInfo): void {
@@ -108,15 +148,28 @@ export class Locker {
     return dk;
   }
 
-  /** All 16 deposit addresses for an epoch — the preimage of the attested `depositKeysRoot`. */
+  /**
+   * All 16 deposit addresses for an epoch — the preimage of the attested `depositKeysRoot`. A
+   * delegation carries them as public data; a full tree derives them.
+   */
   depositAddresses(epoch: bigint = this.currentEpoch()): Address[] {
+    const known = this.keys.depositAddresses?.(epoch);
+    if (known) return [...known];
     const out: Address[] = [];
-    for (let ns = 0; ns < MAX_NAMESPACES; ns++) out.push(this.keys.depositKey(ns, epoch).address);
+    for (let ns = 0; ns < MAX_NAMESPACES; ns++) {
+      const dk = this.keys.depositKey(ns, epoch);
+      out.push(dk.address);
+      dk.privateKey.dispose();
+    }
     return out;
   }
 
   /** True when `origin` is a deposit address this locker can derive for `(ns, epoch)`. */
   isOwnOrigin(origin: Address, ns: number, epoch: bigint): boolean {
+    // A delegation knows every address of its epoch without holding the keys: an origin outside its
+    // namespace is still "own" by lineage, but a delegated locker can only *mint* in its own.
+    const known = this.keys.depositAddresses?.(epoch);
+    if (known) return known[ns] === origin;
     return this.depositKey(ns, epoch).address === origin;
   }
 

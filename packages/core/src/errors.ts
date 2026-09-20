@@ -28,7 +28,8 @@ export type ErrorCode =
   | "FH_CIRCUIT_OPEN"
   | "FH_CHAIN"
   | "FH_INSUFFICIENT_FUNDS"
-  | "FH_CRYPTO";
+  | "FH_CRYPTO"
+  | "FH_DELEGATION_SCOPE";
 
 export interface FirsthandErrorOptions {
   readonly cause?: unknown;
@@ -177,10 +178,20 @@ export class ChainError extends FirsthandError {
   }
 }
 
-/** Cryptographic operation failed. Context carries lengths and labels only — never bytes. */
+/**
+ * Cryptographic operation failed. Context carries lengths and labels only — never bytes.
+ * `FH_DELEGATION_SCOPE` is the one named refusal: a delegated key set was asked for a key it does
+ * not hold (another namespace or epoch, or the authority key) — the scope is the security property.
+ */
 export class CryptoError extends FirsthandError {
-  constructor(message: string, options: FirsthandErrorOptions = {}) {
-    super("FH_CRYPTO", message, options);
+  constructor(
+    message: string,
+    options: FirsthandErrorOptions & {
+      readonly code?: Extract<ErrorCode, "FH_CRYPTO" | "FH_DELEGATION_SCOPE">;
+    } = {},
+  ) {
+    const { code, ...rest } = options;
+    super(code ?? "FH_CRYPTO", message, rest);
   }
 }
 
@@ -220,6 +231,7 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FH_CHAIN: 502,
   FH_INSUFFICIENT_FUNDS: 503,
   FH_CRYPTO: 500,
+  FH_DELEGATION_SCOPE: 403,
 };
 
 export function toProblemDetails(error: unknown): ProblemDetails {

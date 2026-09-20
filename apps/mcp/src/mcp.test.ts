@@ -5,7 +5,7 @@ import {
   MemoryTransport,
 } from "@firsthand/adapters";
 import type { Address } from "@firsthand/core";
-import { StaticPrfSource } from "@firsthand/crypto";
+import { encodeDelegation, issueDelegation, KeyTree, StaticPrfSource } from "@firsthand/crypto";
 import { noopLogger } from "@firsthand/runtime";
 import { FirsthandClient } from "@firsthand/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
 import { createMcpServer } from "./server.js";
 
-async function connect(canBroadcast = true) {
+async function connect(canBroadcast = true, delegation?: string) {
   StaticPrfSource.resetWarning();
   const fh = new FirsthandClient({
     domain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
@@ -33,12 +33,14 @@ async function connect(canBroadcast = true) {
   let session: ReturnType<FirsthandClient["open"]> | null = null;
   const server = createMcpServer({
     session: () =>
-      (session ??= fh.open(
-        new StaticPrfSource(new Uint8Array(32).fill(5), {
-          unsafeAcknowledged: true,
-          warn: () => {},
-        }),
-      )),
+      (session ??= delegation
+        ? Promise.resolve(fh.openDelegated(delegation))
+        : fh.open(
+            new StaticPrfSource(new Uint8Array(32).fill(5), {
+              unsafeAcknowledged: true,
+              warn: () => {},
+            }),
+          )),
     logger: noopLogger,
     canBroadcast,
     canAnchor: false, // memory anchors: deposits stay local, the tool says so in its warning
@@ -303,6 +305,52 @@ describe("enroll / attest tools", () => {
       path: "public",
       tx: { to: `0x${"b1".repeat(20)}` },
     });
+  });
+});
+
+describe("a session on a deposit delegation (the MCP↔PWA handoff)", () => {
+  it("deposits into the human's locker under their principal, and refuses what needs the passkey", async () => {
+    // What the app issues: the passkey's tree, one namespace, this epoch.
+    const tree = KeyTree.fromPrf(new Uint8Array(32).fill(5));
+    const epoch = BigInt(Math.floor(Date.now() / 1000)) / 604_800n;
+    const code = encodeDelegation(
+      issueDelegation(tree, {
+        ns: 0,
+        epoch,
+        chainId: 10143n,
+        expiresAt: (epoch + 1n) * 604_800n,
+      }),
+    );
+    const client = await connect(true, code);
+    const status = textOf(
+      (await client.callTool({ name: "firsthand_status", arguments: {} })) as { content: unknown },
+    );
+    expect(status.locker.principalId).toBe(tree.authorityKey().commitment);
+    expect(status.session).toMatchObject({ kind: "delegated", ns: 0, epoch: epoch.toString() });
+    expect(status.session.scope).toMatch(/namespace 0/);
+
+    const deposited = textOf(
+      (await client.callTool({
+        name: "firsthand_deposit",
+        arguments: { ns: 0, text: "from the laptop", payee: `0x${"cc".repeat(20)}` },
+      })) as { content: unknown },
+    );
+    expect(deposited.passportId).toMatch(/^0x[0-9a-f]{64}$/);
+
+    for (const name of ["firsthand_enroll", "firsthand_attest"] as const) {
+      const refused = await client.callTool({ name, arguments: {} });
+      expect(refused.isError).toBe(true);
+      expect(textOf(refused as { content: unknown })).toMatchObject({
+        error: "FH_DELEGATION_SCOPE",
+        message: expect.stringMatching(/open the app/),
+      });
+    }
+    const rescind = await client.callTool({
+      name: "firsthand_rescind",
+      arguments: { grantId: `0x${"dd".repeat(32)}`, path: "public" },
+    });
+    expect(rescind.isError).toBe(true);
+    expect(textOf(rescind as { content: unknown }).error).toBe("FH_DELEGATION_SCOPE");
   });
 });
 

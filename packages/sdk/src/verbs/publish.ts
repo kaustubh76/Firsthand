@@ -18,6 +18,8 @@ import type { DepositResult } from "./deposit.js";
 export interface PublishTarget {
   readonly gatewayUrl: string;
   readonly fetch?: typeof fetch;
+  /** Retries when the request itself fails (no HTTP answer). Publishing is idempotent: default 1. */
+  readonly retries?: number;
 }
 
 /** Builds the sidecar for a deposited passport once its batch has been anchored. */
@@ -80,11 +82,27 @@ async function post(
   contentType: string,
 ): Promise<unknown> {
   const doFetch = target.fetch ?? fetch;
-  const res = await doFetch(`${target.gatewayUrl.replace(/\/+$/, "")}${path}`, {
-    method: "POST",
-    headers: { "content-type": contentType },
-    body,
-  });
+  const url = `${target.gatewayUrl.replace(/\/+$/, "")}${path}`;
+  const retries = Math.max(0, target.retries ?? 1);
+  let res: Response | null = null;
+  let unreachable: unknown = null;
+  // Every publish is idempotent (content-addressed objects, verified sidecars), so a dropped
+  // connection is retried once rather than surfaced as a failed step after a successful anchor.
+  for (let attempt = 0; attempt <= retries && res === null; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1_500 * attempt));
+    try {
+      res = await doFetch(url, { method: "POST", headers: { "content-type": contentType }, body });
+    } catch (cause) {
+      unreachable = cause;
+    }
+  }
+  if (res === null) {
+    throw new ValidationError(`gateway unreachable for ${path}`, {
+      cause: unreachable,
+      retryable: true,
+      context: { path },
+    });
+  }
   const text = await res.text();
   if (!res.ok) {
     // A host's edge can refuse a body before the gateway sees it (Vercel: 413 above ~4.5 MB, as

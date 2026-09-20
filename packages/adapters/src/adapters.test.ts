@@ -716,6 +716,38 @@ describe("HttpRelayTransport", () => {
     });
   });
 
+  it("retries once when the request itself fails, and gives up with a retryable transport error", async () => {
+    let calls = 0;
+    const flaky = new HttpRelayTransport({
+      baseUrl: "http://gw",
+      sleep: async () => undefined,
+      fetch: (async () => {
+        calls++;
+        if (calls === 1) throw new TypeError("Failed to fetch");
+        return new Response(JSON.stringify({ hash: `0x${"ab".repeat(32)}` }), { status: 201 });
+      }) as unknown as typeof fetch,
+    });
+    await expect(flaky.send({ to: addr(1), data: "0x" })).resolves.toMatchObject({
+      hash: `0x${"ab".repeat(32)}`,
+    });
+    expect(calls).toBe(2);
+    calls = 0;
+    const dead = new HttpRelayTransport({
+      baseUrl: "http://gw",
+      sleep: async () => undefined,
+      fetch: (async () => {
+        calls++;
+        throw new TypeError("Failed to fetch");
+      }) as unknown as typeof fetch,
+    });
+    await expect(dead.send({ to: addr(1), data: "0x" })).rejects.toMatchObject({
+      code: "FH_TRANSPORT",
+      retryable: true,
+      message: "relay unreachable",
+    });
+    expect(calls).toBe(2);
+  });
+
   it("keeps the gateway's own names: an empty float, a rate limit with retry-after, a decoded revert", async () => {
     const withHeaders = (status: number, body: unknown, headers: Record<string, string>) =>
       new HttpRelayTransport({

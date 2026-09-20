@@ -18,6 +18,14 @@ export interface HttpRelayTransportOptions {
   readonly baseUrl: string;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
+  /**
+   * Retries when the request itself fails (no HTTP answer at all: a dropped connection, a timed-out
+   * edge). Default 1. Safe because the relay simulates before spending gas: a request that did reach
+   * the gateway the first time makes the retry a decoded "already done" revert, never a second
+   * transaction of consequence.
+   */
+  readonly retries?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -35,6 +43,8 @@ export class HttpRelayTransport implements TxTransport {
   readonly #base: string;
   readonly #fetch: typeof fetch;
   readonly #now: () => number;
+  readonly #retries: number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
   constructor(options: HttpRelayTransportOptions) {
     this.#base = options.baseUrl.replace(/\/+$/, "");
@@ -42,23 +52,36 @@ export class HttpRelayTransport implements TxTransport {
     // `window.fetch` with `this` = the transport, which browsers refuse ("Illegal invocation").
     this.#fetch = options.fetch ?? fetch.bind(globalThis);
     this.#now = options.now ?? Date.now;
+    this.#retries = Math.max(0, options.retries ?? 1);
+    this.#sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
   async send(tx: PreparedTx): Promise<TxRef> {
-    let res: Response;
-    try {
-      res = await this.#fetch(`${this.#base}/v1/relay`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          to: tx.to,
-          data: tx.data,
-          ...(tx.value === undefined ? {} : { value: tx.value.toString() }),
-          ...(tx.gas === undefined ? {} : { gas: tx.gas.toString() }),
-        }),
+    const payload = JSON.stringify({
+      to: tx.to,
+      data: tx.data,
+      ...(tx.value === undefined ? {} : { value: tx.value.toString() }),
+      ...(tx.gas === undefined ? {} : { gas: tx.gas.toString() }),
+    });
+    let res: Response | null = null;
+    let unreachable: unknown = null;
+    for (let attempt = 0; attempt <= this.#retries && res === null; attempt++) {
+      if (attempt > 0) await this.#sleep(1_500 * attempt);
+      try {
+        res = await this.#fetch(`${this.#base}/v1/relay`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: payload,
+        });
+      } catch (cause) {
+        unreachable = cause;
+      }
+    }
+    if (res === null) {
+      throw new TransportError("FH_TRANSPORT", "relay unreachable", {
+        cause: unreachable,
+        retryable: true,
       });
-    } catch (cause) {
-      throw new TransportError("FH_TRANSPORT", "relay unreachable", { cause, retryable: true });
     }
     const body = (await res.json().catch(() => null)) as {
       hash?: string;

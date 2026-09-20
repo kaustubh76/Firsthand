@@ -75,6 +75,9 @@ export async function startGateway(
       // chains the demo knows carry the MockUSDC faucet double, so its mint relays too.
       RELAY_ENABLED: "true",
       RELAY_FAUCET_MINT: "true",
+      // Where the chain has ERC-8004 registries (testnet), paid queries by carded buyers feed
+      // their reputation — the browser tier asserts it.
+      ERC8004_FEEDBACK: "true",
       RATE_LIMIT_CAPACITY: "1000",
       PUBLIC_URL: url,
     },

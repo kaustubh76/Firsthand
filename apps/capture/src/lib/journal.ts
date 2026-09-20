@@ -25,6 +25,9 @@ export interface GrantEntry {
   readonly txHash: Bytes32;
   readonly at: number;
   rescindTx?: Bytes32;
+  /** The grantee's ERC-8004 agent id, when the request carried one and the binding verified. */
+  agentId?: string;
+  agentName?: string;
 }
 
 export interface ReceiptEntry {

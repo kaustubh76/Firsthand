@@ -2,6 +2,7 @@ import type { Bytes32, PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
 import { Hex } from "../components/Tx.js";
+import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { fetchSidecar, type ListedPassport, listPassports } from "../lib/sidecars.js";
@@ -24,6 +25,8 @@ export function Verify({
   const [text, setText] = useState("");
   const [principalId, setPrincipalId] = useState<string>(principal ?? "");
   const [listing, setListing] = useState<ListedPassport[] | null>(null);
+  const [agentId, setAgentId] = useState("");
+  const [agent, setAgent] = useState<AgentInfo | null | "missing">(null);
   const [verdict, setVerdict] = useState<ManifestVerdict | null>(null);
   const [passportId, setPassportId] = useState("");
   const [sidecar, setSidecar] = useState<
@@ -86,6 +89,15 @@ export function Verify({
       if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a principal id is 32 bytes of hex");
       setListing(await listPassports(config.gatewayUrl, p));
     });
+  const lookupAgent = () =>
+    run("agent", async () => {
+      setAgent(null);
+      if (!config.gatewayUrl) throw new Error("no gateway configured");
+      if (!/^\d{1,20}$/.test(agentId.trim())) throw new Error("an ERC-8004 agent id is a number");
+      const info = await fetchAgent(config.gatewayUrl, agentId.trim());
+      setAgent(info ?? "missing");
+    });
+
   // A shared locker link lists on arrival (once per link; the button re-lists on demand).
   const [listedFor, setListedFor] = useState<string | null>(null);
   useEffect(() => {
@@ -186,6 +198,38 @@ export function Verify({
             </li>
           ))}
         </ul>
+      )}
+
+      <h2>An agent (ERC-8004)</h2>
+      <p className="hint">
+        Buyers can be ERC-8004 agents: an on-chain identity that names its FIRSTHAND card. The
+        gateway credits every paid query to the agent's reputation — what a human sees before
+        granting.
+      </p>
+      <input
+        value={agentId}
+        onChange={(e) => setAgentId(e.target.value)}
+        placeholder="agent id (e.g. 42)"
+        data-testid="agent-input"
+      />
+      <button
+        type="button"
+        onClick={lookupAgent}
+        disabled={agentId.trim() === "" || busy !== null || !config.live}
+      >
+        {busy === "agent" ? "Looking up…" : "Look up agent"}
+      </button>
+      {agent === "missing" && (
+        <p className="hint">no such agent on this chain's registry (or no registry here)</p>
+      )}
+      {agent && agent !== "missing" && (
+        <p data-testid="agent-view">
+          #{agent.agentId}
+          {agent.name ? ` “${agent.name}”` : ""} · owner <Hex value={agent.owner} n={6} /> · card{" "}
+          {agent.cardId ? <Hex value={agent.cardId} n={6} /> : "none bound"} ·{" "}
+          {agent.reputation.paidQueriesHere} paid queries credited by this gateway ·{" "}
+          {agent.reputation.firsthandFeedbackAll} FIRSTHAND feedback entries overall
+        </p>
       )}
 
       <h2>A passport</h2>

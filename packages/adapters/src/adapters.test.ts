@@ -310,7 +310,11 @@ describe("ERC-8004: agent identities and paid-query feedback", () => {
           case "getMetadata":
             return b32(5);
           case "getSummary":
-            return [3n, 3n, 0];
+            return (args[1] as unknown[]).length === 0
+              ? Promise.reject(new Error("clientAddresses required"))
+              : [3n, 3n, 0];
+          case "getClients":
+            return args[0] === 7n ? [addr(0xfe)] : [];
           default:
             throw new Error(`unexpected ${functionName}`);
         }
@@ -328,6 +332,9 @@ describe("ERC-8004: agent identities and paid-query feedback", () => {
       value: 3n,
       decimals: 0,
     });
+    // "All clients" is resolved through getClients — the registry rejects an empty list.
+    expect((await reg.summary(7n)).count).toBe(3n);
+    expect((await reg.summary(8n)).count).toBe(0n);
     // A local chain has no reference deployment; reads say so instead of calling a zero address.
     const local = new OnchainErc8004Registry({ publicClient: { chain: { id: 31337 } } as never });
     expect(local.addresses).toBeNull();

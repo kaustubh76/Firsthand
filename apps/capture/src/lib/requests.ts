@@ -12,6 +12,8 @@ export interface GrantRequest {
   readonly ns: number;
   readonly label: string;
   readonly at: number;
+  /** The requester's ERC-8004 agent id, when it has one — verified against the chain before display. */
+  readonly agentId?: string;
 }
 
 const KEY = "firsthand.requests";
@@ -25,11 +27,20 @@ export function parseGrantRequest(search: string): GrantRequest | null {
   if (!HEX32.test(card) || !HEX32.test(pub)) return null;
   if (!Number.isInteger(ns) || ns < 0 || ns > 15) return null;
   const label = (q.get("from") ?? "an agent").slice(0, 64);
-  return { card: card as Bytes32, pub: pub as Bytes32, ns, label, at: Date.now() };
+  const agent = q.get("agent");
+  return {
+    card: card as Bytes32,
+    pub: pub as Bytes32,
+    ns,
+    label,
+    at: Date.now(),
+    ...(agent && /^\d{1,20}$/.test(agent) ? { agentId: agent } : {}),
+  };
 }
 
 export function requestLink(appUrl: string, r: Omit<GrantRequest, "at">): string {
   const q = new URLSearchParams({ grant: r.card, pub: r.pub, ns: String(r.ns), from: r.label });
+  if (r.agentId) q.set("agent", r.agentId);
   return `${appUrl.replace(/\/+$/, "")}/?${q.toString()}`;
 }
 
@@ -60,7 +71,7 @@ export function absorbRequestFromUrl(): GrantRequest[] {
     save(list);
     try {
       const url = new URL(location.href);
-      for (const k of ["grant", "pub", "ns", "from"]) url.searchParams.delete(k);
+      for (const k of ["grant", "pub", "ns", "from", "agent"]) url.searchParams.delete(k);
       history.replaceState(null, "", url.toString());
     } catch {
       // not fatal

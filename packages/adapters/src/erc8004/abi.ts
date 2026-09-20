@@ -22,6 +22,7 @@ export const IdentityRegistryAbi = parseAbi([
 export const ReputationRegistryAbi = parseAbi([
   "function giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)",
   "function getSummary(uint256 agentId, address[] clientAddresses, string tag1, string tag2) view returns (uint64 count, int128 summaryValue, uint8 summaryValueDecimals)",
+  "function getClients(uint256 agentId) view returns (address[])",
   "function readAllFeedback(uint256 agentId, address[] clientAddresses, string tag1, string tag2, bool includeRevoked) view returns (address[] clients, uint64[] indexes, int128[] values, uint8[] decimals, string[] tag1s, string[] tag2s, bool[] revoked)",
   "function getIdentityRegistry() view returns (address)",
   "event NewFeedback(uint256 indexed agentId, address indexed clientAddress, uint64 feedbackIndex, int128 value, uint8 valueDecimals, string indexed indexedTag1, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)",

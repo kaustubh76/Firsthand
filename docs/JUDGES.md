@@ -18,15 +18,18 @@ Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's c
 | 2:25 **Evidence** | Evidence tab | H1 (+1.9 % on a vanilla EVM, −4.2 % on Monad — the sign flip), H2 per arm with BTX *not measurable*, H3 1.93 s Merkle-only vs 31 s full re-proof, S2, S4 — read from `experiments/results` at build. |
 | **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published. |
 
-## An external buyer, not a stand-in
+## An external buyer, not a stand-in — and an ERC-8004-carded one
 
 Locker → *Share your locker* gives a link. From an MCP-capable agent with the repo's
 `firsthand-mcp` pointed at the live gateway (no MON, no USDC — it rides the relay and the faucet):
 
-`firsthand_list_passports({ principalId })` → `firsthand_request_access({ principalId })` returns
-an **approval link**; open it in the app → *Approve with passkey* → `firsthand_query` pays and opens
-the plaintext → `firsthand_export_manifest` returns the verified compliance file. Recipe in
-[`apps/mcp/README.md`](../apps/mcp/README.md).
+`firsthand_register_agent` (once, the agent's own gas) → `firsthand_list_passports({ principalId })`
+→ `firsthand_request_access({ principalId })` returns an **approval link**; open it in the app →
+the Locker shows *ERC-8004 agent #N · binding verified ✓* → *Approve with passkey* →
+`firsthand_query` pays and opens the plaintext → the gateway credits the query to the agent on the
+ERC-8004 Reputation Registry (`firsthand_agent_reputation`) → `firsthand_export_manifest` returns
+the verified compliance file. Recipe in [`apps/mcp/README.md`](../apps/mcp/README.md); the same
+flow as a script in [`integrations/buyer-agent`](../integrations/buyer-agent/README.md).
 
 ## What cannot be shown, and why
 

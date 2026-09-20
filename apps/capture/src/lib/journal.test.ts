@@ -78,6 +78,15 @@ describe("grant requests", () => {
     expect(parseGrantRequest("?grant=0x12&pub=0x34")).toBeNull();
     expect(parseGrantRequest(`?grant=${card}&pub=${pub}&ns=99`)).toBeNull();
     expect(parseGrantRequest("")).toBeNull();
+    const carded = requestLink("https://app.example", {
+      card,
+      pub,
+      ns: 0,
+      label: "x",
+      agentId: "42",
+    });
+    expect(parseGrantRequest(new URL(carded).search)?.agentId).toBe("42");
+    expect(parseGrantRequest(`?grant=${card}&pub=${pub}&agent=abc`)?.agentId).toBeUndefined();
     const principal = `0x${"77".repeat(32)}` as const;
     expect(parsePrincipalLink(new URL(lockerLink("https://app.example", principal)).search)).toBe(
       principal,
@@ -163,5 +172,24 @@ describe("ledger merge", () => {
       ["rescinded", "local", null],
     ]);
     expect(rows.filter((r) => r.txHash === tx(1))).toHaveLength(1);
+  });
+});
+
+describe("agent binding", () => {
+  it("holds only when the agent names the card and owns it", async () => {
+    const { bindingHolds } = await import("./agents.js");
+    const card = `0x${"ca".repeat(32)}` as const;
+    const info = {
+      agentId: "7",
+      owner: "0xabc",
+      cardId: card,
+      name: "Outside agent",
+      reputation: { paidQueriesHere: "0", firsthandFeedbackAll: "0" },
+      registries: null,
+    };
+    expect(bindingHolds(info, card, "0xABC")).toBe(true);
+    expect(bindingHolds(info, card, "0xdef")).toBe(false);
+    expect(bindingHolds({ ...info, cardId: `0x${"cb".repeat(32)}` }, card, "0xabc")).toBe(false);
+    expect(bindingHolds(null, card, "0xabc")).toBe(false);
   });
 });

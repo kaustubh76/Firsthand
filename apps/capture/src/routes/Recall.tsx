@@ -156,7 +156,8 @@ export function Recall({
       say(
         "buyer",
         <>
-          buyer <Hex value={agent.address} n={6} /> · card <Hex value={agent.cardId} n={6} />
+          buyer <Hex value={agent.address} n={6} /> · card <Hex value={agent.cardId} n={6} /> · no
+          ERC-8004 identity (a demo agent holds no gas; a real one registers with its own key)
         </>,
       );
       const balance = await usdcBalance(publicClient, usdc, agent.address);

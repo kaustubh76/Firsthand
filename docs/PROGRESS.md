@@ -352,3 +352,36 @@ Monad testnet and the live links.
 - **The judge's path.** `docs/JUDGES.md` is Readme §19 beat by beat against the live app, with the
   two beats that cannot be shown and why; the README carries a status block pointing at the app,
   the evidence and the guides — the spec itself is unchanged.
+
+### Update — the ERC-8004 integration, for real (20 Sep 2026, later)
+
+Readme §5/§24 claim "buyer agents are ERC-8004-carded" and "receipts feed its reputation surface".
+The reference ERC-8004 v1 registries are live on Monad testnet at the CREATE2 addresses; today the
+claim is code:
+
+- `@firsthand/adapters`: `OnchainErc8004Registry` reads an agent (owner, `data:` registration,
+  the `firsthand.card` metadata), **verifies the card binding** (metadata names the card *and* the
+  agent's owner is the card's owner), sums reputation; the writer registers agents and gives
+  feedback. Both writes are `msg.sender`-authorised — an agent spends one transaction of its own gas
+  (~0.07 MON), the venue gives feedback as itself. Memory double for tests.
+- Gateway: `discovery.erc8004`, `GET /v1/agents/:id`, and — hosted default on — one unit of
+  `firsthand/paid-query` feedback after every settled query from a buyer that passes `?agent=` and
+  provably owns the grant's card. Off the response path; never blocks a query.
+- MCP: `firsthand_register_agent`, `firsthand_agent_reputation`, `BUYER_AGENT_ID`; request links and
+  queries carry the agent.
+- App: the Locker's request card shows *ERC-8004 agent #N “name” · owner · binding verified ✓ · N
+  paid queries credited here* — or *no identity — an unverified card*; grants remember the agent;
+  the Verify tab looks agents up. The in-browser demo agent stays uncarded and says why.
+- `integrations/buyer-agent`: the partner template — discover → list → card/terms → (ERC-8004)
+  → approval link → poll the deterministic grant id → pay → compliance file → reputation — is the
+  library the browser tier's outside buyer runs, so template and proof are one code path.
+
+Proven on Monad testnet by the browser tier: agent #1903 registered with its card bound, the human
+saw *binding verified*, the buyer found its grant on chain by itself, paid, and the Reputation
+Registry shows one `paid-query` from the gateway's relayer (`getSummary` count 1). Locally (anvil,
+no registries) the section reports that and runs uncarded.
+
+Two operational notes from the run: Monad executes asynchronously, so a just-funded key must wait
+for its balance to show before spending (`awaitBalance`); and the deployer key that relays for
+local testnet runs had drained to 0.02 MON — refilled 1 MON from the hosted float, both need the
+faucet again before the judging window.

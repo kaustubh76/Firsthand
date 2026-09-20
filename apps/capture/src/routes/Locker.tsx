@@ -13,12 +13,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Hex, Tx } from "../components/Tx.js";
 import { activate as activateLocker, reattest as reattestLocker } from "../lib/activation.js";
 import { formatUsdc } from "../lib/agent.js";
+import { type AgentInfo, bindingHolds, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
 import { fetchReceipts, fetchTimeline } from "../lib/ledger.js";
 import { mergeLedger } from "../lib/ledgerMerge.js";
-import { describeLiveness, type Liveness } from "../lib/liveness.js";
+import { describeLiveness, type Liveness, readerFor } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { dismissRequest, type GrantRequest, lockerLink } from "../lib/requests.js";
 import { fetchSidecar } from "../lib/sidecars.js";
@@ -61,6 +62,30 @@ export function LockerView({
   } | null>(null);
   const batches = session.batcher.flushed();
   const waitForTx = client.waitForTx;
+  // Who is asking: the requester's ERC-8004 identity, checked against the card in the link.
+  const [agents, setAgents] = useState<
+    Record<string, { info: AgentInfo | null; verified: boolean; owner: string | null }>
+  >({});
+  useEffect(() => {
+    if (!config.live || !config.gatewayUrl || !client.publicClient) return;
+    for (const r of requests) {
+      if (!r.agentId || agents[`${r.card}:${r.agentId}`]) continue;
+      const key = `${r.card}:${r.agentId}`;
+      void (async () => {
+        const [info, card] = await Promise.all([
+          fetchAgent(config.gatewayUrl as string, r.agentId as string),
+          readerFor(config, client.publicClient as NonNullable<typeof client.publicClient>)
+            .cardOf(r.card)
+            .catch(() => null),
+        ]);
+        const owner = card?.owner ?? null;
+        setAgents((a) => ({
+          ...a,
+          [key]: { info, verified: bindingHolds(info, r.card, owner), owner },
+        }));
+      })();
+    }
+  }, [requests, config, client.publicClient, agents]);
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -122,6 +147,7 @@ export function LockerView({
       });
       await waitForTx?.(sent.txHash);
       await publishWrap({ gatewayUrl: config.gatewayUrl }, plan.grantId, plan.wrap);
+      const known = r.agentId ? agents[`${r.card}:${r.agentId}`] : undefined;
       mutate((j) =>
         j.grants.unshift({
           grantId: plan.grantId,
@@ -130,6 +156,9 @@ export function LockerView({
           termsHash,
           txHash: sent.txHash,
           at: Date.now(),
+          ...(known?.verified && r.agentId
+            ? { agentId: r.agentId, ...(known.info?.name ? { agentName: known.info.name } : {}) }
+            : {}),
         }),
       );
       onRequests(dismissRequest(r.card, r.ns));
@@ -334,27 +363,42 @@ export function LockerView({
             card, the gateway gets only the wrap.
           </p>
           <ul data-testid="requests">
-            {requests.map((r) => (
-              <li key={`${r.card}-${r.ns}`}>
-                <strong>{r.label}</strong> asks for namespace {r.ns} · card{" "}
-                <Hex value={r.card} n={6} />{" "}
-                <button
-                  type="button"
-                  className="inline"
-                  disabled={!config.live || busy !== null || liveness.kind !== "live"}
-                  onClick={() => approve(r)}
-                >
-                  {busy === `approve:${r.card}` ? "Granting…" : "Approve with passkey"}
-                </button>{" "}
-                <button
-                  type="button"
-                  className="inline"
-                  onClick={() => onRequests(dismissRequest(r.card, r.ns))}
-                >
-                  dismiss
-                </button>
-              </li>
-            ))}
+            {requests.map((r) => {
+              const known = r.agentId ? agents[`${r.card}:${r.agentId}`] : undefined;
+              return (
+                <li key={`${r.card}-${r.ns}`}>
+                  <strong>{r.label}</strong> asks for namespace {r.ns} · card{" "}
+                  <Hex value={r.card} n={6} />
+                  <br />
+                  <span className="hint" data-testid="agent-identity">
+                    {!r.agentId
+                      ? "no ERC-8004 identity — an unverified card"
+                      : !known
+                        ? `ERC-8004 agent #${r.agentId} — checking…`
+                        : !known.info
+                          ? `ERC-8004 agent #${r.agentId} — not found in the registry`
+                          : known.verified
+                            ? `ERC-8004 agent #${r.agentId}${known.info.name ? ` “${known.info.name}”` : ""} · owner ${known.info.owner.slice(0, 10)}… · binding verified ✓ · ${known.info.reputation.paidQueriesHere} paid quer${known.info.reputation.paidQueriesHere === "1" ? "y" : "ies"} credited here`
+                            : `ERC-8004 agent #${r.agentId} — binding does NOT match this card ✗`}
+                  </span>{" "}
+                  <button
+                    type="button"
+                    className="inline"
+                    disabled={!config.live || busy !== null || liveness.kind !== "live"}
+                    onClick={() => approve(r)}
+                  >
+                    {busy === `approve:${r.card}` ? "Granting…" : "Approve with passkey"}
+                  </button>{" "}
+                  <button
+                    type="button"
+                    className="inline"
+                    onClick={() => onRequests(dismissRequest(r.card, r.ns))}
+                  >
+                    dismiss
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

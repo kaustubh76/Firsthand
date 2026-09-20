@@ -1,22 +1,24 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { extname, join, normalize } from "node:path";
-import {
-  anvil,
-  createChainClients,
-  HttpRelayTransport,
-  monadTestnet,
-  OnchainAnchorWriter,
-} from "@firsthand/adapters/client";
-import { type Address, type Bytes32, parseSidecar } from "@firsthand/core";
-import {
-  BuyerSession,
-  createBuyerKeys,
-  manifestFromQueries,
-  verifyManifest,
-} from "@firsthand/sdk/browser";
+import { anvil, createChainClients, monadTestnet } from "@firsthand/adapters/client";
+import type { Address, Bytes32 } from "@firsthand/core";
 import { chromium } from "playwright";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey } from "viem/accounts";
+import {
+  approvalLink,
+  awaitBalance,
+  awaitGrant,
+  buy,
+  complianceFile,
+  discover,
+  fetchSidecar,
+  listPassports,
+  openBuyer,
+  prepare,
+  registerAgent,
+  reputation,
+} from "../../../integrations/buyer-agent/src/lib.js";
 import { repoRoot, resolveEnv, startGateway } from "../../demo/src/env.js";
 
 /**
@@ -72,18 +74,18 @@ async function main() {
   let gatewayUrl: string;
 
   step("environment");
+  // .env (git-ignored) supplies the testnet keys: the relayer that also funds the e2e's outside buyer
+  // for its one ERC-8004 transaction. Absent locally, nothing depends on it.
+  try {
+    process.loadEnvFile(join(root, ".env"));
+  } catch {
+    // no .env
+  }
   if (hostedGateway) {
     gatewayUrl = hostedGateway.replace(/\/+$/, "");
     ok(`gateway: ${gatewayUrl} (hosted)`);
   } else {
     const testnet = process.env["E2E_TESTNET"] === "1";
-    if (testnet) {
-      try {
-        process.loadEnvFile(join(root, ".env"));
-      } catch {
-        // no .env: resolveEnv reports which keys are missing
-      }
-    }
     const env = await resolveEnv(testnet ? ["--testnet"] : []);
     if (env.cleanup) cleanups.push(env.cleanup);
     const d = JSON.parse(readFileSync(env.deploymentsFile, "utf8")) as { chainId: number };
@@ -301,7 +303,7 @@ async function main() {
     await verdictBox.filter({ hasText: /FAILS|MERKLE_INVALID/ }).waitFor({ timeout: 60_000 });
     ok("a tampered proof FAILS");
     await page.getByTestId("passport-input").fill(passportId);
-    await page.getByRole("button", { name: "Look up" }).click();
+    await page.getByRole("button", { name: "Look up", exact: true }).click();
     await page
       .getByTestId("passport-view")
       .getByText(/anchored at block/)
@@ -321,106 +323,159 @@ async function main() {
     ok(`H1 paged vs baseline: ${deltas.join(" · ")} · BTX marked not measurable · S4 shown`);
 
     step("external demand: a buyer outside the browser asks, the human approves, the buyer pays");
+    // The same functions the partner template (integrations/buyer-agent) ships — one code path.
     await page.getByRole("button", { name: "locker" }).click();
     await page.getByTestId("locker-link").waitFor({ timeout: 10_000 });
-    const chain = disco.chainId === "31337" ? anvil : monadTestnet;
-    const chainId = BigInt(disco.chainId as string);
-    const anchorsAddress = disco.contracts["PassportAnchors"] as Address;
-    const domain = { chainId, verifyingContract: anchorsAddress };
-    const reader = createChainClients({ rpcUrl: disco.rpcUrl as string, chain });
-    const relay = new HttpRelayTransport({ baseUrl: gatewayUrl });
-    const key = generatePrivateKey();
-    const account = privateKeyToAccount(key);
-    const outsider = new BuyerSession({
-      keys: createBuyerKeys(
-        Uint8Array.from(key.slice(2).match(/.{2}/g) ?? [], (b) => Number.parseInt(b, 16)),
-        account,
-        crypto.getRandomValues(new Uint8Array(32)),
-      ),
-      grantManager: disco.contracts["GrantManager"] as Address,
-      chainId,
-      transport: relay,
-    });
-    const wait = (hash: Bytes32) => reader.publicClient.waitForTransactionReceipt({ hash });
-    // The same handshake firsthand_request_access performs — starting from the *locker link*, not a
-    // passport id: list what the principal published, pick the note, then sidecar → card → terms.
-    const principalIdOnPage = (await page.getByTestId("locker-link").textContent()) ?? "";
-    const sharedPrincipal = /principal=(0x[0-9a-f]{64})/.exec(principalIdOnPage)?.[1] as Bytes32;
-    if (!sharedPrincipal) throw new Error(`no locker link on the page: ${principalIdOnPage}`);
-    const catalogue = (await (
-      await fetch(`${gatewayUrl}/v1/principals/${sharedPrincipal}/passports`)
-    ).json()) as { passports: { passportId: Bytes32; ns: number; price: string }[] };
-    if (!catalogue.passports.some((p) => p.passportId === passportId)) {
+    const lockerLinkText = (await page.getByTestId("locker-link").textContent()) ?? "";
+    const sharedPrincipal = /principal=(0x[0-9a-f]{64})/.exec(lockerLinkText)?.[1] as Bytes32;
+    if (!sharedPrincipal) throw new Error(`no locker link on the page: ${lockerLinkText}`);
+    const fullDisco = await discover(gatewayUrl);
+    const catalogue = await listPassports(gatewayUrl, sharedPrincipal);
+    if (!catalogue.some((p) => p.passportId === passportId)) {
       throw new Error(
         `the principal's listing does not include the note: ${JSON.stringify(catalogue)}`,
       );
     }
+    ok(`locker link lists ${catalogue.length} passports for the principal (note included)`);
+    const outsiderKey = generatePrivateKey();
+    const outsider = openBuyer(
+      gatewayUrl,
+      fullDisco,
+      outsiderKey,
+      crypto.getRandomValues(new Uint8Array(32)),
+    );
+    const sidecar = await fetchSidecar(gatewayUrl, passportId);
+    const prep = await prepare(outsider, fullDisco, sidecar);
     ok(
-      `locker link lists ${catalogue.passports.length} passports for the principal (note included)`,
+      `card ${prep.registerCardTx.slice(0, 12)}… · terms accepted${prep.fundedTx ? " · funded from the faucet double" : ""}`,
     );
-    const sidecar = parseSidecar(
-      await (await fetch(`${gatewayUrl}/v1/passports/${passportId}`)).json(),
-    );
-    await wait((await outsider.registerCard()).txHash);
-    const accept = outsider.acceptTerms(sidecar.principalId, sidecar.terms);
-    await wait((await accept.send()).txHash);
-    // It has no USDC yet: fund it through the same faucet mint the demo agent used.
-    const { encodeFunctionData, parseAbi } = await import("viem");
-    const usdc = disco.x402.asset;
-    const minted = await relay.send({
-      to: usdc,
-      data: encodeFunctionData({
-        abi: parseAbi(["function mint(address to, uint256 value)"]),
-        functionName: "mint",
-        args: [account.address, 100_000n],
-      }),
-    });
-    await wait(minted.hash as Bytes32);
-    const link = `${appUrl}/?grant=${outsider.cardId}&pub=${outsider.encryptionPubKey}&ns=${sidecar.ns}&from=${encodeURIComponent("Outside agent (e2e)")}&gateway=${encodeURIComponent(gatewayUrl)}`;
+
+    // ERC-8004: where the chain has the reference registries, the buyer registers an identity bound
+    // to its card. That one transaction is its own (msg.sender), so the test harness gives the
+    // throwaway key a little MON from the relayer key in .env — a real agent brings its own.
+    let outsiderAgent: bigint | undefined;
+    if (fullDisco.erc8004) {
+      // Fund from the key the gateway under test is NOT relaying with, or the two race on nonces:
+      // the spawned testnet gateway relays with RELAYER_PRIVATE_KEY, the hosted one with the
+      // dedicated hosted relayer. Whatever the outsider does not spend is swept back afterwards.
+      const funderKey = (
+        hostedGateway
+          ? process.env["RELAYER_PRIVATE_KEY"]
+          : process.env["HOSTED_RELAYER_PRIVATE_KEY"]
+      ) as `0x${string}` | undefined;
+      if (!funderKey) {
+        ok(
+          "ERC-8004 registries present but no funding key in the environment for the outsider — skipping registration",
+        );
+      } else {
+        const funder = createChainClients({
+          rpcUrl: fullDisco.rpcUrl as string,
+          chain: fullDisco.chainId === "31337" ? anvil : monadTestnet,
+          privateKey: funderKey,
+        });
+        if (!funder.walletClient) throw new Error("funder wallet");
+        // Registration stores the data: URI on chain: ~680k gas, ≈0.07 MON at 102 gwei (viem's
+        // fee cap asks for ~0.13 MON up front).
+        const gas = await funder.walletClient.sendTransaction({
+          to: outsider.address,
+          value: 150_000_000_000_000_000n, // 0.15 MON
+        });
+        await outsider.wait(gas as Bytes32);
+        await awaitBalance(outsider, 150_000_000_000_000_000n);
+        const reg = await registerAgent(
+          outsider,
+          fullDisco,
+          gatewayUrl,
+          "Outside agent (e2e)",
+          "browser-tier buyer",
+        );
+        outsiderAgent = reg.agentId;
+        ok(`ERC-8004 agent #${outsiderAgent} registered, card bound — ${reg.txHash.slice(0, 12)}…`);
+        cleanups.push(async () => {
+          // Sweep the throwaway key's remainder back to the funder (leave gas for the sweep itself).
+          const wallet = outsider.reader.walletClient;
+          if (!wallet) return;
+          const balance = await outsider.reader.publicClient.getBalance({
+            address: outsider.address,
+          });
+          const gasPrice = await outsider.reader.publicClient.getGasPrice();
+          const fee = gasPrice * 21_000n * 2n;
+          if (balance > fee) {
+            await wallet.sendTransaction({
+              to: funder.walletClient?.account.address as Address,
+              value: balance - fee,
+              gas: 21_000n,
+              maxFeePerGas: gasPrice * 2n,
+              maxPriorityFeePerGas: gasPrice,
+            });
+          }
+        });
+      }
+    } else {
+      ok("no ERC-8004 registries on this chain (local anvil) — the buyer stays an unverified card");
+    }
+
+    const link = `${approvalLink(appUrl, outsider, sidecar.ns, "Outside agent (e2e)", outsiderAgent)}&gateway=${encodeURIComponent(gatewayUrl)}`;
     ok(`approval link built (card ${outsider.cardId.slice(0, 10)}…)`);
     await page.goto(link);
     await page.getByRole("button", { name: "Tap passkey" }).click();
     const requests = page.getByTestId("requests");
     await requests.getByText("Outside agent (e2e)").waitFor({ timeout: 20_000 });
+    const identity = requests.getByTestId("agent-identity");
+    if (outsiderAgent !== undefined) {
+      await identity.filter({ hasText: /binding verified/ }).waitFor({ timeout: 60_000 });
+      ok(`the human sees: ${((await identity.textContent()) ?? "").slice(0, 120)}`);
+    } else {
+      await identity.filter({ hasText: /no ERC-8004 identity/ }).waitFor({ timeout: 10_000 });
+      ok("the human sees: no ERC-8004 identity — an unverified card");
+    }
     await requests.getByRole("button", { name: "Approve with passkey" }).click();
     const grantsList = page.getByTestId("grants");
     await grantsList
       .locator("li")
       .filter({ hasText: outsider.cardId.slice(2, 8) })
       .waitFor({ timeout: 120_000 });
-    const grantRow = grantsList
-      .locator("li")
-      .filter({ hasText: outsider.cardId.slice(2, 8) })
-      .first();
-    const outsiderGrant = (await grantRow.locator("code").first().getAttribute("title")) as Bytes32;
-    ok(`human approved — grant ${outsiderGrant.slice(0, 12)}…`);
-    const served = await outsider.queryAndOpen(
-      { gatewayUrl, grantId: outsiderGrant, passportId },
-      domain,
+    // The buyer does not need the page: the grant id is deterministic and the chain says when it is live.
+    const outsiderGrant = await awaitGrant(
+      outsider,
+      fullDisco,
+      sidecar.principalId,
+      sidecar.ns,
+      60_000,
+    );
+    ok(
+      `human approved — grant ${outsiderGrant.slice(0, 12)}… (found on chain by the buyer itself)`,
+    );
+    const served = await buy(
+      outsider,
+      gatewayUrl,
+      fullDisco,
+      outsiderGrant,
+      passportId,
+      outsiderAgent,
     );
     const opened = new TextDecoder().decode(served.plaintext);
     if (!opened.includes("hallway light")) throw new Error(`outsider opened: ${opened}`);
     ok(`outsider paid and opened: “${opened}”`);
-    const anchorsReader = new OnchainAnchorWriter({
-      address: anchorsAddress,
-      layout: "baseline",
-      publicClient: reader.publicClient,
-    });
-    const buyersFile = await manifestFromQueries({
-      domain,
-      results: [served.result],
-      anchors: anchorsReader,
-      payer: account.address.toLowerCase() as Address,
-      finalityDepth: 0,
-    });
-    const buyersVerdict = await verifyManifest(buyersFile, {
-      anchors: anchorsReader,
-      headBlock: await reader.publicClient.getBlockNumber({ cacheTime: 0 }),
-    });
+    const { verdict: buyersVerdict } = await complianceFile(outsider, fullDisco, [served.result]);
     if (!buyersVerdict.ok) throw new Error("the outsider's manifest does not verify");
     ok(
       `outsider's compliance file verifies (${buyersVerdict.assets.length} asset, receipt ${served.result.receipt.receiptId.slice(0, 10)}…)`,
     );
+    if (outsiderAgent !== undefined) {
+      // The venue's feedback lands a block or two after the response.
+      let rep = await reputation(gatewayUrl, outsiderAgent);
+      const until = Date.now() + 60_000;
+      while ((rep?.paidQueriesHere ?? "0") === "0" && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 3_000));
+        rep = await reputation(gatewayUrl, outsiderAgent);
+      }
+      if ((rep?.paidQueriesHere ?? "0") === "0")
+        throw new Error("no paid-query feedback credited to the agent");
+      ok(
+        `reputation: agent #${outsiderAgent} has ${rep?.paidQueriesHere} paid query credited by this gateway`,
+      );
+    }
 
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");
     const phone = await browser.newContext({
@@ -469,7 +524,14 @@ async function main() {
     console.log(`\n✔ browser proof passed — screenshot ${join(out, "final.png")}`);
   } catch (error) {
     await page.screenshot({ path: join(out, "failure.png"), fullPage: true }).catch(() => {});
-    console.error(`\n✘ ${(error as Error).message}`);
+    const err = error as Error & {
+      shortMessage?: string;
+      details?: string;
+      metaMessages?: string[];
+    };
+    console.error(`\n✘ ${err.shortMessage ?? err.message}`);
+    if (err.details) console.error(`  details: ${err.details}`);
+    if (err.metaMessages) console.error(`  ${err.metaMessages.join("\n  ").slice(0, 600)}`);
     if (pageErrors.length > 0) console.error(`page errors:\n  ${pageErrors.join("\n  ")}`);
     console.error(`screenshot: ${join(out, "failure.png")}`);
     process.exitCode = 1;

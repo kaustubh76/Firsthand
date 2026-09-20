@@ -22,6 +22,18 @@ Parameters: `genesis = 1789257600` (Mon 2026-09-14 00:00 UTC), `epochLength = 60
 `revealWindowBlocks = 1512000` (~1 epoch at 0.4 s), `anchorsLayout = "baseline"`.
 First deploy tx: `0x41985bd7d388d1f700d3453f6064c533c01d06b3eb877b8b9d9cc7b1c2ae026e` (PrincipalRegistry).
 
+## External registries used (not deployed by us)
+
+| Registry | Address (Monad testnet, CREATE2 — same on every testnet) |
+|---|---|
+| ERC-8004 IdentityRegistry (v2.0.0) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| ERC-8004 ReputationRegistry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+
+Buyer agents register there with their FIRSTHAND card bound in metadata (`firsthand.card`); the
+gateway's relayer gives `firsthand/paid-query` feedback per settled query. Verified 2026-09-20:
+agent #1903 registered by the browser tier, one paid query credited (`getSummary` count 1, client =
+the relayer).
+
 ## Accounts
 
 | Role | Address | Funding |

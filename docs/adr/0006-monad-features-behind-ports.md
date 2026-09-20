@@ -18,7 +18,7 @@ in-memory double; experiment arms (README §15) are adapter selections, never co
 | MIP-8 anchors | `AnchorWriter` | `OnchainAnchorWriter(layout: paged)` | `layout: baseline` | `MemoryAnchorWriter` |
 | P-256 precompile | `P256.sol` | RIP-7212 at `0x100` | — (etched daimo verifier in tests) | `P256Double` |
 | x402 | `X402Facilitator` | `MonadFacilitatorClient` | — | `MemoryFacilitator` |
-| ERC-8004 | `Erc8004Registry` | `OnchainErc8004Registry` (shell) | ECIES over card key if no X25519 field | `MemoryErc8004Registry` |
+| ERC-8004 | `Erc8004Registry` / `Erc8004Writer` | `OnchainErc8004Registry` — **live against the reference registries on Monad testnet (2026-09-20)**: agent view, card binding, registration, paid-query feedback | the card carries the X25519 key (decision #12 resolved: agents bind a card in metadata; no ECIES fallback needed) | `MemoryErc8004Registry` |
 | Envio | `ConsentLedger` | `EnvioConsentLedger` (shell) | `LogsConsentLedger` (ADR-0013) | `MemoryConsentLedger` |
 
 - `BtxTransport.send` fails with `FH_BTX_UNAVAILABLE` until the node knows the method (probe-gated;

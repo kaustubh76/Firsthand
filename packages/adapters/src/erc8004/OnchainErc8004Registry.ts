@@ -119,11 +119,23 @@ export class OnchainErc8004Registry implements Erc8004Registry, Erc8004Writer {
     tag2 = "",
   ): Promise<ReputationSummary> {
     const a = this.#need();
+    // The registry refuses an empty client list ("clientAddresses required"): "everyone" means
+    // every client that has ever given this agent feedback, which it also tells us.
+    let who: readonly Address[] = clients;
+    if (who.length === 0) {
+      who = (await this.#o.publicClient.readContract({
+        address: a.reputationRegistry,
+        abi: ReputationRegistryAbi,
+        functionName: "getClients",
+        args: [agentId],
+      })) as readonly Address[];
+      if (who.length === 0) return { count: 0n, value: 0n, decimals: 0 };
+    }
     const [count, value, decimals] = await this.#o.publicClient.readContract({
       address: a.reputationRegistry,
       abi: ReputationRegistryAbi,
       functionName: "getSummary",
-      args: [agentId, [...clients], tag1, tag2],
+      args: [agentId, [...who], tag1, tag2],
     });
     return { count: BigInt(count), value: BigInt(value), decimals: Number(decimals) };
   }

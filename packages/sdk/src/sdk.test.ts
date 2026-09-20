@@ -461,11 +461,34 @@ describe("verify() and the Lineage Manifest", () => {
       anchors,
       now: () => 7n,
     });
-    expect(serialiseManifest(fromSidecars)).toBe(serialiseManifest(fromBatches));
+    // The sidecar path carries the attestation preimage per asset (the batch path has none: a
+    // batch keeps signed passports only); everything else is byte-identical.
+    for (const asset of fromSidecars.assets) expect(asset.attestation).toEqual(attestation);
+    expect(
+      serialiseManifest({
+        ...fromSidecars,
+        assets: fromSidecars.assets.map(({ attestation: _a, ...rest }) => rest),
+      }),
+    ).toBe(serialiseManifest(fromBatches));
     anchors.mineBlocks(3);
     expect((await verifyManifest(fromSidecars, { anchors, headBlock: anchors.head })).ok).toBe(
       true,
     );
+    // A relabelled class is caught by the verifier: the preimage must hash to `passport.attest`.
+    const relabelled = {
+      ...fromSidecars,
+      assets: fromSidecars.assets.map((a, i) =>
+        i === 0 && a.attestation
+          ? { ...a, attestation: { ...a.attestation, class: AttestationClass.DEVICE_CAPTURE } }
+          : a,
+      ),
+    };
+    const verdictRelabelled = await verifyManifest(relabelled, {
+      anchors,
+      headBlock: anchors.head,
+    });
+    expect(verdictRelabelled.ok).toBe(false);
+    expect(verdictRelabelled.assets[0]?.reason).toBe("ATTESTATION_MISMATCH");
     // A sidecar from another namespace or an unanchored root is refused, not silently included.
     await expect(
       manifestFromSidecars({

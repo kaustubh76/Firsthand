@@ -56,6 +56,14 @@ export async function manifestFromSidecars(input: SidecarManifestInput): Promise
       batchRoot: sidecar.batchRoot,
       proof: { index: sidecar.proof.index, siblings: [...sidecar.proof.siblings] },
       anchorBlock: block.toString(),
+      ...(sidecar.attestation
+        ? {
+            attestation: {
+              ...sidecar.attestation,
+              capturedAt: sidecar.attestation.capturedAt.toString(),
+            },
+          }
+        : {}),
       ...(receipt
         ? {
             receipt: {

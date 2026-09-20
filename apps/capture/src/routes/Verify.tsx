@@ -6,7 +6,13 @@ import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { explainFailure } from "../lib/failures.js";
 import type { CaptureClient } from "../lib/locker.js";
-import { fetchSidecar, type ListedPassport, listPassports } from "../lib/sidecars.js";
+import {
+  className,
+  describeFreshness,
+  listing as fetchListing,
+  fetchSidecar,
+  type Listing,
+} from "../lib/sidecars.js";
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
@@ -25,7 +31,7 @@ export function Verify({
 }) {
   const [text, setText] = useState("");
   const [principalId, setPrincipalId] = useState<string>(principal ?? "");
-  const [listing, setListing] = useState<ListedPassport[] | null>(null);
+  const [listing, setListing] = useState<Listing | null>(null);
   const [agentId, setAgentId] = useState("");
   const [agent, setAgent] = useState<AgentInfo | null | "missing">(null);
   const [verdict, setVerdict] = useState<ManifestVerdict | null>(null);
@@ -88,7 +94,7 @@ export function Verify({
       if (!config.gatewayUrl) throw new Error("no gateway configured");
       const p = id.trim().toLowerCase() as Bytes32;
       if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a principal id is 32 bytes of hex");
-      setListing(await listPassports(config.gatewayUrl, p));
+      setListing(await fetchListing(config.gatewayUrl, p));
     });
   const lookupAgent = () =>
     run("agent", async () => {
@@ -181,11 +187,19 @@ export function Verify({
       </button>
       {listing && (
         <ul data-testid="principal-listing">
-          {listing.length === 0 && <li className="hint">nothing published on this gateway</li>}
-          {listing.map((p) => (
+          {listing.passports.length === 0 && (
+            <li className="hint">nothing published on this gateway</li>
+          )}
+          {Object.entries(listing.freshness).map(([ns, f]) => (
+            <li key={`fresh-${ns}`} className="hint" data-testid="freshness">
+              ns {ns}: {describeFreshness(f, Math.floor(Date.now() / 1000))} — a market signal from
+              the newest anchor's block time (README §7.3), not a protocol rule
+            </li>
+          ))}
+          {listing.passports.map((p) => (
             <li key={p.passportId}>
-              <Hex value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} · {p.price}{" "}
-              units/query{" "}
+              <Hex value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} ·{" "}
+              <span data-testid="class">{className(p.class)}</span> · {p.price} units/query{" "}
               <button
                 type="button"
                 className="inline"

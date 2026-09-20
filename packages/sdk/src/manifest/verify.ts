@@ -1,6 +1,7 @@
 import type { AnchorWriter } from "@firsthand/adapters";
 import {
   type Bytes32,
+  hashAttestation,
   type LineageManifest,
   LineageManifestSchema,
   MERKLE_DEPTH,
@@ -14,7 +15,12 @@ import { serialiseManifest } from "./export.js";
  * Offline verifier for a Lineage Manifest (H3). For every asset: signature, Merkle proof, anchored
  * root, and finality depth. Reports per-asset reasons rather than failing on the first.
  */
-export type AssetFailure = "SIG_INVALID" | "MERKLE_INVALID" | "ROOT_UNKNOWN" | "NOT_FINAL";
+export type AssetFailure =
+  | "SIG_INVALID"
+  | "MERKLE_INVALID"
+  | "ROOT_UNKNOWN"
+  | "NOT_FINAL"
+  | "ATTESTATION_MISMATCH";
 
 export interface AssetVerdict {
   readonly passportId: Bytes32;
@@ -97,6 +103,12 @@ export async function verifyManifest(
         fail("SIG_INVALID");
         continue;
       }
+    }
+    // A carried attestation preimage must be the one the passport committed to — otherwise the
+    // "device capture" a buyer filtered on is a label, not a fact.
+    if (asset.attestation && hashAttestation(asset.attestation) !== asset.signed.passport.attest) {
+      fail("ATTESTATION_MISMATCH");
+      continue;
     }
     // Same order as core's verifyPredicate: signature → root known → Merkle → liveness/finality.
     let root = rootCache.get(asset.batchRoot);

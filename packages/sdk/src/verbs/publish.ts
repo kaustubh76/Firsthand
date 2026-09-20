@@ -40,6 +40,7 @@ export function sidecarFor(
     batchRoot: found.batch.root,
     proof: found.proof,
     terms,
+    ...(result.attestation ? { attestation: result.attestation } : {}),
     blobRef: result.blob.id,
     wrappedDekRef: result.wrappedDek.id,
   };
@@ -65,6 +66,7 @@ export function sidecarsForBatch(
       batchRoot: batch.root,
       proof,
       terms,
+      ...(r.attestation ? { attestation: r.attestation } : {}),
       blobRef: r.blob.id,
       wrappedDekRef: r.wrappedDek.id,
     };

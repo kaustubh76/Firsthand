@@ -100,6 +100,9 @@ export const GatewayConfigSchema = z.object({
     .positive()
     .default(8 * 1024 * 1024),
 
+  /** Half-life (s) of the freshness signal (README §7.3); defaults to one epoch. */
+  FRESHNESS_HALF_LIFE_S: z.coerce.bigint().positive().optional(),
+
   RATE_LIMIT_CAPACITY: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_REFILL_PER_SECOND: z.coerce.number().nonnegative().default(1),
 });

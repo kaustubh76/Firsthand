@@ -11,9 +11,13 @@ import type {
 } from "@firsthand/adapters";
 import { FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "@firsthand/adapters";
 import {
+  type AttestationClass,
   type Bytes32,
   type Eip712Domain,
+  type Freshness,
+  freshnessOf,
   GrantError,
+  hashAttestation,
   hashTerms,
   NotFoundError,
   type PassportSidecar,
@@ -41,6 +45,14 @@ export interface ServingDeps {
   readonly settlement: Settlement;
   readonly domain: Eip712Domain;
   readonly logger: Logger;
+  /**
+   * Block timestamp lookup for the freshness signal (README §7.3): the newest anchor's block in a
+   * namespace dates its last deposit. Absent on gateways without a chain (memory mode).
+   */
+  readonly blockTime?: (blockNumber: bigint) => Promise<bigint | null>;
+  /** Half-life for the staleness curve, seconds; defaults to one epoch. */
+  readonly halfLifeSeconds?: bigint;
+  readonly now?: () => bigint;
   /**
    * ERC-8004 (README §5): when a buyer identifies as an agent and the agent provably owns the
    * grant's card, every paid query becomes one unit of `firsthand/paid-query` feedback from this
@@ -75,6 +87,20 @@ export interface ServedQuery {
   readonly receipt: { receiptId: Bytes32; txHash: Bytes32 | null; blockNumber: string | null };
 }
 
+/** One row of `GET /v1/principals/:id/passports` — what a buyer decides on. */
+export interface ListedPassport {
+  readonly passportId: Bytes32;
+  readonly ns: number;
+  readonly epoch: bigint;
+  readonly batchRoot: Bytes32;
+  readonly termsHash: Bytes32;
+  readonly price: bigint;
+  /** Attestation class when the sidecar carries the preimage; null for older sidecars. */
+  readonly class: AttestationClass | null;
+  readonly capturedAt: bigint | null;
+  readonly sourceTag: Bytes32 | null;
+}
+
 const toHex = (bytes: Uint8Array): `0x${string}` =>
   `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 
@@ -105,6 +131,15 @@ export class Serving {
     }
     if (hashTerms(sidecar.terms) !== sidecar.signed.passport.termsHash) {
       throw new ValidationError("sidecar terms do not hash to the passport's termsHash", {
+        context: { passportId: id },
+      });
+    }
+    // The attestation preimage is optional on the wire but never wrong: a buyer will filter on it.
+    if (
+      sidecar.attestation &&
+      hashAttestation(sidecar.attestation) !== sidecar.signed.passport.attest
+    ) {
+      throw new ValidationError("sidecar attestation does not hash to the passport's attest", {
         context: { passportId: id },
       });
     }
@@ -167,37 +202,60 @@ export class Serving {
 
   /**
    * What a principal has published, with the fields a buyer decides on: namespace, epoch, price,
-   * terms. Ids come from the catalog's index; each sidecar is one catalog read.
+   * terms, and — when the sidecar carries the preimage — the attestation class, capture time and
+   * source tag (README §13: buyers filter by class). Ids come from the catalog's index; each
+   * sidecar is one catalog read. `freshness` per namespace dates the newest anchor seen.
    */
   async passportsOf(
     principalId: Bytes32,
-    options: { ns?: number; limit: number },
-  ): Promise<
-    {
-      passportId: Bytes32;
-      ns: number;
-      epoch: bigint;
-      batchRoot: Bytes32;
-      termsHash: Bytes32;
-      price: bigint;
-    }[]
-  > {
+    options: { ns?: number; class?: AttestationClass; limit: number },
+  ): Promise<{ passports: ListedPassport[]; freshness: Record<number, Freshness> }> {
     const ids = await this.#d.catalog.listByPrincipal(principalId);
-    const out = [];
+    const passports: ListedPassport[] = [];
+    const newest = new Map<number, { root: Bytes32; epoch: bigint }>();
     for (const id of ids) {
-      if (out.length >= options.limit) break;
       const s = await this.#d.catalog.get(id);
       if (!s || (options.ns !== undefined && s.ns !== options.ns)) continue;
-      out.push({
+      const seen = newest.get(s.ns);
+      if (!seen || s.signed.passport.epoch >= seen.epoch) {
+        newest.set(s.ns, { root: s.batchRoot, epoch: s.signed.passport.epoch });
+      }
+      if (options.class !== undefined && s.attestation?.class !== options.class) continue;
+      if (passports.length >= options.limit) continue;
+      passports.push({
         passportId: id,
         ns: s.ns,
         epoch: s.signed.passport.epoch,
         batchRoot: s.batchRoot,
         termsHash: s.signed.passport.termsHash,
         price: s.terms.price,
+        class: s.attestation?.class ?? null,
+        capturedAt: s.attestation?.capturedAt ?? null,
+        sourceTag: s.attestation?.sourceTag ?? null,
       });
     }
-    return out;
+    const now = (this.#d.now ?? (() => BigInt(Math.floor(Date.now() / 1000))))();
+    const freshness: Record<number, Freshness> = {};
+    for (const [ns, { root }] of newest) {
+      freshness[ns] = freshnessOf(
+        await this.#lastAnchoredAt(root, ns, principalId),
+        now,
+        this.#d.halfLifeSeconds,
+      );
+    }
+    return { passports, freshness };
+  }
+
+  /**
+   * The newest anchor's block timestamp for a namespace. The catalog's "newest" is by epoch; within
+   * an epoch the ledger's anchors (when available) would refine it — one block read is the honest
+   * cheap answer, and it is what the signal is defined on.
+   */
+  async #lastAnchoredAt(root: Bytes32, _ns: number, _principalId: Bytes32): Promise<bigint | null> {
+    if (!this.#d.blockTime) return null;
+    const block = await this.#d.anchors.anchorBlock(root).catch(() => null);
+    if (block === null) return null;
+    return this.#d.blockTime(block).catch(() => null);
   }
 
   async sidecar(id: Bytes32): Promise<PassportSidecar> {

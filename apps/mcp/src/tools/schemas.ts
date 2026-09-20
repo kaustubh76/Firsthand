@@ -100,6 +100,10 @@ export const RequestAccessInputSchema = z.object({
 export const ListPassportsInputSchema = z.object({
   principalId: hex32.describe("The principal whose published passports to list"),
   ns: z.number().int().min(0).max(15).optional(),
+  class: z
+    .enum(["unattested", "import", "device_capture"])
+    .optional()
+    .describe("Only passports of this attestation class (README §13: buyers filter by class)"),
   limit: z.number().int().min(1).max(100).default(50),
 });
 

@@ -81,17 +81,52 @@ export interface ListedPassport {
   readonly ns: number;
   readonly epoch: string;
   readonly price: string;
+  /** Attestation class (0 unattested · 1 import · 2 device_capture); null on older sidecars. */
+  readonly class: number | null;
+  readonly capturedAt: string | null;
+  readonly sourceTag: Bytes32 | null;
+}
+
+/** README §7.3: staleness since the namespace's newest anchor — price continuing access on it. */
+export interface Freshness {
+  readonly lastAnchoredAt: string | null;
+  readonly halfLifeSeconds: string;
+  readonly staleness: number;
+}
+
+export interface Listing {
+  readonly passports: ListedPassport[];
+  readonly freshness: Record<string, Freshness>;
 }
 
 export async function listPassports(
   gatewayUrl: string,
   principalId: Bytes32,
   ns?: number,
+  options: { readonly class?: 0 | 1 | 2 } = {},
 ): Promise<ListedPassport[]> {
-  const q = ns === undefined ? "" : `?ns=${ns}`;
-  const res = await resilientFetch(`${gatewayUrl}/v1/principals/${principalId}/passports${q}`);
+  return (await listing(gatewayUrl, principalId, ns, options)).passports;
+}
+
+/** The listing with its freshness block — what a buyer prices on. */
+export async function listing(
+  gatewayUrl: string,
+  principalId: Bytes32,
+  ns?: number,
+  options: { readonly class?: 0 | 1 | 2 } = {},
+): Promise<Listing> {
+  const q = new URLSearchParams();
+  if (ns !== undefined) q.set("ns", String(ns));
+  if (options.class !== undefined) q.set("class", String(options.class));
+  const res = await resilientFetch(
+    `${gatewayUrl}/v1/principals/${principalId}/passports?${q.toString()}`,
+  );
   if (!res.ok) throw new Error(`listing failed: ${res.status}`);
-  return ((await res.json()) as { passports: ListedPassport[] }).passports;
+  const body = (await res.json()) as {
+    passports: ListedPassport[];
+    freshness?: Record<string, Freshness>;
+  };
+  return { passports: body.passports, freshness: body.freshness ?? {} };
 }
 
 export async function fetchSidecar(

@@ -15,7 +15,7 @@
 | `pnpm coverage` | per-package coverage; core/crypto ≥ 95 %, contract libraries ≥ 95 % |
 | `pnpm vectors:gen` / `pnpm vectors:check` | regenerate / verify golden vectors |
 | `pnpm check:deps` | assert the dependency graph (ADR-0001) |
-| `pnpm check:all` | everything CI runs, in order |
+| `pnpm check:all` | everything CI runs, in order — lint, dependency rules, build, typecheck, coverage, golden vectors, and `forge test` when Foundry is installed (skipped with a printed reason otherwise) |
 | `pnpm --filter @firsthand/experiments s1 -- --n 10000` | run a scenario; `report` renders results |
 
 ## Start here

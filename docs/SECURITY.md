@@ -58,7 +58,7 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
 | Threat | Code / test |
 |---|---|
 | Grantee front-runs rescission | `TxTransport` (btx vs public, path/transport consistency enforced), `Rescissions` commit store, S3 harness on chain (`experiments/src/scenarios/s3-rescission-race.ts`, findings in `experiments/README.md`) |
-| Synthetic laundering through a real passkey | `AttestationClass` + `sourceTag` in every passport; buyers filter; not prevented — see §6 |
+| Synthetic laundering through a real passkey | `AttestationClass` + `sourceTag` committed in every passport (`attest = hashAttestation(…)`) and carried in the open in the sidecar, verified at ingest; buyers filter (`?class=` on the listing, `firsthand_list_passports({ class })`) and the compliance file carries the class per asset (`ATTESTATION_MISMATCH` if relabelled); not prevented — see §6 |
 | Passport replay / re-mint | deterministic nonce (ADR-0005) → structural dedup; `Batcher`, `PassportAnchors.DuplicateRoot`; S4 (`s4-refusal.ts`) |
 | Stolen passkey | epoch rotation (§4) |
 | Bulk scraping within a live grant | `rateLimit` middleware pre-filter; `ReceiptLedger` counters (chain is truth) |
@@ -78,9 +78,31 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
    breach via receipts), not prevention.
 3. A passport proves origin key, attestation class, consent and integrity — **not** truth, quality,
    or one-human-one-passkey. Commodity capture attestation is heuristic; hardware attestation is roadmap.
-4. No injection/poisoning screening ships in core.
+4. No injection/poisoning screening ships in core. The literature is real and not denied: Carlini
+   et al., *Poisoning Web-Scale Training Datasets is Practical* (2023); Greshake et al., *Not what
+   you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt
+   Injection* (2023); Wallace et al., *Concealed Data Poisoning Attacks on NLP Models* (2021).
+   Provenance tags are the shipped defence layer; screening is a buyer-side, opt-in concern.
 5. BTX advantage holds only where BTX is live; the commit-reveal fallback narrows but does not
    eliminate the race — measured, not asserted.
+
+Three more, found by auditing the spec against the code rather than promised anywhere:
+
+6. **Prices are per passport, not per epoch.** README §7.6 says "prices can change per epoch
+   only"; nothing enforces it — terms are committed per passport (`termsHash`), and a locker may
+   mint under new terms mid-epoch. A grant is bound to one terms hash, so a buyer never pays more
+   than it accepted; repricing simply means new passports under new terms.
+7. **A rescinded grantee cannot be re-granted in the same epoch.** The grant id is
+   `keccak(principal, card, ns, epochStart)` and a rescinded grant keeps its slot, so "a fresh grant"
+   (README §7.6) needs a fresh epoch. Stricter than the spec; pinned by
+   `test_rescindedGranteeCannotBeRegrantedInTheSameEpoch`.
+8. **The ERC-8004 binding is verified off-chain by the venue.** Contracts store a card as
+   `(owner, X25519 key)`; the agent ↔ card binding (`firsthand.card` metadata on the Identity
+   Registry, owner equality) is checked by the gateway (`verifyCardBinding`) before it credits a
+   paid query to the agent, and shown to the human. The chain does not gate grants on it.
+9. **Freshness is a signal, not a rule.** `staleness = 1 − 2^(−t/τ)` per namespace (README §7.3)
+   is computed by the gateway from the newest anchor's block time with a published half-life; a
+   buyer prices on it; the protocol enforces nothing with it.
 
 ## 7. Rescission semantics
 

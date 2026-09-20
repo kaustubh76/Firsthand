@@ -166,7 +166,20 @@ interface ListedPassport {
   batchRoot: Bytes32;
   termsHash: Bytes32;
   price: string;
+  /** Attestation class (0 unattested · 1 import · 2 device_capture), null on older sidecars. */
+  class: number | null;
+  capturedAt: string | null;
+  sourceTag: Bytes32 | null;
 }
+
+/** README §7.3's staleness signal per namespace — a market input, not a protocol rule. */
+interface Freshness {
+  lastAnchoredAt: string | null;
+  halfLifeSeconds: string;
+  staleness: number;
+}
+
+const CLASS_NAMES = ["unattested", "import", "device_capture"] as const;
 
 /** Supply, discoverable: what a principal has published on this gateway. */
 async function listPassports(
@@ -174,12 +187,18 @@ async function listPassports(
   principalId: string,
   ns: number | undefined,
   limit: number,
-): Promise<ListedPassport[]> {
+  klass?: number,
+): Promise<{ passports: ListedPassport[]; freshness: Record<string, Freshness> }> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (ns !== undefined) q.set("ns", String(ns));
+  if (klass !== undefined) q.set("class", String(klass));
   const res = await fetch(`${gatewayUrl}/v1/principals/${principalId}/passports?${q.toString()}`);
   if (!res.ok) throw new Error(`gateway answered ${res.status} listing ${principalId}`);
-  return ((await res.json()) as { passports: ListedPassport[] }).passports;
+  const body = (await res.json()) as {
+    passports: ListedPassport[];
+    freshness?: Record<string, Freshness>;
+  };
+  return { passports: body.passports, freshness: body.freshness ?? {} };
 }
 
 const agentOf = (deps: McpDeps, raw: string | undefined): bigint | undefined =>
@@ -622,19 +641,30 @@ export function createMcpServer(deps: McpDeps): McpServer {
     {
       title: "List what a principal has published",
       description:
-        "Buyer side: given a principal id (from a shared locker link), list the passports the gateway hosts for it — namespace, epoch, price per query, terms hash — so the agent can choose what to ask access to.",
+        "Buyer side: given a principal id (from a shared locker link), list the passports the gateway hosts for it — namespace, epoch, price per query, terms hash, attestation class (unattested / import / device_capture; filter with `class`) — plus each namespace's freshness (staleness since its last anchored deposit, README §7.3) so the agent can choose what to ask access to and price continuing access.",
       inputSchema: ListPassportsInputSchema.shape,
     },
     async (input) => {
       try {
         if (!deps.gatewayUrl) throw new Error("GATEWAY_URL is required");
-        const passports = await listPassports(
+        const klass = input.class === undefined ? undefined : CLASS_NAMES.indexOf(input.class);
+        const { passports, freshness } = await listPassports(
           deps.gatewayUrl,
           input.principalId,
           input.ns,
           input.limit,
+          klass,
         );
-        return text({ principalId: input.principalId, count: passports.length, passports });
+        return text({
+          principalId: input.principalId,
+          count: passports.length,
+          passports: passports.map((p) => ({
+            ...p,
+            className: p.class === null ? null : (CLASS_NAMES[p.class] ?? null),
+          })),
+          freshness,
+          note: "staleness = 1 − 2^(−t/τ) since the namespace's newest anchor; an off-chain market signal, not a protocol rule",
+        });
       } catch (error) {
         return failure(error);
       }
@@ -658,7 +688,12 @@ export function createMcpServer(deps: McpDeps): McpServer {
         if (!passportId) {
           // A locker link names a principal, not a passport: take the newest one they published.
           if (!input.principalId) throw new Error("give a passportId or a principalId");
-          const listed = await listPassports(deps.gatewayUrl, input.principalId, input.ns, 1);
+          const { passports: listed } = await listPassports(
+            deps.gatewayUrl,
+            input.principalId,
+            input.ns,
+            1,
+          );
           passportId = listed[0]?.passportId;
           if (!passportId)
             throw new Error(

@@ -13,6 +13,7 @@ import {
   complianceFile,
   discover,
   fetchSidecar,
+  listing,
   listPassports,
   openBuyer,
   prepare,
@@ -321,6 +322,23 @@ async function main() {
       .getByText(/anchored at block/)
       .waitFor({ timeout: 60_000 });
     ok("passport lookup shows origin, terms and the anchor block");
+    // A principal's listing, for anyone: attestation classes in the open and the namespace's
+    // freshness line — what a buyer decides on before asking.
+    await page.locator("nav").getByRole("button", { name: "locker" }).click();
+    await page.getByTestId("locker-link").waitFor({ timeout: 10_000 });
+    const ownPrincipal = /principal=(0x[0-9a-f]{64})/.exec(
+      (await page.getByTestId("locker-link").textContent()) ?? "",
+    )?.[1];
+    if (!ownPrincipal) throw new Error("no principal in the locker link");
+    await page.locator("nav").getByRole("button", { name: "verify" }).click();
+    await page.getByPlaceholder("0x… principal id").fill(ownPrincipal);
+    await page.getByRole("button", { name: "List passports" }).click();
+    await page.getByTestId("principal-listing").waitFor({ timeout: 60_000 });
+    await page.getByTestId("freshness").first().waitFor({ timeout: 60_000 });
+    const shown = await page.getByTestId("class").allTextContents();
+    if (!shown.includes("device capture") || !shown.includes("import"))
+      throw new Error(`listing classes: ${shown.join(", ")}`);
+    ok(`listing shows classes (${[...new Set(shown)].join(" · ")}) and freshness`);
 
     step("evidence: H1/H2/H3 on screen, from experiments/results");
     await page.locator("nav").getByRole("button", { name: "evidence" }).click();
@@ -349,6 +367,29 @@ async function main() {
       );
     }
     ok(`locker link lists ${catalogue.length} passports for the principal (note included)`);
+    // The attestation class is in the open (README §13): what the app captured is device capture,
+    // the export is an import, and a buyer can ask for one class only. The listing also dates
+    // each namespace (README §7.3 freshness) from the newest anchor's block.
+    const classes = new Map(catalogue.map((p) => [p.passportId, p.class]));
+    if (classes.get(passportId) !== 2)
+      throw new Error(
+        `the note should be class 2 (device capture), got ${classes.get(passportId)}`,
+      );
+    if (!catalogue.some((p) => p.class === 1))
+      throw new Error("no import passport in the listing (the ChatGPT export)");
+    const devices = await listPassports(gatewayUrl, sharedPrincipal, undefined, { class: 2 });
+    if (devices.length === 0 || devices.some((p) => p.class !== 2))
+      throw new Error(`?class=2 listed ${JSON.stringify(devices)}`);
+    const full = await listing(gatewayUrl, sharedPrincipal);
+    const fresh0 = full.freshness["0"];
+    if (!fresh0 || fresh0.lastAnchoredAt === null || fresh0.staleness >= 0.01) {
+      throw new Error(
+        `ns 0 freshness should date a just-anchored deposit: ${JSON.stringify(fresh0)}`,
+      );
+    }
+    ok(
+      `classes in the open: ${devices.length} device capture · ns 0 last anchored at ${fresh0.lastAnchoredAt} · staleness ${fresh0.staleness}`,
+    );
     const outsiderKey = generatePrivateKey();
     const outsider = openBuyer(
       gatewayUrl,

@@ -3,6 +3,7 @@ export * from "./bytes.js";
 export * from "./constants.js";
 export * from "./epoch/index.js";
 export * from "./errors.js";
+export * from "./freshness.js";
 export * from "./grant/index.js";
 export * from "./hash.js";
 export * from "./merkle/index.js";

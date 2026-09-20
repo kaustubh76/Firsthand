@@ -43,6 +43,8 @@ export interface DepositResult {
   readonly wrappedDek: BlobRef;
   /** Set when this deposit completed a batch. */
   readonly anchored: AnchoredBatch | null;
+  /** The attestation preimage, when this locker minted the passport (it travels in the sidecar). */
+  readonly attestation?: Attestation;
 }
 
 /** Sidecar record the locker keeps per passport (public data + ciphertext locators). */
@@ -121,13 +123,14 @@ export async function deposit(
   input: DepositInput,
 ): Promise<DepositResult> {
   const signed = mintPassport(locker, input);
-  return acceptSigned(
+  const result = await acceptSigned(
     locker,
     batcher,
     signed,
     input.ns,
     input.plaintext ?? datumBytes(input.datum),
   );
+  return { ...result, attestation: input.attestation };
 }
 
 /**

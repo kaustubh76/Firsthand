@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AttestationSchema,
   BatchProofSchema,
   Eip712DomainSchema,
   PassportSchema,
@@ -26,6 +27,12 @@ export const ManifestAssetSchema = z.object({
   proof: BatchProofSchema,
   /** Anchor block for `batchRoot`; verifiers require `finalityDepth` confirmations past it. */
   anchorBlock: Uint64Schema,
+  /**
+   * The attestation preimage (class, capture time, source tag) when the sidecar carried it — the
+   * buyer's file then says *what kind* of origin each asset has, verifiably (`hashAttestation`
+   * must equal `passport.attest`; the verifier checks).
+   */
+  attestation: AttestationSchema.optional(),
   receipt: ManifestReceiptSchema.optional(),
 });
 

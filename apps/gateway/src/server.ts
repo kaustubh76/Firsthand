@@ -49,8 +49,10 @@ import {
 import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/contracts/deployments";
 import {
   type Address,
+  type AttestationClass,
   Bytes32Schema,
   ConfigError,
+  DEFAULT_HALF_LIFE_SECONDS,
   type Eip712Domain,
   parseSidecar,
   ValidationError,
@@ -217,6 +219,7 @@ export function createGateway(
   let deployment: Deployment | null = null;
   let ledger: ConsentLedger | null = null;
   let chainHead: (() => Promise<bigint>) | null = null;
+  let blockTime: ((blockNumber: bigint) => Promise<bigint | null>) | null = null;
   let relayerFloat: (() => Promise<{ address: Address; balanceWei: bigint }>) | null = null;
   let erc8004: (Erc8004Registry & Erc8004Writer) | null = overrides.erc8004 ?? null;
   let relayerAddress: Address | null = overrides.relayerAddress ?? null;
@@ -236,6 +239,18 @@ export function createGateway(
     payTo = d.RoyaltyRouter.toLowerCase() as Address;
     usdc = d.USDC.toLowerCase() as Address;
     chainHead = () => clients.publicClient.getBlockNumber({ cacheTime: 0 });
+    // Block timestamps date anchors for the freshness signal; a block's time never changes, so
+    // a small cache saves the RPC a call per listing.
+    const blockTimes = new Map<bigint, bigint>();
+    blockTime = async (blockNumber) => {
+      const cached = blockTimes.get(blockNumber);
+      if (cached !== undefined) return cached;
+      const block = await clients.publicClient.getBlock({ blockNumber }).catch(() => null);
+      if (!block) return null;
+      if (blockTimes.size > 512) blockTimes.clear();
+      blockTimes.set(blockNumber, block.timestamp);
+      return block.timestamp;
+    };
     if (clients.walletClient) {
       const address = clients.walletClient.account.address.toLowerCase() as Address;
       relayerAddress = address;
@@ -338,6 +353,10 @@ export function createGateway(
     settlement,
     domain,
     logger,
+    ...(blockTime ? { blockTime } : {}),
+    halfLifeSeconds:
+      config.FRESHNESS_HALF_LIFE_S ??
+      (deployment ? BigInt(deployment.epochLength) : DEFAULT_HALF_LIFE_SECONDS),
     ...(erc8004 && config.ERC8004_FEEDBACK && relayerAddress
       ? {
           reputation: {
@@ -718,13 +737,25 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       throw new ValidationError("ns must be 0..15");
     }
     const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? "100") || 100));
+    // `?class=` filters on the attestation class (0 unattested · 1 import · 2 device_capture) —
+    // README §13's "buyers filter by class"; sidecars that predate the preimage never match.
+    const classRaw = c.req.query("class");
+    const klass = classRaw === undefined ? undefined : Number(classRaw);
+    if (klass !== undefined && ![0, 1, 2].includes(klass)) {
+      throw new ValidationError("class must be 0 (unattested), 1 (import) or 2 (device_capture)");
+    }
+    const listed = await serving.passportsOf(principalId, {
+      ...(ns === undefined ? {} : { ns }),
+      ...(klass === undefined ? {} : { class: klass as AttestationClass }),
+      limit,
+    });
     return c.json(
       jsonSafe({
         principalId,
-        passports: await serving.passportsOf(principalId, {
-          ...(ns === undefined ? {} : { ns }),
-          limit,
-        }),
+        passports: listed.passports,
+        // README §7.3: an off-chain market signal from on-chain anchor timestamps — nothing here is
+        // enforced by the protocol, and the half-life is this gateway's published default.
+        freshness: listed.freshness,
       }),
     );
   });

@@ -1,14 +1,22 @@
 import { z } from "zod";
 import type { Bytes32 } from "../bytes.js";
 import type { BatchProof } from "../merkle/merkle.js";
-import type { SignedPassport, Terms } from "../passport/types.js";
-import { BatchProofSchema, SignedPassportSchema, TermsSchema } from "./passport.schema.js";
+import type { Attestation, SignedPassport, Terms } from "../passport/types.js";
+import {
+  AttestationSchema,
+  BatchProofSchema,
+  SignedPassportSchema,
+  TermsSchema,
+} from "./passport.schema.js";
 import { Bytes32Schema, Uint32Schema } from "./primitives.js";
 
 /**
  * Passport sidecar: everything public a gateway needs to serve one passport (README §7.1 "passports
  * live with the encrypted blobs"). Contains no plaintext and no keys — only the signed passport, its
- * batch proof, the terms preimage, and content-addressed ciphertext locators.
+ * batch proof, the terms preimage, the attestation preimage, and content-addressed ciphertext
+ * locators. The attestation is what "buyers filter by attestation class" (README §13) needs in the
+ * open: its hash is committed in the passport, so a gateway checks the preimage at ingest.
+ * Optional because sidecars published before it existed carry only the hash.
  */
 export const PassportSidecarSchema = z.object({
   signed: SignedPassportSchema,
@@ -17,6 +25,7 @@ export const PassportSidecarSchema = z.object({
   batchRoot: Bytes32Schema,
   proof: BatchProofSchema,
   terms: TermsSchema,
+  attestation: AttestationSchema.optional(),
   /** `keccak256(blob)` — id in the BlobStore. */
   blobRef: Bytes32Schema,
   wrappedDekRef: Bytes32Schema,
@@ -32,18 +41,23 @@ export interface PassportSidecar {
   readonly batchRoot: Bytes32;
   readonly proof: BatchProof;
   readonly terms: Terms;
+  /** The preimage of `passport.attest`; absent on sidecars published before it was carried. */
+  readonly attestation?: Attestation;
   readonly blobRef: Bytes32;
   readonly wrappedDekRef: Bytes32;
 }
 
 export function parseSidecar(input: unknown): PassportSidecar {
-  return PassportSidecarSchema.parse(input);
+  const { attestation, ...rest } = PassportSidecarSchema.parse(input);
+  // `exactOptionalPropertyTypes`: an absent attestation is absent, never `undefined`.
+  return attestation ? { ...rest, attestation } : rest;
 }
 
 /** Serialises a sidecar to its wire form (bigints → decimal strings). */
 export function sidecarToWire(sidecar: PassportSidecar): PassportSidecarWire {
+  const { attestation: _attestation, ...rest } = sidecar;
   return {
-    ...sidecar,
+    ...rest,
     signed: {
       passport: { ...sidecar.signed.passport, epoch: sidecar.signed.passport.epoch.toString() },
       signature: sidecar.signed.signature,
@@ -54,6 +68,14 @@ export function sidecarToWire(sidecar: PassportSidecar): PassportSidecarWire {
       weights: sidecar.terms.weights.map((w) => w.toString()),
       payees: [...sidecar.terms.payees],
     },
+    ...(sidecar.attestation
+      ? {
+          attestation: {
+            ...sidecar.attestation,
+            capturedAt: sidecar.attestation.capturedAt.toString(),
+          },
+        }
+      : {}),
     proof: { index: sidecar.proof.index, siblings: [...sidecar.proof.siblings] },
   };
 }

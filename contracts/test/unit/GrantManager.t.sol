@@ -198,6 +198,26 @@ contract GrantManagerTest is GrantFixture {
         grants.rescind(grantId, EPOCH, bytes32(uint256(201)), again);
     }
 
+    /// README §7.6 "slow to forgive", made stricter by the deterministic grant id
+    /// keccak(principal, card, ns, epochStart): a rescinded grantee cannot be re-granted the same
+    /// namespace in the same epoch at all — a fresh grant needs a fresh epoch. Documented in
+    /// SECURITY.md §6; pinned here so the limitation cannot drift silently.
+    function test_rescindedGranteeCannotBeRegrantedInTheSameEpoch() public {
+        bytes32 grantId = doGrant();
+        bytes32 nonce = bytes32(uint256(300));
+        grants.rescind(grantId, EPOCH, nonce, rescindSig(AUTHORITY_SK, grantId, EPOCH, nonce));
+        assertEq(uint8(grants.effectiveStatus(grantId)), uint8(GrantStatus.RESCINDED));
+
+        GrantArgs memory again = defaultGrant();
+        again.nonce = bytes32(uint256(301));
+        again.wrapRef = keccak256("a fresh wrap");
+        bytes memory sig = grantSig(AUTHORITY_SK, again);
+        vm.expectRevert(abi.encodeWithSelector(IGrantManager.GrantExists.selector, grantId));
+        submitGrant(again, sig);
+        // The rescission itself is final: the old wrap reference is never replaced.
+        assertEq(grants.wrapRefOf(grantId), keccak256("wrap"));
+    }
+
     function test_rescindRejectsUnknownWrongEpochForeignAndReplay() public {
         bytes32 none = keccak256("none");
         vm.expectRevert(abi.encodeWithSelector(IGrantManager.GrantNotLive.selector, none));

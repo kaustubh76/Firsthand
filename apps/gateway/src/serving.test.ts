@@ -153,10 +153,38 @@ describe("gateway serving path (memory mode)", () => {
     // Discovery: a buyer handed the principal's locker link lists what it can buy.
     const listed = (await (
       await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports`)
-    ).json()) as { passports: { passportId: string; ns: number; price: string }[] };
+    ).json()) as {
+      passports: { passportId: string; ns: number; price: string; class: number | null }[];
+      freshness: Record<string, { lastAnchoredAt: string | null; staleness: number }>;
+    };
+    // The attestation preimage travels with the sidecar, so a buyer sees the class in the open …
     expect(listed.passports).toEqual([
-      expect.objectContaining({ passportId: s.r.passportId, ns: 0, price: "1000" }),
+      expect.objectContaining({
+        passportId: s.r.passportId,
+        ns: 0,
+        price: "1000",
+        class: AttestationClass.IMPORT,
+        capturedAt: "0",
+      }),
     ]);
+    // … filters on it (README §13), and reads the namespace's freshness signal (README §7.3) —
+    // memory mode has no block clock, so nothing is dated and staleness is the honest 1.
+    const byClass = async (klass: number) =>
+      (
+        (await (
+          await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports?class=${klass}`)
+        ).json()) as { passports: unknown[] }
+      ).passports.length;
+    expect(await byClass(AttestationClass.IMPORT)).toBe(1);
+    expect(await byClass(AttestationClass.DEVICE_CAPTURE)).toBe(0);
+    expect(
+      (await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports?class=7`)).status,
+    ).toBe(400);
+    expect(listed.freshness["0"]).toEqual({
+      lastAnchoredAt: null,
+      halfLifeSeconds: expect.any(String),
+      staleness: 1,
+    });
     expect(
       (
         (await (
@@ -254,6 +282,15 @@ describe("gateway serving path (memory mode)", () => {
     ).toBe(422);
     expect(
       (await post("/v1/passports", { ...wire, terms: { ...wire.terms, price: "2" } })).status,
+    ).toBe(400);
+    // A carried attestation must be the preimage the passport committed to.
+    expect(
+      (
+        await post("/v1/passports", {
+          ...wire,
+          attestation: { ...wire.attestation, class: AttestationClass.DEVICE_CAPTURE },
+        })
+      ).status,
     ).toBe(400);
     expect((await post("/v1/passports", wire)).status).toBe(201); // re-ingest of a valid sidecar is fine
 

@@ -27,6 +27,11 @@ const defaults: Record<string, string> = {
   // carries what is older.
   LEDGER_MAX_SCAN_BLOCKS: "12000",
   LEDGER_SCAN_BUDGET_MS: "40000",
+  // The public RPC enforces a per-second window shared with everything behind the function's
+  // egress ("requests limited to 15/sec", 2026-09-20): three walks in flight at ≤ 12 starts/s
+  // leave room for the serving path's own reads, and the RPC layer backs off on a 429.
+  LEDGER_MIN_REQUEST_INTERVAL_MS: "80",
+  LEDGER_MAX_IN_FLIGHT: "3",
   // Vercel rejects request bodies above ~4.5 MB before the function runs (measured: 5 MB → 413);
   // publish a limit the PWA can honour instead of letting a photo fail at the edge.
   MAX_UPLOAD_BYTES: String(4 * 1024 * 1024),

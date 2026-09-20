@@ -59,14 +59,25 @@ export const resilientFetch: typeof fetch = async (input, init) => {
   const method = (init?.method ?? "GET").toUpperCase();
   const idempotent = method === "GET" || method === "HEAD";
   for (let attempt = 0; ; attempt++) {
+    let res: Response;
     try {
-      return await fetch(input, init);
+      res = await fetch(input, init);
     } catch (error) {
       const code = ((error as Error & { cause?: { code?: string } }).cause?.code ?? "") as string;
       const retry = attempt < 2 && (idempotent || NOT_SENT.has(code));
       if (!retry) throw error;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      continue;
     }
+    // A gateway whose chain RPC is rate-limiting answers 503 + retry-after; a read is worth waiting.
+    if (idempotent && (res.status === 503 || res.status === 429) && attempt < 4) {
+      const after = Number(res.headers.get("retry-after"));
+      await new Promise((r) =>
+        setTimeout(r, Math.min(5_000, (Number.isFinite(after) && after > 0 ? after : 2) * 1_000)),
+      );
+      continue;
+    }
+    return res;
   }
 };
 

@@ -1,5 +1,6 @@
 import type { ConsentEvent, ReceiptView } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
+import { readFetch } from "./fetch.js";
 
 /** Wire shape of the gateway's audit routes: bigints arrive as decimal strings. */
 type Wire<T> = { [K in keyof T]: T[K] extends bigint ? string : T[K] };
@@ -27,7 +28,7 @@ export async function fetchTimeline(
   principalId: Bytes32,
   fromBlock?: bigint,
 ): Promise<Timeline> {
-  const res = await fetch(
+  const res = await readFetch(
     `${base(gatewayUrl)}/v1/principals/${principalId}/timeline${since(fromBlock)}`,
   );
   if (!res.ok) throw new Error(`timeline: gateway answered ${res.status}`);
@@ -65,7 +66,9 @@ export async function fetchReceipts(
   grantId: Bytes32,
   fromBlock?: bigint,
 ): Promise<ReceiptView[]> {
-  const res = await fetch(`${base(gatewayUrl)}/v1/grants/${grantId}/receipts${since(fromBlock)}`);
+  const res = await readFetch(
+    `${base(gatewayUrl)}/v1/grants/${grantId}/receipts${since(fromBlock)}`,
+  );
   if (!res.ok) throw new Error(`receipts: gateway answered ${res.status}`);
   const body = (await res.json()) as { receipts: Wire<ReceiptView>[] };
   return body.receipts.map((r) => ({

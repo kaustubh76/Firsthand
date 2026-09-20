@@ -36,6 +36,15 @@ export interface ChainClientsOptions {
   readonly privateKey?: `0x${string}`;
   /** Receipt/pending polling cadence in ms (viem default 4 000). Race harnesses need ~25. */
   readonly pollingInterval?: number;
+  /**
+   * Retries on a 429 / 5xx from the RPC (viem retries those), with exponential backoff from
+   * `retryDelayMs`. Monad's public endpoint enforces a per-second window (measured 2026-09-20:
+   * `x-ratelimit-limit: 50;w=1`, and "requests limited to 15/sec" from a hosted function's shared
+   * egress), so the default backoff — 300 · 2^n ms, four times — spans the window rather than
+   * viem's ~1 s total.
+   */
+  readonly retryCount?: number;
+  readonly retryDelayMs?: number;
 }
 
 export interface ChainClients {
@@ -47,7 +56,10 @@ export interface ChainClients {
 
 export function createChainClients(options: ChainClientsOptions): ChainClients {
   const chain = options.chain ?? monadTestnet;
-  const transport = http(options.rpcUrl);
+  const transport = http(options.rpcUrl, {
+    retryCount: options.retryCount ?? 4,
+    retryDelay: options.retryDelayMs ?? 300,
+  });
   const clientOptions =
     options.pollingInterval === undefined ? {} : { pollingInterval: options.pollingInterval };
   const publicClient = createPublicClient({ chain, transport, ...clientOptions });

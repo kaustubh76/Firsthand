@@ -4,6 +4,7 @@ import { BuyerSession, createBuyerKeys } from "@firsthand/sdk/browser";
 import { encodeFunctionData, type PublicClient, parseAbi } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import type { AppConfig } from "./config.js";
+import { readFetch } from "./fetch.js";
 
 /**
  * The demand side, in the same browser: a throwaway AI-buyer agent with an EVM key that pays (x402)
@@ -82,6 +83,8 @@ export function openAgent(config: AppConfig, transport: HttpRelayTransport): Dem
     grantManager: config.grantManager,
     chainId: config.chainId,
     transport,
+    // The demo agent's reads (offer, wrap) retry a dropped connection or a rate-limited RPC.
+    fetch: readFetch,
   });
   return {
     session,

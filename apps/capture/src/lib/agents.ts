@@ -1,4 +1,5 @@
 import type { Bytes32 } from "@firsthand/core";
+import { readFetch } from "./fetch.js";
 
 /** The gateway's view of an ERC-8004 agent: identity, bound card, and what this venue said about it. */
 export interface AgentInfo {
@@ -11,7 +12,7 @@ export interface AgentInfo {
 }
 
 export async function fetchAgent(gatewayUrl: string, agentId: string): Promise<AgentInfo | null> {
-  const res = await fetch(`${gatewayUrl.replace(/\/+$/, "")}/v1/agents/${agentId}`);
+  const res = await readFetch(`${gatewayUrl.replace(/\/+$/, "")}/v1/agents/${agentId}`);
   if (!res.ok) return null;
   const body = (await res.json()) as {
     agentId: string;

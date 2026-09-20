@@ -60,7 +60,10 @@ describe("gateway", () => {
     expect((await fresh.app.request(`/v1/blobs/${id}`)).status).toBe(200);
   });
 
-  it("binds read-only on-chain anchors from a deployment file and rejects chain-id mismatches", async () => {
+  it("binds read-only on-chain anchors from a deployment file and rejects chain-id mismatches", {
+    // The RPC here is unreachable on purpose, and the chain client now backs off 300·2^n ms ×4.
+    timeout: 30_000,
+  }, async () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const { tmpdir } = await import("node:os");
@@ -249,6 +252,26 @@ describe("gateway", () => {
     expect(limited.headers.get("retry-after")).toBeDefined();
     // Without the flag the token is not on the list at all.
     expect(withRelay.relay?.allowList.some((a) => a.startsWith(usdc))).toBe(false);
+  });
+
+  it("answers a rate-limited chain RPC with 503 + retry-after, not an opaque 500", async () => {
+    const gw = createGateway(loadConfig({}), { logger: noopLogger });
+    // A route that throws what viem throws when the RPC says "too many requests" — and one that
+    // throws a plain bug. (Routes go in before the first request; Hono then seals its matcher.)
+    gw.app.get("/boom", () => {
+      throw new Error(
+        "HTTP request failed. Status: 429 Too Many Requests — requests limited to 15/sec",
+      );
+    });
+    gw.app.get("/bug", () => {
+      throw new Error("undefined is not a function");
+    });
+    const res = await gw.app.request("/boom");
+    expect(res.status).toBe(503);
+    expect(res.headers.get("retry-after")).toBe("2");
+    expect(await res.json()).toMatchObject({ code: "FH_CHAIN", retryable: true });
+    // Everything else non-FIRSTHAND stays an opaque 500.
+    expect((await gw.app.request("/bug")).status).toBe(500);
   });
 
   it("bounds ?fromBlock= on the audit routes and rejects garbage", async () => {

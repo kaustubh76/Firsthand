@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import {
   type AnchorWriter,
   buildAgentURI,
@@ -26,9 +26,12 @@ import { parseExport } from "@firsthand/importers";
 import type { Logger } from "@firsthand/runtime";
 import {
   type BuyerSession,
+  exportLocker,
+  importLocker,
   type LockerSession,
   manifestFromQueries,
   type QueryResult,
+  serialiseBundle,
   serialiseManifest,
   verifyManifest,
 } from "@firsthand/sdk";
@@ -40,9 +43,11 @@ import {
   AttestInputSchema,
   DepositInputSchema,
   EnrollInputSchema,
+  ExportLockerInputSchema,
   ExportManifestInputSchema,
   GrantInputSchema,
   ImportInputSchema,
+  ImportLockerInputSchema,
   ListPassportsInputSchema,
   QueryInputSchema,
   RegisterAgentInputSchema,
@@ -313,6 +318,64 @@ export function createMcpServer(deps: McpDeps): McpServer {
         });
       } catch (error) {
         deps.logger.warn("query failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_export_locker",
+    {
+      title: "Take a locker with you (exit)",
+      description:
+        "README §4 'exit = keys + blobs walk away': reads everything a gateway holds for a principal — ciphertext, sidecars and grant wraps, all public and content-addressed, never plaintext or a key — into one bundle file that firsthand_import_locker (or the capture app) re-publishes on any conformant gateway. The chain is the source of truth; a gateway is a cache you can leave.",
+      inputSchema: ExportLockerInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const gatewayUrl = input.gatewayUrl ?? deps.gatewayUrl;
+        if (!gatewayUrl) throw new Error("GATEWAY_URL (or gatewayUrl) is required");
+        const principalId =
+          (input.principalId as Bytes32 | undefined) ?? (await deps.session()).locker.principalId;
+        const bundle = await exportLocker({
+          gatewayUrl,
+          principalId,
+          chainId: deps.passportDomain.chainId,
+          grantIds: input.grantIds as Bytes32[],
+        });
+        await writeFile(input.path, serialiseBundle(bundle), "utf8");
+        return text({
+          path: input.path,
+          principalId,
+          passports: bundle.passports.length,
+          wraps: bundle.wraps.length,
+          gateway: bundle.gateway,
+          contains: "ciphertext + sidecars + grant wraps — no plaintext, no key",
+        });
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_import_locker",
+    {
+      title: "Re-publish a locker bundle on a gateway",
+      description:
+        "The other half of exit: re-publishes a bundle from firsthand_export_locker through the gateway's verified ingest. Every sidecar is checked against the chain (signature, anchored root, owner, inclusion) and every wrap against its grant's on-chain reference; what the gateway cannot verify is reported as skipped, never forced.",
+      inputSchema: ImportLockerInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        const gatewayUrl = input.gatewayUrl ?? deps.gatewayUrl;
+        if (!gatewayUrl) throw new Error("GATEWAY_URL (or gatewayUrl) is required");
+        const report = await importLocker({
+          gatewayUrl,
+          bundle: await readFile(input.path, "utf8"),
+        });
+        return text({ gateway: gatewayUrl, ...report });
+      } catch (error) {
         return failure(error);
       }
     },

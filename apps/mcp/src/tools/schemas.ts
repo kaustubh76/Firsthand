@@ -114,6 +114,27 @@ export const ExportManifestInputSchema = z.object({
   agentId,
 });
 
+export const ExportLockerInputSchema = z.object({
+  gatewayUrl: z.string().url().optional().describe("Defaults to GATEWAY_URL"),
+  principalId: hex32
+    .optional()
+    .describe("Whose locker to read; defaults to this server's own locker (the PRF session)"),
+  grantIds: z
+    .array(hex32)
+    .max(256)
+    .default([])
+    .describe("Grants whose wrap bytes should travel with the bundle"),
+  path: z.string().min(1).describe("Where to write the bundle file on this machine"),
+});
+
+export const ImportLockerInputSchema = z.object({
+  gatewayUrl: z.string().url().optional().describe("Defaults to GATEWAY_URL"),
+  path: z
+    .string()
+    .min(1)
+    .describe("A locker bundle written by firsthand_export_locker (or the app)"),
+});
+
 export const RescindInputSchema = z.object({
   grantId: hex32,
   path: z

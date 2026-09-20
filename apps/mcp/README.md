@@ -1,6 +1,6 @@
 # firsthand-mcp
 
-MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_register_agent`, `firsthand_agent_reputation`, `firsthand_accept_terms`, `firsthand_list_passports`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_rescind`, `firsthand_status`
+MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_register_agent`, `firsthand_agent_reputation`, `firsthand_accept_terms`, `firsthand_list_passports`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_export_locker`, `firsthand_import_locker`, `firsthand_rescind`, `firsthand_status`
 over stdio. Runs on the **user's** machine and may derive keys (README §22, §13 "malicious MCP client":
 a hostile client can only pollute its own user's locker — deposits are valid only under derived keys).
 
@@ -58,3 +58,15 @@ the agent with a hundred queries' worth itself and reports `funding.txHash` — 
 not (a real stablecoin deployment does not relay `mint`).
 
 If the human withdraws consent, step 4 answers `FH_GRANT_RESCINDED` (HTTP 403): no data, no charge.
+
+`firsthand_list_passports` also returns each passport's attestation class (filter with
+`class: "device_capture"`) and each namespace's freshness — staleness since its newest anchor,
+README §7.3 — so an agent prices continuing access on something measured.
+
+## Exit — a locker moves between gateways
+
+`firsthand_export_locker({ path })` writes everything a gateway holds for a principal (ciphertext,
+sidecars, grant wraps; never plaintext, never a key) to one file; `firsthand_import_locker({
+gatewayUrl, path })` re-publishes it on another gateway, which verifies every object against the
+chain before hosting it (README §4 "exit = keys + blobs walk away"). Pass `principalId` to carry
+someone else's public objects — a bundle needs no trust in its carrier.

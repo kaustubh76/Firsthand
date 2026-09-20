@@ -15,6 +15,12 @@ sign flip on H1, BTX marked not measurable, the H3 signature re-proof shown as t
 (origin signatures, Merkle inclusion, anchoring, finality), or look up a passport the gateway hosts.
 **Access requests:** an outside buyer (`firsthand_request_access` in the MCP) hands the human a
 link `?grant=<card>&pub=<x25519>&ns=<n>&from=<label>`; the Locker shows it, one passkey tap grants.
+**Exit:** Locker → *Take your locker with you* downloads everything the gateway holds for you
+(ciphertext, sidecars, grant wraps — no plaintext, no key) as one file; *Re-publish here* takes
+that file onto whatever gateway the app is pointed at (`?gateway=…`), which verifies each object
+against the chain first (README §4 "keys + blobs walk away").
+**Freshness and class:** the Verify tab's listing shows each passport's attestation class and each
+namespace's staleness since its newest anchor (README §7.3, a market signal).
 The Recall tab also exports the **buyer's** compliance file from the served query. A localStorage
 journal keeps this browser's history (evidence is rebuilt from the gateway after a reload); the
 status strip says when this epoch needs a fresh attestation and the Capture/Recall tabs offer the
@@ -49,5 +55,7 @@ in headless Chromium with a virtual PRF passkey (local anvil by default, `E2E_TE
 `PassportAnchors.anchor` verifies the deposit-key signature against the root attested for that epoch,
 so anchoring without it is refused.
 
-Known gap: capture is text only. The README's demo scene wants a photo or short clip; the provenance
-path is identical for any payload, so this is UI work, not protocol work.
+Hosted captures are capped at 4 MiB (`limits.maxUploadBytes`, Vercel's request-body ceiling); a
+self-hosted gateway takes 8 MiB. The status strip reads the gateway's `/healthz` every minute and
+words the relayer float once it is low; an out-of-gas answer raises a banner instead of a failed
+tap; discovery retries a cold-starting gateway and can be re-run from the strip.

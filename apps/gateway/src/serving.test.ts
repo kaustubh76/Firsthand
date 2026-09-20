@@ -21,8 +21,12 @@ import {
   BuyerSession,
   createBuyerKeys,
   deposit,
+  exportLocker,
+  importLocker,
   Locker,
+  parseBundle,
   planGrant,
+  serialiseBundle,
   sidecarFor,
 } from "@firsthand/sdk";
 import { privateKeyToAccount } from "viem/accounts";
@@ -396,6 +400,94 @@ describe("gateway serving path (memory mode)", () => {
       identityRegistry: `0x${"80".repeat(20)}`,
       feedbackBy: reg.client,
     });
+  });
+
+  it("exit: a locker bundle re-hosts on another conformant gateway, and the buyer's query works there", async () => {
+    // README §4/§12/§13: "exit = keys + blobs walk away … any conformant client resumes". Gateway A
+    // hosts the locker; the bundle is its public objects only; gateway B is empty.
+    const s = await scenario();
+    const bundle = await exportLocker({
+      gatewayUrl: "http://gw",
+      principalId: s.sidecar.principalId,
+      chainId: 10143n,
+      grantIds: [s.grantId],
+      fetch: s.fetchApp,
+      now: () => 99n,
+    });
+    expect(bundle.passports).toHaveLength(1);
+    expect(bundle.wraps).toEqual([{ grantId: s.grantId, wrap: expect.any(String) }]);
+    // No plaintext, no key: the file is ciphertext, sidecars and wrap bytes, base64.
+    const file = serialiseBundle(bundle);
+    expect(file).not.toContain("served plaintext");
+    expect(parseBundle(file).passports[0]?.sidecar.principalId).toBe(s.sidecar.principalId);
+
+    const b = createGateway(
+      loadConfig({
+        PASSPORT_ANCHORS: `0x${"a1".repeat(20)}`,
+        PAY_TO: `0x${"aa".repeat(20)}`,
+        CHAIN_ID: "10143",
+        RATE_LIMIT_CAPACITY: "1000",
+      }),
+      { logger: noopLogger },
+    );
+    if (!b.memory) throw new Error("memory mode expected");
+    const fetchB = ((input: string | URL | Request, init?: RequestInit) =>
+      b.app.request(String(input).replace("http://gw-b", ""), init)) as unknown as typeof fetch;
+    // A conformant gateway takes nothing on trust: with B's chain view empty, every sidecar and
+    // the wrap are refused with the gateway's reason …
+    const refused = await importLocker({ gatewayUrl: "http://gw-b", bundle: file, fetch: fetchB });
+    expect(refused.passports).toBe(0);
+    expect(refused.skipped.map((x) => x.reason)).toEqual([
+      expect.stringMatching(/not anchored/),
+      expect.stringMatching(/unknown grant/),
+    ]);
+    // … and once B sees the same chain (the anchors and the grant, as it would on Monad), the
+    // same bundle lands whole.
+    if (!s.gw.memory) throw new Error("memory mode expected");
+    for (const call of s.gw.memory.anchors.callsTo("anchor")) {
+      await b.memory.anchors.anchor(call.args[0] as never);
+    }
+    b.memory.grants.setEpoch(5n);
+    b.memory.grants.enroll(s.locker.principalId, 5n);
+    b.memory.grants.registerCard(s.buyer.owner, s.buyer.encryptionPubKey);
+    b.memory.grants.acceptTerms(s.buyer.cardId, s.locker.principalId, s.terms);
+    b.memory.grants.grant({
+      principalId: s.locker.principalId,
+      granteeCard: s.buyer.cardId,
+      ns: 0,
+      termsHash: hashTerms(s.terms),
+      wrapRef: s.plan.wrapRef,
+      term: 4n,
+    });
+    const report = await importLocker({ gatewayUrl: "http://gw-b", bundle: file, fetch: fetchB });
+    expect(report).toEqual({ passports: 1, blobs: 2, wraps: 1, skipped: [] });
+    expect((await b.app.request(`/v1/passports/${s.r.passportId}`)).status).toBe(200);
+
+    // The buyer, with the grant it already holds, opens the same plaintext on B.
+    const buyerB = new BuyerSession({
+      keys: createBuyerKeys(
+        new Uint8Array(32).fill(0x0b),
+        privateKeyToAccount(`0x${"0b".repeat(32)}`),
+        new Uint8Array(32).fill(0x0c),
+      ),
+      grantManager: `0x${"b1".repeat(20)}`,
+      chainId: 10143n,
+      transport: new MemoryTransport(),
+      fetch: fetchB,
+    });
+    const { plaintext } = await buyerB.queryAndOpen(
+      { gatewayUrl: "http://gw-b", grantId: s.grantId, passportId: s.r.passportId },
+      b.domain,
+    );
+    expect(new TextDecoder().decode(plaintext)).toBe("served plaintext");
+    // A bundle whose ciphertext was altered is refused before any request is made.
+    const tampered = parseBundle(file);
+    const altered = {
+      ...tampered,
+      passports: tampered.passports.map((p) => ({ ...p, blob: btoa("not the ciphertext") })),
+    };
+    const bad = await importLocker({ gatewayUrl: "http://gw-b", bundle: altered, fetch: fetchB });
+    expect(bad.skipped[0]?.reason).toMatch(/does not hash/);
   });
 
   it("refuses payment for an unhosted passport and unknown grants cleanly", async () => {

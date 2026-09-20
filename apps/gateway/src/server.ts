@@ -736,7 +736,8 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     if (ns !== undefined && (!Number.isInteger(ns) || ns < 0 || ns > 15)) {
       throw new ValidationError("ns must be 0..15");
     }
-    const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? "100") || 100));
+    // Up to the catalog's index size in one page: a locker bundle (exit) lists everything at once.
+    const limit = Math.min(500, Math.max(1, Number(c.req.query("limit") ?? "100") || 100));
     // `?class=` filters on the attestation class (0 unattested · 1 import · 2 device_capture) —
     // README §13's "buyers filter by class"; sidecars that predate the preimage never match.
     const classRaw = c.req.query("class");

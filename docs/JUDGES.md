@@ -16,7 +16,8 @@ Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's c
 | 1:50 **Rescind** | (same run) | *You withdraw consent*: one passkey-signed `GrantManager.rescind`. *The same query is refused*: `FH_GRANT_RESCINDED` (HTTP 403) — no data, no charge. |
 | 2:00 **Ledger** | Locker | Grants with *withdrawn*, Earnings (receipts, USDC), the **Consent Ledger** — enrolled · attested · granted · rescinded with block numbers — and *Export + verify manifest*. |
 | 2:25 **Evidence** | Evidence tab | H1 (+1.9 % on a vanilla EVM, −4.2 % on Monad — the sign flip), H2 per arm with BTX *not measurable*, H3 1.93 s Merkle-only vs 31 s full re-proof, S2, S4 — read from `experiments/results` at build. |
-| **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published. |
+| **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published, with each passport's attestation class and the namespace's freshness (README §7.3). |
+| **Exit** (README §4) | Locker → *Take your locker with you* | One file: ciphertext, sidecars, grant wraps — no plaintext, no key. Point the app at another gateway (`?gateway=…`) and *Re-publish here*: it verifies every object against the chain before hosting it. The browser tier proves a second, empty gateway serves the buyer's paid query under the grant it already held. |
 
 ## An external buyer, not a stand-in — and an ERC-8004-carded one
 

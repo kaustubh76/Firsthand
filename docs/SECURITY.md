@@ -145,6 +145,16 @@ Three more, found by auditing the spec against the code rather than promised any
   own MCP process (`BUYER_PRIVATE_KEY`, `GRANTEE_SEED_HEX`).
 - **What an access-request link carries:** a card id, an X25519 public key, a namespace and a
   label — all public. Approving it is a passkey-signed grant; a hostile link can only ask.
+- **Exit (README §4 "keys + blobs walk away"):** a locker bundle (Locker → *Take your locker with
+  you*, `firsthand_export_locker`) is the gateway's public objects for one principal — ciphertext,
+  wrapped DEKs, signed sidecars, grant wraps — and nothing else: no plaintext, no key, nothing a
+  passkey did not already publish. It can be carried by anyone and re-published on any conformant
+  gateway (`?gateway=…` + *Re-publish here*, `firsthand_import_locker`), which verifies every
+  sidecar against the chain and every wrap against the grant's on-chain `wrapRef` before hosting
+  it; a bundle whose ciphertext does not hash to its references is refused before a request is
+  made. The chain is the source of truth; a gateway is a cache you can leave. Proven by the
+  browser tier: a second, empty gateway takes the bundle whole and serves the buyer's paid query
+  under the grant it already held.
 - **Upload bounds:** the function accepts bodies to `limits.maxUploadBytes` (4 MiB hosted;
   Vercel rejects larger bodies before the code runs) and the audit routes scan at most
   `LEDGER_MAX_SCAN_BLOCKS` per request inside a `LEDGER_SCAN_BUDGET_MS` wall-clock budget, so one

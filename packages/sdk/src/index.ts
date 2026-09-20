@@ -21,6 +21,22 @@ export type {
   SignatureMode,
 } from "./manifest/verify.js";
 export { verifyManifest } from "./manifest/verify.js";
+export type {
+  ExportLockerInput,
+  ImportLockerInput,
+  ImportReport,
+  LockerBundle,
+  LockerBundleWire,
+} from "./portability/bundle.js";
+export {
+  exportLocker,
+  fromBase64,
+  importLocker,
+  LockerBundleSchema,
+  parseBundle,
+  serialiseBundle,
+  toBase64,
+} from "./portability/bundle.js";
 export type { AcceptTermsPlan, CardKeys } from "./verbs/acceptTerms.js";
 export { planAcceptTerms, planRegisterCard, sendTx } from "./verbs/acceptTerms.js";
 export type { AttestPlan } from "./verbs/attest.js";

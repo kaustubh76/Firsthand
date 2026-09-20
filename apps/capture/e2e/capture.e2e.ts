@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { anvil, createChainClients, monadTestnet } from "@firsthand/adapters/client";
 import type { Address, Bytes32 } from "@firsthand/core";
+import { importLocker, parseBundle } from "@firsthand/sdk";
 import { chromium } from "playwright";
 import { generatePrivateKey } from "viem/accounts";
 import {
@@ -528,6 +529,61 @@ async function main() {
       ok(
         `reputation: agent #${outsiderAgent} has ${rep?.paidQueriesHere} paid query credited by this gateway`,
       );
+    }
+
+    step(
+      "exit: the locker walks away — a bundle from this gateway re-hosts on another, and the buyer's grant still opens it",
+    );
+    // README §4 / §12 / §13. The page downloads everything the gateway holds for the locker —
+    // ciphertext, sidecars, grant wraps; no plaintext, no key — and a second, empty gateway on the
+    // same chain takes it through verified ingest. The outsider then pays and opens the note there
+    // with the grant it already holds: the chain was the source of truth all along.
+    await page.locator("nav").getByRole("button", { name: "locker" }).click();
+    const bundleDownloading = page.waitForEvent("download", { timeout: 120_000 });
+    await page.getByTestId("bundle-download").click();
+    const bundleDownload = await bundleDownloading;
+    const bundlePath = join(out, "locker-bundle.json");
+    await bundleDownload.saveAs(bundlePath);
+    await page.getByTestId("bundle-note").waitFor({ timeout: 120_000 });
+    const bundleNote = (await page.getByTestId("bundle-note").textContent()) ?? "";
+    const bundleFile = readFileSync(bundlePath, "utf8");
+    if (bundleFile.includes("hallway light")) throw new Error("the bundle carries plaintext");
+    const parsed = parseBundle(bundleFile);
+    if (parsed.passports.length < 3 || parsed.wraps.length < 1) {
+      throw new Error(
+        `bundle too small: ${parsed.passports.length} passports, ${parsed.wraps.length} wraps`,
+      );
+    }
+    ok(`${bundleNote}`);
+    const second = spawned
+      ? spawned
+      : process.env["RELAYER_PRIVATE_KEY"] && process.env["BUYER_PRIVATE_KEY"]
+        ? await (async () => {
+            const env = await resolveEnv(["--testnet"]);
+            const d = JSON.parse(readFileSync(env.deploymentsFile, "utf8")) as { chainId: number };
+            return { env, chainId: d.chainId };
+          })()
+        : null;
+    if (!second) {
+      ok("no keys for a second gateway in this environment — the re-host half is proven locally");
+    } else {
+      const gwB = await startGateway(second.env, root, second.chainId);
+      cleanups.push(gwB.stop);
+      const before = await fetch(`${gwB.url}/v1/passports/${passportId}`);
+      if (before.status !== 404)
+        throw new Error(`gateway B already hosts the note (${before.status})`);
+      const report = await importLocker({ gatewayUrl: gwB.url, bundle: bundleFile });
+      if (report.passports !== parsed.passports.length || report.wraps !== parsed.wraps.length) {
+        throw new Error(`re-host incomplete: ${JSON.stringify(report)}`);
+      }
+      ok(
+        `re-hosted on ${gwB.url}: ${report.passports} passports, ${report.blobs} blobs, ${report.wraps} wraps — every one verified against the chain by the new gateway`,
+      );
+      const discoB = await discover(gwB.url);
+      const servedB = await buy(outsider, gwB.url, discoB, outsiderGrant, passportId);
+      const openedB = new TextDecoder().decode(servedB.plaintext);
+      if (!openedB.includes("hallway light")) throw new Error(`gateway B served: ${openedB}`);
+      ok(`the outsider paid gateway B with the same grant and opened: “${openedB}”`);
     }
 
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");

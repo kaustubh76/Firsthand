@@ -10,6 +10,7 @@ import {
   verifyManifest,
 } from "@firsthand/sdk/browser";
 import { useCallback, useEffect, useState } from "react";
+import { Portability } from "../components/Portability.js";
 import { Hex, Tx } from "../components/Tx.js";
 import { activate as activateLocker, reattest as reattestLocker } from "../lib/activation.js";
 import { formatUsdc } from "../lib/agent.js";
@@ -317,6 +318,12 @@ export function LockerView({
           ))}
         </ul>
       )}
+
+      <Portability
+        config={config}
+        principalId={principalId}
+        grantIds={journal.grants.map((g) => g.grantId)}
+      />
 
       <h2>Share your locker</h2>
       <p className="hint">

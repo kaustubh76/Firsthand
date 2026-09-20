@@ -1,4 +1,10 @@
-import { encodePaymentHeader, MemoryBlobStore, MemoryTransport } from "@firsthand/adapters";
+import {
+  buildAgentURI,
+  encodePaymentHeader,
+  MemoryBlobStore,
+  MemoryErc8004Registry,
+  MemoryTransport,
+} from "@firsthand/adapters";
 import {
   AttestationClass,
   hashTerms,
@@ -36,15 +42,19 @@ const prfSource = (fill: number) => ({
   evaluate: async () => new Uint8Array(32).fill(fill),
 });
 
-async function scenario() {
+async function scenario(erc8004?: MemoryErc8004Registry) {
   const gw = createGateway(
     loadConfig({
       PASSPORT_ANCHORS: `0x${"a1".repeat(20)}`,
       PAY_TO: `0x${"aa".repeat(20)}`,
       CHAIN_ID: "10143",
       RATE_LIMIT_CAPACITY: "1000",
+      ...(erc8004 ? { ERC8004_FEEDBACK: "true" } : {}),
     }),
-    { logger: noopLogger },
+    {
+      logger: noopLogger,
+      ...(erc8004 ? { erc8004, relayerAddress: erc8004.client } : {}),
+    },
   );
   if (!gw.memory) throw new Error("memory mode expected");
   const fetchApp = ((input: string | URL | Request, init?: RequestInit) =>
@@ -278,6 +288,77 @@ describe("gateway serving path (memory mode)", () => {
         })
       ).status,
     ).toBe(400);
+  });
+
+  it("ERC-8004: a paid query by a carded agent becomes feedback; an unbound agent gets none", async () => {
+    const reg = new MemoryErc8004Registry({
+      identityRegistry: `0x${"80".repeat(20)}`,
+      reputationRegistry: `0x${"81".repeat(20)}`,
+    });
+    const s = await scenario(reg);
+    // The buyer registered an ERC-8004 identity from its own key, naming its card in metadata.
+    const agentId = reg.mint(
+      s.buyer.owner,
+      buildAgentURI({
+        name: "Outside agent",
+        description: "",
+        owner: s.buyer.owner,
+        cardId: s.buyer.cardId,
+        encryptionPubKey: s.buyer.encryptionPubKey,
+      }),
+      s.buyer.cardId,
+    );
+    const impostor = reg.mint(`0x${"ee".repeat(20)}`, "data:application/json,{}", s.buyer.cardId);
+
+    // The agents route shows who is asking, before any grant.
+    const who = (await (await s.gw.app.request(`/v1/agents/${agentId}`)).json()) as {
+      owner: string;
+      cardId: string;
+      reputation: { paidQueriesHere: string };
+    };
+    expect(who).toMatchObject({ owner: s.buyer.owner, cardId: s.buyer.cardId });
+    expect(who.reputation.paidQueriesHere).toBe("0");
+    expect((await s.gw.app.request("/v1/agents/999")).status).toBe(404);
+    expect((await s.gw.app.request("/v1/agents/abc")).status).toBe(400);
+
+    await s.buyer.queryAndOpen(
+      { gatewayUrl: "http://gw", grantId: s.grantId, passportId: s.r.passportId, agentId },
+      s.gw.domain,
+    );
+    await new Promise((r) => setTimeout(r, 20)); // feedback is off the response path
+    expect(reg.feedback).toHaveLength(1);
+    expect(reg.feedback[0]).toMatchObject({
+      agentId,
+      tag1: "firsthand",
+      tag2: "paid-query",
+      value: 1n,
+      feedbackURI: `http://localhost:8402/v1/grants/${s.grantId}/receipts`,
+    });
+    const after = (await (await s.gw.app.request(`/v1/agents/${agentId}`)).json()) as {
+      reputation: { paidQueriesHere: string };
+    };
+    expect(after.reputation.paidQueriesHere).toBe("1");
+
+    // Someone else's agent naming this card is not bound: the owner does not match. No feedback.
+    await s.buyer.queryAndOpen(
+      {
+        gatewayUrl: "http://gw",
+        grantId: s.grantId,
+        passportId: s.r.passportId,
+        agentId: impostor,
+      },
+      s.gw.domain,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(reg.feedback).toHaveLength(1);
+    // Discovery names the registries and who gives feedback.
+    const disco = (await (await s.gw.app.request("/.well-known/firsthand.json")).json()) as {
+      erc8004: { identityRegistry: string; feedbackBy: string };
+    };
+    expect(disco.erc8004).toMatchObject({
+      identityRegistry: `0x${"80".repeat(20)}`,
+      feedbackBy: reg.client,
+    });
   });
 
   it("refuses payment for an unhosted passport and unknown grants cleanly", async () => {

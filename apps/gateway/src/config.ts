@@ -49,6 +49,12 @@ export const GatewayConfigSchema = z.object({
   RELAYER_PRIVATE_KEY: privateKey.optional(),
   /** /healthz reports `relayer.low` below this many MON — the refill signal. */
   RELAYER_LOW_WATERMARK_MON: z.coerce.number().nonnegative().default(0.5),
+  /**
+   * ERC-8004: after each paid query from a buyer that identifies as an agent (`?agent=`) and
+   * provably owns the grant's card, the relayer gives one unit of `firsthand/paid-query` feedback
+   * on the reference Reputation Registry. Costs relayer gas per query; off by default.
+   */
+  ERC8004_FEEDBACK: z.coerce.boolean().default(false),
 
   X402_MODE: z.enum(["memory", "monad"]).default("memory"),
   X402_FACILITATOR_URL: z.string().url().optional(),

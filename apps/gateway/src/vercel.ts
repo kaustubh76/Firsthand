@@ -18,6 +18,8 @@ const defaults: Record<string, string> = {
   // USDC is the MockUSDC faucet double, so its `mint` relays too — a demo buyer funds itself.
   RELAY_ENABLED: "true",
   RELAY_FAUCET_MINT: "true",
+  // ERC-8004 reference registries are live on Monad testnet: paid queries feed buyer reputation.
+  ERC8004_FEEDBACK: "true",
   // A judge's own history: ?fromBlock= may reach back 20 000 blocks (~2.2 h at 0.4 s), ≤ 200 paced
   // eth_getLogs calls, inside the function's 60 s.
   LEDGER_MAX_SCAN_BLOCKS: "20000",

@@ -30,6 +30,8 @@ export interface QueryRequest {
   readonly gatewayUrl: string;
   readonly grantId: Bytes32;
   readonly passportId: Bytes32;
+  /** The buyer's ERC-8004 agent id: the gateway then credits this paid query to its reputation. */
+  readonly agentId?: bigint;
 }
 
 export interface QueryDeps {
@@ -68,7 +70,9 @@ export interface QueryResult {
 
 export async function query(request: QueryRequest, deps: QueryDeps): Promise<QueryResult> {
   const doFetch = deps.fetch ?? fetch;
-  const url = `${request.gatewayUrl.replace(/\/+$/, "")}/v1/query/${request.grantId}/${request.passportId}`;
+  const url = `${request.gatewayUrl.replace(/\/+$/, "")}/v1/query/${request.grantId}/${request.passportId}${
+    request.agentId === undefined ? "" : `?agent=${request.agentId}`
+  }`;
 
   const first = await doFetch(url);
   if (first.status === 404) throw new NotFoundError(`gateway does not host ${request.passportId}`);

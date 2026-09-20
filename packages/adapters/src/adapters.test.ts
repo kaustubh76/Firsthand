@@ -18,7 +18,14 @@ import { FsBlobStore } from "./blobs/FsBlobStore.js";
 import { IpfsBlobStore } from "./blobs/IpfsBlobStore.js";
 import { ObjectBlobStore } from "./blobs/ObjectBlobStore.js";
 import { anvil, createChainClients, monadTestnet } from "./chain.js";
-import { OnchainErc8004Registry } from "./erc8004/OnchainErc8004Registry.js";
+import { FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "./erc8004/abi.js";
+import { erc8004Addresses } from "./erc8004/addresses.js";
+import { buildAgentURI, decodeAgentURI } from "./erc8004/agentUri.js";
+import {
+  cardMetadata,
+  decodeCard,
+  OnchainErc8004Registry,
+} from "./erc8004/OnchainErc8004Registry.js";
 import { EnvioConsentLedger } from "./ledger/EnvioConsentLedger.js";
 import {
   blobId,
@@ -222,17 +229,120 @@ describe("x402 header codec", () => {
   });
 });
 
-describe("MemoryErc8004Registry / MemoryConsentLedger", () => {
-  it("resolve cards and filter ledger views", async () => {
-    const reg = new MemoryErc8004Registry();
-    const card = { cardId: b32(5), owner: addr(5), encryptionPubKey: b32(6), active: true };
-    reg.register(card);
-    expect(await reg.resolveCard(b32(5))).toEqual(card);
-    reg.deactivate(b32(5));
-    expect((await reg.resolveCard(b32(5)))?.active).toBe(false);
-    reg.deactivate(b32(42));
-    expect(await reg.resolveCard(b32(42))).toBeNull();
+describe("ERC-8004: agent identities and paid-query feedback", () => {
+  it("registration files round-trip as data: URIs and name the card", () => {
+    const uri = buildAgentURI({
+      name: "Qwen buyer",
+      description: "buys provenance-checked data",
+      owner: addr(9),
+      cardId: b32(5),
+      encryptionPubKey: b32(6),
+      gatewayUrl: "https://gw.example",
+    });
+    expect(uri.startsWith("data:application/json;base64,")).toBe(true);
+    const back = decodeAgentURI(uri);
+    expect(back).toMatchObject({
+      name: "Qwen buyer",
+      firsthand: { cardId: b32(5), encryptionPubKey: b32(6) },
+      services: [{ name: "firsthand-buyer", endpoint: "https://gw.example" }],
+    });
+    expect(decodeAgentURI("ipfs://bafy…")).toBeNull();
+    expect(decodeAgentURI("data:application/json,%7B%22name%22%3A%22x%22%7D")).toEqual({
+      name: "x",
+    });
+  });
 
+  it("the memory double binds cards, verifies ownership and sums feedback like the registries", async () => {
+    const reg = new MemoryErc8004Registry();
+    const owner = addr(0xa9);
+    const { agentId } = await (async () => {
+      reg.client = owner;
+      return reg.registerAgent({
+        agentURI: "data:application/json,{}",
+        metadata: [cardMetadata(b32(5))],
+      });
+    })();
+    expect(agentId).toBe(1n);
+    expect(await reg.verifyCardBinding(agentId, b32(5), owner)).toBe(true);
+    expect(await reg.verifyCardBinding(agentId, b32(6), owner)).toBe(false);
+    expect(await reg.verifyCardBinding(agentId, b32(5), addr(1))).toBe(false);
+    expect(await reg.agent(99n)).toBeNull();
+    // The gateway relayer gives feedback; the summary can be scoped to that client and tag.
+    reg.client = addr(0xfe);
+    await reg.giveFeedback({
+      agentId,
+      value: 1n,
+      tag1: FEEDBACK_TAG1,
+      tag2: FEEDBACK_TAG2_PAID,
+      endpoint: "https://gw.example",
+      feedbackURI: "https://gw.example/v1/grants/0x..",
+      feedbackHash: b32(7),
+    });
+    expect(await reg.summary(agentId, [addr(0xfe)], FEEDBACK_TAG1, FEEDBACK_TAG2_PAID)).toEqual({
+      count: 1n,
+      value: 1n,
+      decimals: 0,
+    });
+    expect((await reg.summary(agentId, [addr(1)])).count).toBe(0n);
+  });
+
+  it("the on-chain adapter reads an agent from the registries and reports where none exist", async () => {
+    // A fake public client answering the four reads for agent #7 owned by 0x..a9 with a bound card.
+    const owner = addr(0xa9);
+    const uri = buildAgentURI({
+      name: "Outside agent",
+      description: "",
+      owner,
+      cardId: b32(5),
+      encryptionPubKey: b32(6),
+    });
+    const publicClient = {
+      chain: { id: 10143 },
+      readContract: async ({ functionName, args }: { functionName: string; args: unknown[] }) => {
+        switch (functionName) {
+          case "ownerOf":
+            if (args[0] === 7n) return owner;
+            throw new Error("ERC721NonexistentToken");
+          case "tokenURI":
+            return uri;
+          case "getAgentWallet":
+            return "0x0000000000000000000000000000000000000000";
+          case "getMetadata":
+            return b32(5);
+          case "getSummary":
+            return [3n, 3n, 0];
+          default:
+            throw new Error(`unexpected ${functionName}`);
+        }
+      },
+    } as never;
+    const reg = new OnchainErc8004Registry({ publicClient });
+    expect(reg.addresses?.identityRegistry).toBe("0x8004a818bfb912233c491871b3d84c89a494bd9e");
+    const view = await reg.agent(7n);
+    expect(view).toMatchObject({ agentId: 7n, owner, cardId: b32(5), wallet: null });
+    expect((view?.registration as { name?: string } | null)?.name).toBe("Outside agent");
+    expect(await reg.agent(8n)).toBeNull();
+    expect(await reg.verifyCardBinding(7n, b32(5), owner)).toBe(true);
+    expect(await reg.summary(7n, [addr(0xfe)], "firsthand", "paid-query")).toEqual({
+      count: 3n,
+      value: 3n,
+      decimals: 0,
+    });
+    // A local chain has no reference deployment; reads say so instead of calling a zero address.
+    const local = new OnchainErc8004Registry({ publicClient: { chain: { id: 31337 } } as never });
+    expect(local.addresses).toBeNull();
+    await expect(local.agent(1n)).rejects.toThrow(/not deployed/);
+    await expect(reg.registerAgent({ agentURI: uri })).rejects.toThrow(/need a wallet/);
+    expect(erc8004Addresses(143)?.identityRegistry).toBe(
+      "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432",
+    );
+    expect(decodeCard(`0x${"ab".repeat(32)}`)).toBe(`0x${"ab".repeat(32)}`);
+    expect(decodeCard("0x1234")).toBeNull();
+  });
+});
+
+describe("MemoryConsentLedger", () => {
+  it("filters ledger views", async () => {
     const ledger = new MemoryConsentLedger();
     const receipt = {
       receiptId: b32(1),
@@ -673,10 +783,6 @@ describe("shells and chain wiring", () => {
     });
     expect(signed.account?.address).toMatch(/^0x/);
     expect(monadTestnet.id).toBe(10143);
-    const reg = new OnchainErc8004Registry(clients.publicClient, addr(1));
-    expect(reg.chainId).toBe(31337);
-    expect(reg.address).toBe(addr(1));
-    await expect(reg.resolveCard(b32(1))).rejects.toThrow(NotImplementedError);
     const ledger = new EnvioConsentLedger({
       graphqlUrl: "http://envio/graphql",
       fetch: (async () =>

@@ -10,7 +10,19 @@ export type { ObjectPassportCatalogOptions } from "./catalog/ObjectPassportCatal
 export { ObjectPassportCatalog } from "./catalog/ObjectPassportCatalog.js";
 export type { ChainClients, ChainClientsOptions } from "./chain.js";
 export { anvil, createChainClients, monadTestnet } from "./chain.js";
-export { OnchainErc8004Registry } from "./erc8004/OnchainErc8004Registry.js";
+export {
+  CARD_METADATA_KEY,
+  FEEDBACK_TAG1,
+  FEEDBACK_TAG2_PAID,
+  IdentityRegistryAbi,
+  ReputationRegistryAbi,
+} from "./erc8004/abi.js";
+export type { Erc8004Addresses } from "./erc8004/addresses.js";
+export { erc8004Addresses } from "./erc8004/addresses.js";
+export type { AgentRegistrationInput } from "./erc8004/agentUri.js";
+export { buildAgentURI, buildRegistration, decodeAgentURI } from "./erc8004/agentUri.js";
+export type { OnchainErc8004RegistryOptions } from "./erc8004/OnchainErc8004Registry.js";
+export { cardMetadata, OnchainErc8004Registry } from "./erc8004/OnchainErc8004Registry.js";
 export type { OnchainGrantReaderOptions } from "./grants/OnchainGrantReader.js";
 export { OnchainGrantReader } from "./grants/OnchainGrantReader.js";
 export type { EnvioConsentLedgerOptions } from "./ledger/EnvioConsentLedger.js";
@@ -34,7 +46,12 @@ export type {
   LedgerScan,
   ReceiptView,
 } from "./ports/ConsentLedger.js";
-export type { Erc8004Registry } from "./ports/Erc8004Registry.js";
+export type {
+  AgentView,
+  Erc8004Registry,
+  Erc8004Writer,
+  ReputationSummary,
+} from "./ports/Erc8004Registry.js";
 export type {
   CardView,
   GrantReader,

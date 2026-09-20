@@ -3,6 +3,10 @@ import {
   anvil,
   type ConsentLedger,
   createChainClients,
+  type Erc8004Registry,
+  type Erc8004Writer,
+  FEEDBACK_TAG1,
+  FEEDBACK_TAG2_PAID,
   FsBlobStore,
   FsPassportCatalog,
   type GrantReader,
@@ -20,6 +24,7 @@ import {
   ObjectBlobStore,
   ObjectPassportCatalog,
   OnchainAnchorWriter,
+  OnchainErc8004Registry,
   OnchainGrantReader,
   OnchainSettlement,
   type PaymentRequirements,
@@ -112,7 +117,11 @@ function objectStoreClient(config: GatewayConfig) {
 /** Assembles adapters from config. Memory mode needs no network — used by tests and `pnpm dev`. */
 export function createGateway(
   config: GatewayConfig,
-  overrides: Partial<Pick<GatewayApp, "logger">> = {},
+  overrides: Partial<Pick<GatewayApp, "logger">> & {
+    /** Tests: an ERC-8004 double in place of the chain's registries (memory mode has none). */
+    erc8004?: Erc8004Registry & Erc8004Writer;
+    relayerAddress?: Address;
+  } = {},
 ): GatewayApp {
   const logger =
     overrides.logger ?? createLogger({ level: config.LOG_LEVEL, json: config.LOG_JSON });
@@ -160,6 +169,8 @@ export function createGateway(
   let ledger: ConsentLedger | null = null;
   let chainHead: (() => Promise<bigint>) | null = null;
   let relayerFloat: (() => Promise<{ address: Address; balanceWei: bigint }>) | null = null;
+  let erc8004: (Erc8004Registry & Erc8004Writer) | null = overrides.erc8004 ?? null;
+  let relayerAddress: Address | null = overrides.relayerAddress ?? null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
     const d = readDeployment(config);
@@ -178,11 +189,18 @@ export function createGateway(
     chainHead = () => clients.publicClient.getBlockNumber({ cacheTime: 0 });
     if (clients.walletClient) {
       const address = clients.walletClient.account.address.toLowerCase() as Address;
+      relayerAddress = address;
       relayerFloat = async () => ({
         address,
         balanceWei: await clients.publicClient.getBalance({ address }),
       });
     }
+    // ERC-8004 reference registries, where the chain has them (Monad testnet/mainnet).
+    const registries = new OnchainErc8004Registry({
+      publicClient: clients.publicClient,
+      ...(clients.walletClient ? { walletClient: clients.walletClient } : {}),
+    });
+    if (registries.addresses) erc8004 = registries;
     anchors = new OnchainAnchorWriter({
       address: passportAnchors,
       layout: d.anchorsLayout,
@@ -252,7 +270,18 @@ export function createGateway(
   }
 
   const domain: Eip712Domain = { chainId: config.CHAIN_ID, verifyingContract: passportAnchors };
-  const serving = new Serving({ anchors, blobs, catalog, grants, settlement, domain, logger });
+  const serving = new Serving({
+    anchors,
+    blobs,
+    catalog,
+    grants,
+    settlement,
+    domain,
+    logger,
+    ...(erc8004 && config.ERC8004_FEEDBACK && relayerAddress
+      ? { reputation: { registry: erc8004, publicUrl: config.PUBLIC_URL } }
+      : {}),
+  });
   const limiter = new MemoryTokenBucketLimiter({
     capacity: config.RATE_LIMIT_CAPACITY,
     refillPerSecond: config.RATE_LIMIT_REFILL_PER_SECOND,
@@ -390,6 +419,15 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       // Clients size their captures to this: ciphertext (plaintext + AEAD overhead) must fit.
       limits: { maxUploadBytes: config.MAX_UPLOAD_BYTES },
       app: config.CAPTURE_URL ?? null,
+      // ERC-8004 (README §5): where the reference registries exist, buyers can be carded agents
+      // and paid queries feed their reputation — given by `feedbackBy` (this gateway's relayer).
+      erc8004: erc8004?.addresses
+        ? {
+            ...erc8004.addresses,
+            feedbackBy: config.ERC8004_FEEDBACK ? relayerAddress : null,
+            agent: "/v1/agents/:agentId",
+          }
+        : null,
       endpoints: {
         query: "/v1/query/:grantId/:passportId",
         relay: "POST /v1/relay",
@@ -459,11 +497,16 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         requirementsFor(c.req.param("grantId") ?? "", c.req.param("passportId") ?? ""),
     }),
     async (c) => {
+      const agentRaw = c.req.query("agent");
+      if (agentRaw !== undefined && !/^\d{1,20}$/.test(agentRaw)) {
+        throw new ValidationError("agent must be an ERC-8004 agent id");
+      }
       const result = await serving.serve({
         grantId: parseId(c.req.param("grantId"), "grantId"),
         passportId: parseId(c.req.param("passportId"), "passportId"),
         payment: c.get("x402Payload"),
         requirements: c.get("x402Requirements"),
+        ...(agentRaw === undefined ? {} : { agentId: BigInt(agentRaw) }),
       });
       return c.json(result);
     },
@@ -555,6 +598,36 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     const scan = await scanOf(c.req.query("fromBlock"));
     return c.json(
       jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId, scan) }),
+    );
+  });
+
+  /** Who is asking: an ERC-8004 agent, its bound card, and what this gateway has said about it. */
+  app.get("/v1/agents/:agentId", async (c) => {
+    if (!erc8004) {
+      return c.json({ code: "FH_CONFIG", error: "no ERC-8004 registries on this chain" }, 404);
+    }
+    const raw = c.req.param("agentId") ?? "";
+    if (!/^\d{1,20}$/.test(raw)) throw new ValidationError("agent id must be a decimal integer");
+    const agentId = BigInt(raw);
+    const view = await erc8004.agent(agentId);
+    if (!view)
+      return c.json({ code: "FH_NOT_FOUND", error: `agent ${raw} is not registered` }, 404);
+    const [paid, all] = await Promise.all([
+      relayerAddress
+        ? erc8004.summary(agentId, [relayerAddress], FEEDBACK_TAG1, FEEDBACK_TAG2_PAID)
+        : Promise.resolve({ count: 0n, value: 0n, decimals: 0 }),
+      erc8004.summary(agentId, [], FEEDBACK_TAG1, ""),
+    ]);
+    return c.json(
+      jsonSafe({
+        ...view,
+        registries: erc8004.addresses,
+        reputation: {
+          paidQueriesHere: paid.count,
+          firsthandFeedbackAll: all.count,
+          feedbackBy: relayerAddress,
+        },
+      }),
     );
   });
 

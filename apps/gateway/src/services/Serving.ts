@@ -1,12 +1,15 @@
 import type {
   AnchorWriter,
   BlobStore,
+  Erc8004Registry,
+  Erc8004Writer,
   GrantReader,
   PassportCatalog,
   PaymentPayload,
   PaymentRequirements,
   Settlement,
 } from "@firsthand/adapters";
+import { FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "@firsthand/adapters";
 import {
   type Bytes32,
   type Eip712Domain,
@@ -38,6 +41,15 @@ export interface ServingDeps {
   readonly settlement: Settlement;
   readonly domain: Eip712Domain;
   readonly logger: Logger;
+  /**
+   * ERC-8004 (README §5): when a buyer identifies as an agent and the agent provably owns the
+   * grant's card, every paid query becomes one unit of `firsthand/paid-query` feedback from this
+   * gateway — receipts feeding the agent's reputation surface. Absent on chains without registries.
+   */
+  readonly reputation?: {
+    readonly registry: Erc8004Registry & Erc8004Writer;
+    readonly publicUrl: string;
+  };
 }
 
 export interface ServeRequest {
@@ -45,6 +57,8 @@ export interface ServeRequest {
   readonly passportId: Bytes32;
   readonly payment: PaymentPayload;
   readonly requirements: PaymentRequirements;
+  /** The buyer's ERC-8004 agent id, when it wants this paid query on its reputation. */
+  readonly agentId?: bigint;
 }
 
 export interface ServedQuery {
@@ -212,6 +226,10 @@ export class Serving {
       passportId: request.passportId,
       receipt: settled.receiptId,
     });
+    if (request.agentId !== undefined) {
+      // Off the response path: the buyer has its data; the feedback lands when it lands.
+      void this.#feedback(request.agentId, request.grantId, settled.receiptId);
+    }
     return {
       passportId: request.passportId,
       sidecar: sidecarToWire(sidecar),
@@ -223,6 +241,41 @@ export class Serving {
         blockNumber: settled.blockNumber?.toString() ?? null,
       },
     };
+  }
+
+  /**
+   * One paid, honoured query → one unit of feedback on the agent, given by this gateway. Only when
+   * the agent provably owns the grant's card: metadata names the card and the agent's owner is the
+   * card's owner — a stranger cannot pin queries on someone else's identity.
+   */
+  async #feedback(agentId: bigint, grantId: Bytes32, receiptId: Bytes32): Promise<void> {
+    const rep = this.#d.reputation;
+    if (!rep) return;
+    try {
+      const g = await this.#d.grants.grantState(grantId);
+      const card = g ? await this.#d.grants.cardOf(g.granteeCard) : null;
+      if (!g || !card) return;
+      const bound = await rep.registry.verifyCardBinding(agentId, g.granteeCard, card.owner);
+      if (!bound) {
+        this.#d.logger.warn("agent is not bound to the grant's card; no feedback", {
+          agentId: agentId.toString(),
+          grantId,
+        });
+        return;
+      }
+      const txHash = await rep.registry.giveFeedback({
+        agentId,
+        value: 1n,
+        tag1: FEEDBACK_TAG1,
+        tag2: FEEDBACK_TAG2_PAID,
+        endpoint: rep.publicUrl,
+        feedbackURI: `${rep.publicUrl}/v1/grants/${grantId}/receipts`,
+        feedbackHash: receiptId,
+      });
+      this.#d.logger.info("reputation feedback", { agentId: agentId.toString(), grantId, txHash });
+    } catch (error) {
+      this.#d.logger.warn("reputation feedback failed", { agentId: agentId.toString(), error });
+    }
   }
 
   /** The one call, composed from chain reads (README §7.3). */

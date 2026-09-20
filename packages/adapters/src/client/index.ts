@@ -10,6 +10,12 @@ export type { OnchainAnchorWriterOptions } from "../anchors/OnchainAnchorWriter.
 export { OnchainAnchorWriter, prepareAnchorTx } from "../anchors/OnchainAnchorWriter.js";
 export type { ChainClients, ChainClientsOptions } from "../chain.js";
 export { anvil, createChainClients, monadTestnet } from "../chain.js";
+export { CARD_METADATA_KEY, FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "../erc8004/abi.js";
+export type { Erc8004Addresses } from "../erc8004/addresses.js";
+export { erc8004Addresses } from "../erc8004/addresses.js";
+export { buildAgentURI, buildRegistration, decodeAgentURI } from "../erc8004/agentUri.js";
+export type { OnchainErc8004RegistryOptions } from "../erc8004/OnchainErc8004Registry.js";
+export { cardMetadata, OnchainErc8004Registry } from "../erc8004/OnchainErc8004Registry.js";
 export type { OnchainGrantReaderOptions } from "../grants/OnchainGrantReader.js";
 export { OnchainGrantReader } from "../grants/OnchainGrantReader.js";
 export * from "../memory/index.js";
@@ -27,6 +33,12 @@ export type {
   ConsentEventKind,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
+export type {
+  AgentView,
+  Erc8004Registry,
+  Erc8004Writer,
+  ReputationSummary,
+} from "../ports/Erc8004Registry.js";
 export type { GrantView, PrincipalLivenessView } from "../ports/GrantReader.js";
 export type {
   PreparedTx,

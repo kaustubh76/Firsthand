@@ -17,6 +17,7 @@ Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's c
 | 2:00 **Ledger** | Locker | Grants with *withdrawn*, Earnings (receipts, USDC), the **Consent Ledger** — enrolled · attested · granted · rescinded with block numbers — and *Export + verify manifest*. |
 | 2:25 **Evidence** | Evidence tab | H1 (+1.9 % on a vanilla EVM, −4.2 % on Monad — the sign flip), H2 per arm with BTX *not measurable*, H3 1.93 s Merkle-only vs 31 s full re-proof, S2, S4 — read from `experiments/results` at build. |
 | **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published, with each passport's attestation class and the namespace's freshness (README §7.3). |
+| **Handoff** (the MCP from the phone's locker) | Locker → *Let an agent deposit for you* | An `fhd1.` deposit code for one namespace and this epoch. `FIRSTHAND_DELEGATION=…` in `firsthand-mcp`: `firsthand_deposit` lands in *this* locker under *this* principal; grant, rescind and attest stay with the passkey (`FH_DELEGATION_SCOPE`). |
 | **Exit** (README §4) | Locker → *Take your locker with you* | One file: ciphertext, sidecars, grant wraps — no plaintext, no key. Point the app at another gateway (`?gateway=…`) and *Re-publish here*: it verifies every object against the chain before hosting it. The browser tier proves a second, empty gateway serves the buyer's paid query under the grant it already held. |
 
 ## An external buyer, not a stand-in — and an ERC-8004-carded one
@@ -40,7 +41,11 @@ flow as a script in [`integrations/buyer-agent`](../integrations/buyer-agent/REA
 - **A large live clip.** Hosted captures are capped at 4 MiB (Vercel's request-body ceiling; the
   gateway publishes the limit). A self-hosted gateway takes 8 MiB.
 - **Weekly epochs.** A locker attested last week needs *Attest this epoch* (offered on the Capture
-  card) before it anchors again — the app says so before anything reverts.
+  card) before it anchors again — the app says so before anything reverts; the strip announces a
+  rollover inside its last six hours.
+- **The venue's float.** Every relayed step is paid by the gateway's relayer (≈0.3 MON per full
+  script at 102 gwei). The strip words the float once it is low; if it runs dry the app says so in
+  a banner (`FH_INSUFFICIENT_FUNDS`) and reading, verifying and the evidence still work.
 
 ## Proof that this script works
 

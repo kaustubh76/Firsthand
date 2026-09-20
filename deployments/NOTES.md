@@ -38,9 +38,9 @@ the relayer).
 
 | Role | Address | Funding |
 |---|---|---|
-| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`; **0.31 MON on 2026-09-20 evening, refill** |
+| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`, and funds the browser tier's outside buyer (0.15 MON, swept back); **0.23 MON on 2026-09-21, refill (≥ 5 MON) before judging** |
 | Buyer | `0xE73b48c4d667aAe87cEf56624F5EDB7ba9A1CcD5` | **none** — it only signs; the relayer submits |
-| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float (~1 MON); refill from the faucet — **0.56 MON on 2026-09-20 evening, refill before judging** |
+| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float; refill from the faucet — **0.23 MON on 2026-09-21 (`/healthz` says `low`), refill (≥ 5 MON) before judging: one full live script ≈ 0.3 MON at 102 gwei** |
 
 The hosted relayer is deliberately a separate key with a small float: the public relay spends its
 gas on request, so a stranger looping on it can only ever drain that float, never the deployer.
@@ -63,8 +63,16 @@ photo and import passports anchored and published → refusal → demo buyer fun
 double, card, terms → grant (`0xa2870bdd39…86ff097b5d`) → paid query settled on chain
 (`0x510b5d9365…f84ffc54c3`, 0.001 USDC to the deposit key) → rescission (`0xd68e2b1c4e…bec5d81471`)
 → the same query refused `FH_GRANT_RESCINDED` → ledger and manifest verified. Sidecars survive
-redeploys (Vercel Blob). Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`). One full script
-≈ 0.08 MON of relayer gas.
+redeploys (Vercel Blob). Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`). One full script —
+now sixteen relayed transactions with the outside buyer's handshake, its settlement and the
+ERC-8004 feedback — ≈ 0.3 MON of relayer gas at 102 gwei (measured 20 Sep; the earlier 0.08 figure
+was the shorter script at a quieter fee).
+
+Latest live run (20 Sep, after the robustness pass): activation, captures, recall, ledger, verify
+with classes and freshness, evidence, the outside buyer's ERC-8004 registration (agent #1907,
+binding verified on screen) — then the public RPC's per-second window ("requests limited to
+15/sec") turned a wrap read into a 500, now handled (backoff, 503 + `retry-after`, retrying
+reads). The complete live proof of that fix, and the judging window, need both floats refilled.
 
 ## Caveats a reviewer should know
 

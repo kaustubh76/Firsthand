@@ -385,3 +385,69 @@ Two operational notes from the run: Monad executes asynchronously, so a just-fun
 for its balance to show before spending (`awaitBalance`); and the deployer key that relays for
 local testnet runs had drained to 0.02 MON — refilled 1 MON from the hosted float, both need the
 faucet again before the judging window.
+
+### Update — the judging window holds; the locker walks away; the agent gets a scoped key (21 Sep 2026)
+
+Four things, in the order a judge would meet them.
+
+**Hosted robustness.** One relayer key served five senders across serverless instances with no
+nonce management, and every failure read "relay: submission failed". Now: the paying account uses
+viem's nonce manager and every sender retries a nonce collision with a fresh pending nonce; a
+simulated revert decodes to its custom error (`EpochNotAttested(…)`, not "would revert") and the
+app turns it into the action to take; an empty float is `FH_INSUFFICIENT_FUNDS` naming the
+relayer, shown as a banner, and the status strip reads `/healthz` every minute and words the float
+once it is low; discovery retries a cold-starting gateway and can be re-run from the strip; a
+dropped relay or publish request is retried once (safe: the relay simulates first, publishing is
+idempotent); the Consent Ledger walks newest-first with a wall-clock budget and reports what it
+covered instead of timing out; the faucet relay is capped per call; hosted rate limits fit a
+judging room behind one NAT. The browser tier gained a beat: a second gateway with an unfunded
+relayer, and the page names it — banner, card, strip.
+
+The live run then found the next one: Monad's public RPC enforces a per-second window shared with
+everything behind Vercel's egress ("requests limited to 15/sec"; 50/s from a home IP), and viem's
+second of retries did not span it — a wrap read became an opaque 500. The chain clients now back
+off 300·2^n ms four times, a rate-limited RPC surfaces as 503 + `retry-after`, and every
+idempotent read (the app's, the demo agent's, the buyer template's) honours it.
+
+**Two spec claims made true.** README §13 says buyers filter by attestation class; the sidecar
+carried only the hash. The attestation preimage now travels with the sidecar (verified at ingest
+against `passport.attest`), listings show class / capture time / source tag and take `?class=`,
+the MCP's `firsthand_list_passports` takes `class`, the buyer's compliance file carries the class
+per asset (`ATTESTATION_MISMATCH` if relabelled), the Verify tab shows it. README §7.3's freshness
+— `s(t) = 1 − 2^(−t/τ)` since a namespace's newest anchor — is computed by the gateway from the
+anchor's block time and returned with every listing, stated as the market signal it is.
+
+**Exit (README §4 / §12 / §13).** A locker bundle is the gateway's public objects for one
+principal — ciphertext, wrapped DEKs, signed sidecars, grant wraps; never plaintext, never a key —
+exported by the SDK with every object re-hashed against its reference and re-published through the
+same verified ingest every publisher uses. Locker → *Take your locker with you* / *Re-publish
+here*; MCP `firsthand_export_locker` / `firsthand_import_locker`. Proven by the browser tier: the
+page downloads the bundle, a second empty gateway takes it whole, and the outsider pays gateway B
+with the grant it already held.
+
+**The handoff (the MCP↔PWA gap, closed).** The passkey cannot be used over stdio, so the app issues
+a *deposit delegation*: the three keys of one namespace-epoch (`k_dep`, `k_nonce`, `k_ns,e`) with
+the public scope, as one `fhd1.` code. `KeyTree.delegate` is the tree's one serialisation;
+`DelegatedKeys` refuses every other derivation with `FH_DELEGATION_SCOPE` — no authority key, no
+other namespace or epoch, nothing past the epoch boundary. `firsthand-mcp` opens it from
+`FIRSTHAND_DELEGATION`; `deposit`/`import` land under the human's principal; enrol, attest, grant
+and rescind answer "open the app". SECURITY.md §3 says exactly what leaves the device and why it
+is a capability, not a key export. Proven by the browser tier: an agent with no passkey deposits
+into the page's locker, anchored through the relay and listed by the gateway; the same code cannot
+rescind.
+
+Also: a forge test pins that a rescinded grantee cannot be re-granted in the same epoch (stricter
+than §7.6); SECURITY.md §6 gains that, per-passport pricing, the off-chain ERC-8004 binding,
+freshness, and the screening citations it claimed; `check:all` runs `forge test` when Foundry is
+installed.
+
+**Live, honestly.** After these changes the hosted links ran the script through activation,
+captures, the recall loop, the ledger, verify (classes and freshness live), evidence, and the
+outside buyer's ERC-8004 registration (agent #1907, binding verified on screen) — then hit the RPC
+window described above, which the last commit handles. A full live run costs the hosted relayer
+≈0.3 MON at 102 gwei (measured 20 Sep; the earlier 0.08 estimate was wrong), and both testnet
+floats now sit at ≈0.23 MON: the complete live proof of the last commit, and the judging window
+itself, need the faucet first.
+
+**Still not built:** Envio handlers, the external x402 facilitator, the docs site, BTX (not on
+testnet).

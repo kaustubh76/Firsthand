@@ -80,7 +80,8 @@ redeploy — verified by redeploying and re-fetching.
 - `/healthz` reports the float (`relayer.balanceMon`, `low` below `RELAYER_LOW_WATERMARK_MON`);
   the PWA's status strip reads it every minute and words it once it is low.
 - The full judge script (enrol, attest, three anchors, faucet mint, card, terms, grant, settle,
-  rescind — 12 relayed transactions) costs ≈ 0.08 MON; a capture alone ≈ 0.05 MON.
+  rescind, plus the outside buyer's card, terms, settlement and ERC-8004 feedback — sixteen
+  relayed transactions) costs ≈ 0.3 MON at 102 gwei; a capture alone ≈ 0.02 MON.
   Refill: send testnet MON to the relayer address above. Rotate: `npx vercel@59 env rm
   RELAYER_PRIVATE_KEY production` then `env add` a new one and redeploy — nothing on chain
   references the relayer.

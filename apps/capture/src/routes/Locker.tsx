@@ -16,8 +16,9 @@ import { formatUsdc } from "../lib/agent.js";
 import { type AgentInfo, bindingHolds, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
+import { reportFailure } from "../lib/failures.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
-import { fetchReceipts, fetchTimeline } from "../lib/ledger.js";
+import { describeScan, fetchReceipts, fetchTimeline, type TimelineScan } from "../lib/ledger.js";
 import { mergeLedger } from "../lib/ledgerMerge.js";
 import { describeLiveness, type Liveness, readerFor } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
@@ -53,6 +54,7 @@ export function LockerView({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<ConsentEvent[] | null>(null);
+  const [scan, setScan] = useState<TimelineScan | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [manifest, setManifest] = useState<{ text: string; verdict: ManifestVerdict } | null>(null);
   const [earnings, setEarnings] = useState<{
@@ -93,7 +95,7 @@ export function LockerView({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(reportFailure(e));
     } finally {
       setBusy(null);
     }
@@ -106,9 +108,11 @@ export function LockerView({
     try {
       const j = loadJournal(principalId);
       const from = j.enrolBlock ? BigInt(j.enrolBlock) : undefined;
-      setEvents(await fetchTimeline(config.gatewayUrl, principalId, from));
+      const t = await fetchTimeline(config.gatewayUrl, principalId, from);
+      setEvents(t.events);
+      setScan(t.scan);
     } catch (e) {
-      setLedgerError((e as Error).message);
+      setLedgerError(reportFailure(e));
     }
   }, [config.live, config.gatewayUrl, principalId]);
 
@@ -170,10 +174,16 @@ export function LockerView({
     const j = loadJournal(principalId);
     const from = j.enrolBlock ? BigInt(j.enrolBlock) : undefined;
     const rows: { tx: string; grantId: string; block: bigint }[] = [];
-    for (const g of j.grants) {
-      for (const r of await fetchReceipts(config.gatewayUrl, g.grantId, from)) {
-        rows.push({ tx: r.txHash, grantId: r.grantId, block: r.blockNumber });
+    try {
+      for (const g of j.grants) {
+        for (const r of await fetchReceipts(config.gatewayUrl, g.grantId, from)) {
+          rows.push({ tx: r.txHash, grantId: r.grantId, block: r.blockNumber });
+        }
       }
+    } catch (e) {
+      // Earnings are a read model over the same ledger the Consent Ledger shows: say so, once.
+      setLedgerError(reportFailure(e));
+      return;
     }
     setEarnings({ count: rows.length, total: PRICE_UNITS * BigInt(rows.length), rows });
   }, [config.live, config.gatewayUrl, principalId]);
@@ -476,6 +486,11 @@ export function LockerView({
         </button>
       </p>
       {ledgerError && <p className="error">{ledgerError}</p>}
+      {describeScan(scan) && (
+        <p className="hint" data-testid="ledger-scan">
+          {describeScan(scan)}
+        </p>
+      )}
       {(() => {
         const rows = mergeLedger(principalId, events ?? [], journal);
         if (events === null && rows.length === 0) {

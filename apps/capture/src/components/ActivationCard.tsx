@@ -2,6 +2,7 @@ import type { LockerSession } from "@firsthand/sdk/browser";
 import { useState } from "react";
 import { type Activated, activate, reattest } from "../lib/activation.js";
 import type { AppConfig } from "../lib/config.js";
+import { reportFailure } from "../lib/failures.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { Tx } from "./Tx.js";
@@ -45,7 +46,7 @@ export function ActivationCard({
       }
       onActivated();
     } catch (e) {
-      setError((e as Error).message);
+      setError(reportFailure(e));
     } finally {
       setBusy(false);
     }

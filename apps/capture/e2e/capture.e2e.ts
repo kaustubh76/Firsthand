@@ -72,6 +72,8 @@ async function main() {
   const hostedGateway = process.env["E2E_GATEWAY_URL"];
   const cleanups: (() => Promise<void>)[] = [];
   let gatewayUrl: string;
+  /** The spawned gateway's environment, kept so a second gateway can be spawned for the dry-float beat. */
+  let spawned: { env: Awaited<ReturnType<typeof resolveEnv>>; chainId: number } | null = null;
 
   step("environment");
   // .env (git-ignored) supplies the testnet keys: the relayer that also funds the e2e's outside buyer
@@ -92,6 +94,7 @@ async function main() {
     const gw = await startGateway(env, root, d.chainId);
     cleanups.push(gw.stop);
     gatewayUrl = gw.url;
+    spawned = { env, chainId: d.chainId };
     ok(`gateway: ${gatewayUrl} (spawned, chain ${d.chainId})`);
   }
   const disco = (await (await fetch(`${gatewayUrl}/.well-known/firsthand.json`)).json()) as {
@@ -169,6 +172,15 @@ async function main() {
       .filter({ hasText: /attested for epoch/ })
       .waitFor({ timeout: 60_000 });
     ok("status strip: attested for this epoch; the card is gone");
+    // The strip has read /healthz: the venue's float is known (and worded only once it is low).
+    await page.locator('.status[data-relayer="ok"], .status[data-relayer="low"]').waitFor({
+      timeout: 30_000,
+    });
+    ok(
+      `status strip knows the relayer float (${await page
+        .locator(".status")
+        .getAttribute("data-relayer")})`,
+    );
 
     step("capture a note → passport → anchor → publish");
     await page.getByRole("button", { name: "capture" }).click();
@@ -518,6 +530,47 @@ async function main() {
       await overflow(tab);
     }
     await phone.close();
+
+    if (spawned) {
+      step("the venue runs dry: an unfunded relayer is named on screen, not hidden in a 502");
+      // A second gateway on the same chain whose relayer key holds nothing. The first relayed
+      // transaction cannot be paid for; the app must say exactly that.
+      const dry = await startGateway(
+        { ...spawned.env, relayerKey: generatePrivateKey() },
+        root,
+        spawned.chainId,
+      );
+      cleanups.push(dry.stop);
+      const dryContext = await browser.newContext();
+      const dryPage = await dryContext.newPage();
+      const dryCdp = await dryContext.newCDPSession(dryPage);
+      await dryCdp.send("WebAuthn.enable", { enableUI: false });
+      await dryCdp.send("WebAuthn.addVirtualAuthenticator", {
+        options: {
+          protocol: "ctap2",
+          transport: "internal",
+          hasResidentKey: true,
+          hasUserVerification: true,
+          isUserVerified: true,
+          hasPrf: true,
+          automaticPresenceSimulation: true,
+        },
+      });
+      await dryPage.goto(`${appUrl}/?gateway=${encodeURIComponent(dry.url)}`);
+      await dryPage.locator(".status").filter({ hasText: /^live/ }).waitFor({ timeout: 30_000 });
+      await dryPage.getByRole("button", { name: "Create passkey" }).click();
+      await dryPage.locator("nav").waitFor({ timeout: 20_000 });
+      const dryCard = dryPage.getByTestId("activation");
+      await dryCard.waitFor({ timeout: 60_000 });
+      await dryCard.getByRole("button", { name: /Activate on chain/ }).click();
+      await dryPage.getByTestId("out-of-gas").waitFor({ timeout: 60_000 });
+      const cardError = (await dryCard.locator(".error").textContent()) ?? "";
+      if (!/out of gas/.test(cardError)) throw new Error(`unexpected wording: ${cardError}`);
+      ok(`banner + card: ${cardError.slice(0, 110)}…`);
+      await dryPage.getByTestId("relayer-float").waitFor({ timeout: 30_000 });
+      ok(`strip: ${await dryPage.getByTestId("relayer-float").textContent()}`);
+      await dryContext.close();
+    }
 
     if (pageErrors.length > 0) throw new Error(`page errors:\n  ${pageErrors.join("\n  ")}`);
     await page.screenshot({ path: join(out, "final.png"), fullPage: true });

@@ -94,14 +94,42 @@ function fallback(): AppConfig {
   };
 }
 
-/** Never throws: a gateway that is down or misconfigured degrades to offline mode, not a blank screen. */
-export async function loadConfig(): Promise<AppConfig> {
+export interface LoadConfigOptions {
+  /** Discovery attempts before giving up (default 3): a serverless gateway can take a cold start. */
+  readonly attempts?: number;
+  readonly onAttempt?: (attempt: number, of: number) => void;
+  readonly fetch?: typeof fetch;
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Never throws: a gateway that is down or misconfigured degrades to offline mode, not a blank
+ * screen. A gateway that is merely slow to wake — a hosted function's cold start — gets up to
+ * `attempts` tries before the app calls it offline, and says which attempt it is on.
+ */
+export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppConfig> {
+  const attempts = Math.max(1, options.attempts ?? 3);
+  const sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  let last: AppConfig | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    options.onAttempt?.(attempt, attempts);
+    last = await discoverOnce(options.fetch ?? fetch.bind(globalThis));
+    if (last.live || !last.reason || !RETRYABLE.test(last.reason)) return last;
+    if (attempt < attempts) await sleep(1_000 * attempt);
+  }
+  return last as AppConfig;
+}
+
+/** Reasons worth another try: the gateway not answering, or answering with a server-side status. */
+const RETRYABLE = /did not answer|is unreachable|answered 5\d\d/;
+
+async function discoverOnce(doFetch: typeof fetch): Promise<AppConfig> {
   const base = fallback();
   const gatewayUrl = base.gatewayUrl;
   if (!gatewayUrl) return base;
   const host = gatewayUrl.replace(/\/+$/, "");
   try {
-    const res = await fetch(`${host}/.well-known/firsthand.json`, {
+    const res = await doFetch(`${host}/.well-known/firsthand.json`, {
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
     });
     if (!res.ok) return { ...base, reason: `gateway ${host} answered ${res.status} to discovery` };

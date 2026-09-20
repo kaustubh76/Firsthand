@@ -11,6 +11,7 @@ import { ActivationCard } from "../components/ActivationCard.js";
 import { Hex, Tx } from "../components/Tx.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Landed, land } from "../lib/deposits.js";
+import { reportFailure } from "../lib/failures.js";
 import type { Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
@@ -58,7 +59,7 @@ export function Capture({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(reportFailure(e));
     } finally {
       setBusy(null);
     }
@@ -140,9 +141,7 @@ export function Capture({
           });
         } catch (e) {
           // One unprovable or duplicate conversation must not abandon the rest.
-          refused.push(
-            `${item.conversation.title || item.conversation.id}: ${(e as Error).message}`,
-          );
+          refused.push(`${item.conversation.title || item.conversation.id}: ${reportFailure(e)}`);
         }
       }
       setExportFile(null);

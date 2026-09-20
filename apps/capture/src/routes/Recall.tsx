@@ -20,6 +20,7 @@ import {
 } from "../lib/agent.js";
 import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
+import { reportFailure } from "../lib/failures.js";
 import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
@@ -126,7 +127,7 @@ export function Recall({
       set(id, { status: "done" });
       return true;
     } catch (e) {
-      say(id, <span className="error">{(e as Error).message}</span>);
+      say(id, <span className="error">{reportFailure(e)}</span>);
       set(id, { status: "failed" });
       return false;
     }

@@ -47,12 +47,13 @@ describe("loadConfig", () => {
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("Failed to fetch");
     });
-    let c = await loadConfig();
+    const noWait = { sleep: async () => undefined };
+    let c = await loadConfig(noWait);
     expect(c.live).toBe(false);
     expect(c.reason).toMatch(/gw.test is unreachable/);
 
     vi.stubGlobal("fetch", async () => new Response("{}", { status: 503 }));
-    c = await loadConfig();
+    c = await loadConfig(noWait);
     expect(c.reason).toMatch(/answered 503/);
 
     vi.stubGlobal(
@@ -89,5 +90,47 @@ describe("loadConfig", () => {
     c = await loadConfig();
     expect(c.live).toBe(false);
     expect(c.reason).toMatch(/RELAY_ENABLED=false/);
+  });
+
+  it("retries a gateway that is slow to wake, and reports each attempt", async () => {
+    const { loadConfig } = await import("./config.js");
+    vi.stubGlobal("localStorage", {
+      getItem: () => "http://gw.test",
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const disco = {
+      chainId: "10143",
+      rpcUrl: "https://rpc.test",
+      relay: { enabled: true },
+      contracts: {
+        PassportAnchors: `0x${"01".repeat(20)}`,
+        GrantManager: `0x${"02".repeat(20)}`,
+        Rescissions: `0x${"03".repeat(20)}`,
+        PrincipalRegistry: `0x${"04".repeat(20)}`,
+      },
+      epochs: { genesis: "1", length: "604800" },
+    };
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      if (calls < 3) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(disco), { status: 200 });
+    });
+    const attempts: number[] = [];
+    const c = await loadConfig({
+      onAttempt: (n) => attempts.push(n),
+      sleep: async () => undefined,
+    });
+    expect(c.live).toBe(true);
+    expect(attempts).toEqual([1, 2, 3]);
+    // A definite answer is not retried: memory mode is a configuration, not a cold start.
+    calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      return new Response(JSON.stringify({ contracts: null, epochs: null }), { status: 200 });
+    });
+    await loadConfig({ sleep: async () => undefined });
+    expect(calls).toBe(1);
   });
 });

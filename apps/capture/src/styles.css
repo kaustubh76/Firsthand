@@ -166,6 +166,22 @@ code {
 .status[data-live="false"] {
   border-color: #ff7b7b;
 }
+.status[data-relayer="low"] {
+  border-color: #f2c14e;
+}
+.status .float {
+  color: #f2c14e;
+  opacity: 1;
+}
+.banner {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ff7b7b;
+  border-radius: 0.5rem;
+  background: rgba(255, 123, 123, 0.08);
+  color: #ffb3b3;
+  font-size: 0.9em;
+}
 .card {
   border: 1px solid #3a3a48;
   border-radius: 0.6rem;

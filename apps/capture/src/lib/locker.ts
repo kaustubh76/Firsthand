@@ -82,7 +82,16 @@ export function createClient(config: AppConfig): CaptureClient {
     anchors,
     waitForTx: publicClient
       ? async (hash) => {
-          await publicClient.waitForTransactionReceipt({ hash });
+          // 90 s, not viem's 180 s: a relayed transaction that has not landed by then was dropped
+          // or replaced, and a judge deserves the sentence rather than a longer spinner.
+          await publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 }).catch((e) => {
+            if ((e as Error).name === "WaitForTransactionReceiptTimeoutError") {
+              throw new Error(
+                `transaction ${hash} was not included within 90 s — check the explorer, then retry`,
+              );
+            }
+            throw e;
+          });
         }
       : null,
   };

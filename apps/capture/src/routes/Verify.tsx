@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Hex } from "../components/Tx.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
+import { explainFailure } from "../lib/failures.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { fetchSidecar, type ListedPassport, listPassports } from "../lib/sidecars.js";
 
@@ -43,7 +44,7 @@ export function Verify({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(explainFailure(e));
     } finally {
       setBusy(null);
     }

@@ -2,12 +2,14 @@ import {
   anvil,
   BtxTransport,
   createChainClients,
+  erc8004Addresses,
   FsBlobStore,
   HttpRelayTransport,
   MemoryAnchorWriter,
   MemoryFacilitator,
   MemoryTransport,
   monadTestnet,
+  OnchainErc8004Registry,
   PublicMempoolTransport,
   type TxTransport,
 } from "@firsthand/adapters";
@@ -149,6 +151,25 @@ const openSession = () => {
   return session;
 };
 
+// ERC-8004, where the chain has the reference registries. Reads over the key-less reader; the one
+// write an agent makes itself (registration) uses a wallet on the BUYER key — it cannot be relayed.
+const erc8004 =
+  readerClients && erc8004Addresses(config.CHAIN_ID)
+    ? new OnchainErc8004Registry({ publicClient: readerClients.publicClient })
+    : null;
+const buyerRegistry =
+  erc8004 && config.RPC_URL && config.BUYER_PRIVATE_KEY
+    ? () =>
+        new OnchainErc8004Registry({
+          publicClient: (readerClients as NonNullable<typeof readerClients>).publicClient,
+          walletClient: createChainClients({
+            rpcUrl: config.RPC_URL as string,
+            chain: config.CHAIN_ID === 31337n ? anvil : monadTestnet,
+            privateKey: config.BUYER_PRIVATE_KEY as `0x${string}`,
+          }).walletClient as NonNullable<ReturnType<typeof createChainClients>["walletClient"]>,
+        })
+    : null;
+
 let buyer: Promise<BuyerSession> | null = null;
 const openBuyer = () => {
   if (buyer === null) {
@@ -179,6 +200,9 @@ const server = createMcpServer({
   canBroadcast: transport.kind !== "memory",
   canAnchor: deployment !== null && (relayerClients?.walletClient !== undefined || relayed),
   transport,
+  ...(config.BUYER_AGENT_ID === undefined ? {} : { agentId: config.BUYER_AGENT_ID }),
+  ...(erc8004 ? { erc8004 } : {}),
+  ...(buyerRegistry ? { buyerRegistry } : {}),
   ...(readerClients
     ? {
         publicClient: readerClients.publicClient as never,

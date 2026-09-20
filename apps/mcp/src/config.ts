@@ -62,6 +62,8 @@ export const McpConfigSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{64}$/)
     .optional(),
+  /** The buyer's ERC-8004 agent id once registered (firsthand_register_agent prints it). */
+  BUYER_AGENT_ID: z.coerce.bigint().optional(),
   GRANTEE_SEED_HEX: z
     .string()
     .regex(/^0x[0-9a-f]{64}$/)

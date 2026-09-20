@@ -60,6 +60,7 @@ describe("firsthand-mcp", () => {
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(tools).toEqual([
       "firsthand_accept_terms",
+      "firsthand_agent_reputation",
       "firsthand_attest",
       "firsthand_deposit",
       "firsthand_enroll",
@@ -68,6 +69,7 @@ describe("firsthand-mcp", () => {
       "firsthand_import",
       "firsthand_list_passports",
       "firsthand_query",
+      "firsthand_register_agent",
       "firsthand_register_card",
       "firsthand_request_access",
       "firsthand_rescind",
@@ -83,6 +85,12 @@ describe("firsthand-mcp", () => {
     });
     expect(request.isError).toBe(true);
     expect(textOf(request as { content: unknown }).message).toMatch(/no buyer keys/);
+    const agent = await client.callTool({
+      name: "firsthand_register_agent",
+      arguments: { name: "Test buyer" },
+    });
+    expect(agent.isError).toBe(true);
+    expect(textOf(agent as { content: unknown }).message).toMatch(/no buyer keys/);
     const listing = await client.callTool({
       name: "firsthand_list_passports",
       arguments: { principalId: `0x${"11".repeat(32)}` },

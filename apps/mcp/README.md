@@ -1,6 +1,6 @@
 # firsthand-mcp
 
-MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_accept_terms`, `firsthand_list_passports`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_rescind`, `firsthand_status`
+MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_register_agent`, `firsthand_agent_reputation`, `firsthand_accept_terms`, `firsthand_list_passports`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_rescind`, `firsthand_status`
 over stdio. Runs on the **user's** machine and may derive keys (README §22, §13 "malicious MCP client":
 a hostile client can only pollute its own user's locker — deposits are valid only under derived keys).
 
@@ -42,6 +42,15 @@ RPC_URL=https://testnet-rpc.monad.xyz  DEPLOYMENTS_FILE=$PWD/deployments/10143.j
 5. `firsthand_export_manifest({ gatewayUrl, grantId, passportIds })` queries and returns the buyer's
    Lineage Manifest — origin signature, Merkle proof, anchor and receipt per asset — verified
    against the chain before it is handed back.
+
+**Be an ERC-8004 agent (recommended).** `firsthand_register_agent({ name })` mints the agent's
+identity on the reference Identity Registry (Monad testnet `0x8004A818…`) with a `data:`
+registration file and this buyer's card bound in metadata — the one transaction the buyer signs
+with its own key (≈0.07 MON; the registry is `msg.sender`-authorised, so it cannot be relayed).
+Set the returned id as `BUYER_AGENT_ID`: approval links then carry `agent=`, the human sees
+*ERC-8004 agent #N · binding verified ✓*, and every paid query becomes one unit of
+`firsthand/paid-query` feedback from the gateway on the Reputation Registry —
+`firsthand_agent_reputation` reads it back.
 
 The buyer needs MockUSDC for step 4: on testnet the token is the faucet double and the gateway
 relays its `mint` (selector-scoped, published in discovery), so `firsthand_request_access` funds

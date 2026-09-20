@@ -46,10 +46,32 @@ export const AcceptTermsInputSchema = z.object({
   rateLimit: z.number().int().min(0).default(100),
 });
 
+const agentId = z
+  .string()
+  .regex(/^\d{1,20}$/)
+  .optional()
+  .describe(
+    "ERC-8004 agent id; defaults to BUYER_AGENT_ID. Paid queries then feed its reputation.",
+  );
+
 export const QueryInputSchema = z.object({
   gatewayUrl: z.string().url(),
   grantId: hex32,
   passportId: hex32,
+  agentId,
+});
+
+export const RegisterAgentInputSchema = z.object({
+  name: z.string().min(1).max(64),
+  description: z.string().max(280).default("FIRSTHAND buyer agent"),
+});
+
+export const AgentReputationInputSchema = z.object({
+  agentId: z
+    .string()
+    .regex(/^\d{1,20}$/)
+    .optional()
+    .describe("defaults to BUYER_AGENT_ID"),
 });
 
 export const RequestAccessInputSchema = z.object({
@@ -66,6 +88,7 @@ export const RequestAccessInputSchema = z.object({
     .max(15)
     .optional()
     .describe("With principalId: restrict to a namespace"),
+  agentId,
   label: z.string().max(64).default("an agent").describe("How the human will see this buyer"),
   appUrl: z
     .string()
@@ -84,6 +107,7 @@ export const ExportManifestInputSchema = z.object({
   gatewayUrl: z.string().url(),
   grantId: hex32,
   passportIds: z.array(hex32).min(1).max(64),
+  agentId,
 });
 
 export const RescindInputSchema = z.object({

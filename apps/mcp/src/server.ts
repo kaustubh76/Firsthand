@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import type { AnchorWriter, TxTransport } from "@firsthand/adapters";
+import {
+  type AnchorWriter,
+  buildAgentURI,
+  cardMetadata,
+  type Erc8004Registry,
+  type Erc8004Writer,
+  type TxTransport,
+} from "@firsthand/adapters";
 import {
   type Address,
   AttestationClass,
@@ -29,6 +36,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { encodeFunctionData, type PublicClient, parseAbi } from "viem";
 import {
   AcceptTermsInputSchema,
+  AgentReputationInputSchema,
   AttestInputSchema,
   DepositInputSchema,
   EnrollInputSchema,
@@ -37,6 +45,7 @@ import {
   ImportInputSchema,
   ListPassportsInputSchema,
   QueryInputSchema,
+  RegisterAgentInputSchema,
   RegisterCardInputSchema,
   RequestAccessInputSchema,
   RescindInputSchema,
@@ -64,6 +73,11 @@ export interface McpDeps {
   readonly waitForTx?: (hash: Bytes32) => Promise<void>;
   /** The transport every relayed call rides; the faucet mint goes through it when the gateway allows. */
   readonly transport?: TxTransport;
+  /** ERC-8004: the reference registries on this chain (reads; writes when the buyer wallet is set). */
+  readonly erc8004?: Erc8004Registry & Erc8004Writer;
+  /** A wallet on the buyer key, for the one transaction that cannot be relayed: agent registration. */
+  readonly buyerRegistry?: () => Erc8004Registry & Erc8004Writer;
+  readonly agentId?: bigint;
 }
 
 const CLASS = {
@@ -168,6 +182,9 @@ async function listPassports(
   return ((await res.json()) as { passports: ListedPassport[] }).passports;
 }
 
+const agentOf = (deps: McpDeps, raw: string | undefined): bigint | undefined =>
+  raw !== undefined ? BigInt(raw) : deps.agentId;
+
 /** Builds the MCP server with the three verbs plus `firsthand_status`. */
 export function createMcpServer(deps: McpDeps): McpServer {
   const server = new McpServer({ name: "firsthand-mcp", version: "0.1.0" });
@@ -254,16 +271,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
             new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)"),
           );
         const buyer = await deps.buyer();
+        const agent = agentOf(deps, input.agentId);
         const { result, plaintext } = await buyer.queryAndOpen(
           {
             gatewayUrl: input.gatewayUrl,
             grantId: input.grantId as Bytes32,
             passportId: input.passportId as Bytes32,
+            ...(agent === undefined ? {} : { agentId: agent }),
           },
           deps.passportDomain,
         );
         return text({
           passportId: result.passportId,
+          ...(agent === undefined ? {} : { agentId: agent.toString() }),
           receipt: result.receipt,
           paid: {
             value: result.paid.requirements.maxAmountRequired,
@@ -528,6 +548,76 @@ export function createMcpServer(deps: McpDeps): McpServer {
   );
 
   server.registerTool(
+    "firsthand_register_agent",
+    {
+      title: "Register this buyer as an ERC-8004 agent",
+      description:
+        "One transaction from the buyer's own key (the identity registry is msg.sender-authorised, so it cannot be relayed — the key needs a little MON). Mints the agent NFT with a data: registration file and binds this buyer's FIRSTHAND card in metadata, so a human can verify who is asking and the gateway can credit paid queries to the agent's reputation. Put the returned agentId in BUYER_AGENT_ID.",
+      inputSchema: RegisterAgentInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.buyer)
+          throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
+        if (!deps.buyerRegistry) {
+          throw new Error(
+            "registration needs RPC_URL and a chain with ERC-8004 registries (Monad testnet/mainnet)",
+          );
+        }
+        if (deps.agentId !== undefined) {
+          return text({ agentId: deps.agentId.toString(), note: "BUYER_AGENT_ID is already set" });
+        }
+        const buyer = await deps.buyer();
+        const card = await buyer.registerCard();
+        await deps.waitForTx?.(card.txHash);
+        const { agentId, txHash } = await deps.buyerRegistry().registerAgent({
+          agentURI: buildAgentURI({
+            name: input.name,
+            description: input.description,
+            owner: buyer.owner,
+            cardId: buyer.cardId,
+            encryptionPubKey: buyer.encryptionPubKey,
+            ...(deps.gatewayUrl ? { gatewayUrl: deps.gatewayUrl } : {}),
+          }),
+          metadata: [cardMetadata(buyer.cardId)],
+        });
+        return text({
+          agentId: agentId.toString(),
+          cardId: buyer.cardId,
+          owner: buyer.owner,
+          txHash,
+          next: `Set BUYER_AGENT_ID=${agentId} so request_access links and queries carry it.`,
+        });
+      } catch (error) {
+        deps.logger.warn("registerAgent failed", { error });
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "firsthand_agent_reputation",
+    {
+      title: "Read an agent's FIRSTHAND reputation",
+      description:
+        "What the gateway has said about an ERC-8004 agent: paid queries it credited (firsthand/paid-query feedback from the gateway's relayer), all FIRSTHAND feedback, the bound card and owner.",
+      inputSchema: AgentReputationInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.gatewayUrl) throw new Error("GATEWAY_URL is required");
+        const agent = agentOf(deps, input.agentId);
+        if (agent === undefined) throw new Error("give an agentId or set BUYER_AGENT_ID");
+        const res = await fetch(`${deps.gatewayUrl}/v1/agents/${agent}`);
+        if (!res.ok) throw new Error(`gateway answered ${res.status} for agent ${agent}`);
+        return text(await res.json());
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "firsthand_list_passports",
     {
       title: "List what a principal has published",
@@ -586,12 +676,14 @@ export function createMcpServer(deps: McpDeps): McpServer {
         const accepted = await accept.send();
         await deps.waitForTx?.(accepted.txHash);
         const funding = await fundBuyer(deps, buyer.owner, sidecar.terms.price);
+        const agent = agentOf(deps, input.agentId);
         const q = new URLSearchParams({
           grant: buyer.cardId,
           pub: buyer.encryptionPubKey,
           ns: String(sidecar.ns),
           from: input.label,
         });
+        if (agent !== undefined) q.set("agent", agent.toString());
         return text({
           passportId,
           principalId: sidecar.principalId,
@@ -608,6 +700,12 @@ export function createMcpServer(deps: McpDeps): McpServer {
           registerCardTx: card.txHash,
           acceptTermsTx: accepted.txHash,
           funding,
+          ...(agent === undefined
+            ? {
+                erc8004:
+                  "not carded — firsthand_register_agent gives this buyer an identity the human can verify",
+              }
+            : { agentId: agent.toString() }),
           next: "Send approvalLink to the human. Once they approve, firsthand_query works with the grantId of the epoch they granted in (the Locker shows it); the wrap is published by the app.",
         });
       } catch (error) {
@@ -635,12 +733,14 @@ export function createMcpServer(deps: McpDeps): McpServer {
           );
         const buyer = await deps.buyer();
         const results: QueryResult[] = [];
+        const agent = agentOf(deps, input.agentId);
         for (const id of input.passportIds) {
           const { result } = await buyer.queryAndOpen(
             {
               gatewayUrl: input.gatewayUrl,
               grantId: input.grantId as Bytes32,
               passportId: id as Bytes32,
+              ...(agent === undefined ? {} : { agentId: agent }),
             },
             deps.passportDomain,
           );

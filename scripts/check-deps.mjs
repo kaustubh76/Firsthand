@@ -17,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Workspace globs, mirrored from pnpm-workspace.yaml. */
 const WORKSPACE_DIRS = ["packages", "apps"];
-const WORKSPACE_SINGLES = ["contracts", "experiments"];
+const WORKSPACE_SINGLES = ["contracts", "experiments", "integrations/buyer-agent"];
 
 /**
  * Allowed *runtime* dependencies per package. Internal packages are listed by name;
@@ -112,6 +112,11 @@ const GRAPH = {
     ],
     // viem for the demo buyer's EVM account and USDC reads — the same viem the adapters use.
     external: ["react", "react-dom", "viem"],
+  },
+  "@firsthand/buyer-agent": {
+    // The partner template: what an external buyer needs and nothing else.
+    internal: ["@firsthand/sdk", "@firsthand/adapters", "@firsthand/core"],
+    external: ["viem"],
   },
   "@firsthand/experiments": {
     // Runs on a developer machine with throw-away keys; the S4 on-chain arm forges deposit signatures.

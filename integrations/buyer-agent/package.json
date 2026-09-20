@@ -1,0 +1,29 @@
+{
+  "name": "@firsthand/buyer-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Partner template: an AI buyer agent that discovers, requests, pays for and audits provenance-checked data through any FIRSTHAND gateway — ERC-8004-carded, no gas of its own beyond the identity",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "buy": "tsx src/buy.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:testnet": "echo 'run `pnpm buy` against a live gateway (README)'",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@firsthand/adapters": "workspace:*",
+    "@firsthand/core": "workspace:*",
+    "@firsthand/sdk": "workspace:*",
+    "viem": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

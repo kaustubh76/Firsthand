@@ -3,6 +3,7 @@ packages:
   - apps/*
   - contracts
   - experiments
+  - integrations/buyer-agent
 
 catalog:
   '@biomejs/biome': 2.5.13

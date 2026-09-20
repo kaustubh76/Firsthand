@@ -3,6 +3,7 @@ import type {
   AnchorView,
   ConsentEvent,
   ConsentLedger,
+  ConsentTimeline,
   LedgerScan,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
@@ -59,5 +60,15 @@ export class MemoryConsentLedger extends Recorder implements ConsentLedger {
       this.events.filter((e) => e.principalId === principalId),
       scan,
     ).sort((a, b) => Number(a.blockNumber - b.blockNumber));
+  }
+
+  /** Memory sees everything it recorded: never partial, `toBlock` is the newest block it knows. */
+  async timeline(principalId: Bytes32, scan?: LedgerScan): Promise<ConsentTimeline> {
+    const events = await this.consentTimeline(principalId, scan);
+    const newest = [...this.events, ...this.receipts, ...this.anchors].reduce(
+      (max, row) => (row.blockNumber > max ? row.blockNumber : max),
+      0n,
+    );
+    return { events, scan: { fromBlock: scan?.fromBlock ?? 0n, toBlock: newest, partial: false } };
   }
 }

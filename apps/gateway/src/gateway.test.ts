@@ -216,7 +216,7 @@ describe("gateway", () => {
         RELAYER_PRIVATE_KEY: `0x${"01".repeat(32)}`,
         RELAY_ENABLED: "true",
         RELAY_FAUCET_MINT: "true",
-        RATE_LIMIT_CAPACITY: "2",
+        RATE_LIMIT_CAPACITY: "3",
         RATE_LIMIT_REFILL_PER_SECOND: "0",
       }),
       { logger: noopLogger },
@@ -232,11 +232,18 @@ describe("gateway", () => {
     const transfer = await relayTo(usdc, `0xa9059cbb${"00".repeat(64)}`); // transfer(address,uint256)
     expect(transfer.status).toBe(400);
     expect(((await transfer.json()) as { detail: string }).detail).toMatch(/not relayable/);
+    // The faucet pays for a demo, not a treasury: an amount above RELAY_FAUCET_MAX_UNITS is refused
+    // on the calldata, before any simulation.
+    const tooMuch = await relayTo(usdc, `0x40c10f19${"00".repeat(32)}${"ff".repeat(32)}`);
+    expect(tooMuch.status).toBe(400);
+    expect(((await tooMuch.json()) as { detail: string }).detail).toMatch(
+      /exceeds the relayed cap/,
+    );
     // A permitted selector gets past the allow-list to the simulation (which fails: no node here).
     const mint = await relayTo(usdc, `0x40c10f19${"00".repeat(64)}`);
     expect(mint.status).not.toBe(400);
     expect(((await mint.json()) as { code: string }).code).toBe("FH_CHAIN");
-    // The relay has its own bucket: capacity 2, no refill — the third call from one IP is 429.
+    // The relay has its own bucket: capacity 3, no refill — the fourth call from one IP is 429.
     const limited = await relayTo(usdc, `0x40c10f19${"00".repeat(64)}`);
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBeDefined();
@@ -251,7 +258,12 @@ describe("gateway", () => {
     expect(bad.status).toBe(400);
     const ok = await gw.app.request(`/v1/principals/${b32}/timeline?fromBlock=12`);
     expect(ok.status).toBe(200);
-    expect(await ok.json()).toMatchObject({ principalId: b32, events: [] });
+    // The route reports what the scan covered, so a viewer can tell "nothing older" from "not looked".
+    expect(await ok.json()).toMatchObject({
+      principalId: b32,
+      events: [],
+      scan: { fromBlock: "12", partial: false, clamped: false, requestedFromBlock: "12" },
+    });
     const receipts = await gw.app.request(`/v1/grants/${b32}/receipts?fromBlock=0`);
     expect(receipts.status).toBe(200);
   });

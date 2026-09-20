@@ -91,6 +91,18 @@ export { BtxTransport } from "./tx/BtxTransport.js";
 export type { HttpRelayTransportOptions } from "./tx/HttpRelayTransport.js";
 export { HttpRelayTransport } from "./tx/HttpRelayTransport.js";
 export { PublicMempoolTransport } from "./tx/PublicMempoolTransport.js";
+export {
+  classifySendError,
+  explainRevert,
+  insufficientFundsError,
+  messagesOf,
+  type NonceRetryOptions,
+  type RevertExplanation,
+  revertData,
+  type SendFailure,
+  type SendFailureKind,
+  sendWithNonceRetry,
+} from "./tx/send.js";
 export type { MonadFacilitatorClientOptions } from "./x402/MonadFacilitatorClient.js";
 export { MonadFacilitatorClient } from "./x402/MonadFacilitatorClient.js";
 export type { AssetDomain, BuildPaymentOptions, TypedDataSigner } from "./x402/typedData.js";

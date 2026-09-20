@@ -40,11 +40,13 @@ Deployment protection was switched off on both projects (`PATCH /v9/projects/:id
 
 Everything else — chain id, the deployment document, `RELAY_ENABLED`, `RELAY_FAUCET_MINT` (the
 MockUSDC faucet double's `mint` rides the relay, selector-scoped, so a keyless demo buyer can fund
-itself), `LEDGER_MAX_SCAN_BLOCKS` (20 000), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above
-~4.5 MB before the function runs; measured 5 MB → 413; discovery publishes `limits.maxUploadBytes`
-and the PWA sizes captures under it), the vercel stores, on-chain settlement, rate limits (the relay
-has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields to an
-explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
+itself, capped at `RELAY_FAUCET_MAX_UNITS` = 1 USDC per call), `LEDGER_MAX_SCAN_BLOCKS` (12 000)
+with `LEDGER_SCAN_BUDGET_MS` (40 s — the walk is newest-first and answers `scan.partial` instead of
+timing out), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above ~4.5 MB before the function
+runs; measured 5 MB → 413; discovery publishes `limits.maxUploadBytes` and the PWA sizes captures
+under it), the vercel stores, on-chain settlement, rate limits (60 burst / 0.5 per s per IP; the
+relay has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields
+to an explicit environment variable. Secrets on the public surface: exactly two, `RELAYER_PRIVATE_KEY`
 (the dedicated hosted relayer `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C`, small float) and
 `BLOB_READ_WRITE_TOKEN` (injected by the store connection).
 
@@ -67,8 +69,16 @@ redeploy — verified by redeploying and re-fetching.
 ## Operating the public relay
 
 - The relay spends the relayer's gas on request. It is allow-listed to the four authority contracts,
-  refuses non-zero value, simulates first, and the hosted defaults rate-limit to 20 requests with a
-  0.2/s refill per IP (per warm instance — the chain-side counters remain the source of truth).
+  refuses non-zero value, simulates first, and the hosted defaults rate-limit to 60 requests with a
+  0.5/s refill per IP (per warm instance — the chain-side counters remain the source of truth; a
+  judging room behind one NAT runs the script more than once). A simulated revert comes back
+  decoded (`relay: transaction would revert: EpochNotAttested(…)`); an empty float is
+  `FH_INSUFFICIENT_FUNDS` (503) naming the relayer, and the PWA shows it as a banner.
+- One key, several senders, several serverless instances: the paying account uses viem's nonce
+  manager and every sender retries a nonce collision with a fresh pending nonce
+  (`sendWithNonceRetry`), so two judges at once do not cost one of them a transaction.
+- `/healthz` reports the float (`relayer.balanceMon`, `low` below `RELAYER_LOW_WATERMARK_MON`);
+  the PWA's status strip reads it every minute and words it once it is low.
 - The full judge script (enrol, attest, three anchors, faucet mint, card, terms, grant, settle,
   rescind — 12 relayed transactions) costs ≈ 0.08 MON; a capture alone ≈ 0.05 MON.
   Refill: send testnet MON to the relayer address above. Rotate: `npx vercel@59 env rm

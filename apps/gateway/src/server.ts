@@ -31,7 +31,21 @@ import {
   type Settlement,
   type X402Facilitator,
 } from "@firsthand/adapters";
-import { MockUSDCAbi } from "@firsthand/contracts/abi";
+import {
+  EpochLibAbi,
+  GrantManagerAbi,
+  MerkleLibAbi,
+  MockUSDCAbi,
+  P256Abi,
+  PassportAnchorsBaselineAbi,
+  PassportAnchorsPagedAbi,
+  PassportLibAbi,
+  PrincipalRegistryAbi,
+  ReceiptLedgerAbi,
+  RescissionsAbi,
+  RoyaltyRouterAbi,
+  SplitMathAbi,
+} from "@firsthand/contracts/abi";
 import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/contracts/deployments";
 import {
   type Address,
@@ -49,7 +63,7 @@ import {
 } from "@firsthand/runtime";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { toFunctionSelector } from "viem";
+import { decodeFunctionData, toFunctionSelector } from "viem";
 import type { GatewayConfig } from "./config.js";
 import { problemDetailsHandler } from "./middleware/problemDetails.js";
 import { rateLimit } from "./middleware/rateLimit.js";
@@ -63,6 +77,39 @@ export { type GatewayConfig, loadConfig } from "./config.js";
 const MOCK_USDC_MINT = toFunctionSelector(
   MockUSDCAbi.find((f) => f.type === "function" && f.name === "mint") as never,
 );
+
+/** Every custom error a relayed call can surface, so a simulated revert decodes to its name. */
+const DEPLOYMENT_ABIS = [
+  PrincipalRegistryAbi,
+  PassportAnchorsBaselineAbi,
+  PassportAnchorsPagedAbi,
+  GrantManagerAbi,
+  RescissionsAbi,
+  ReceiptLedgerAbi,
+  RoyaltyRouterAbi,
+  MockUSDCAbi,
+  SplitMathAbi,
+  MerkleLibAbi,
+  PassportLibAbi,
+  EpochLibAbi,
+  P256Abi,
+] as const;
+
+/** The faucet relays a demo's worth of test dollars per call, not a treasury: amount ≤ the cap. */
+function faucetMintPolicy(maxUnits: bigint): (data: `0x${string}`) => string | null {
+  return (data) => {
+    try {
+      const { args } = decodeFunctionData({ abi: MockUSDCAbi, data });
+      const amount = args?.[1];
+      if (typeof amount !== "bigint") return "faucet mint: malformed calldata";
+      if (amount > maxUnits)
+        return `faucet mint: amount exceeds the relayed cap of ${maxUnits} units`;
+      return null;
+    } catch {
+      return "faucet mint: malformed calldata";
+    }
+  };
+}
 
 import { Serving } from "./services/Serving.js";
 
@@ -226,6 +273,7 @@ export function createGateway(
       lookbackBlocks: config.LEDGER_LOOKBACK_BLOCKS,
       maxRange: config.LEDGER_MAX_RANGE,
       minRequestIntervalMs: config.LEDGER_MIN_REQUEST_INTERVAL_MS,
+      maxInFlight: config.LEDGER_MAX_IN_FLIGHT,
     });
     if (clients.walletClient && config.RELAY_ENABLED) {
       // Only the four contracts whose entry points authorise by signature rather than msg.sender —
@@ -241,6 +289,16 @@ export function createGateway(
           d.Rescissions.toLowerCase() as Address,
           ...(config.RELAY_FAUCET_MINT ? [{ address: usdc, selectors: [MOCK_USDC_MINT] }] : []),
         ],
+        abis: DEPLOYMENT_ABIS,
+        policies: config.RELAY_FAUCET_MINT
+          ? [
+              {
+                address: usdc,
+                selector: MOCK_USDC_MINT,
+                check: faucetMintPolicy(config.RELAY_FAUCET_MAX_UNITS),
+              },
+            ]
+          : [],
         logger,
       });
     }
@@ -591,19 +649,31 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
    * enrolled in) ask for exactly that, instead of the default recent-activity lookback. Bounded by
    * LEDGER_MAX_SCAN_BLOCKS so one request cannot turn into thousands of paced RPC calls.
    */
-  const scanOf = async (raw: string | undefined): Promise<LedgerScan | undefined> => {
-    if (raw === undefined) return undefined;
+  /**
+   * `?fromBlock=` bounded to the last LEDGER_MAX_SCAN_BLOCKS and given the scan budget; the route
+   * says when it clamped, so a viewer can tell "no older events" from "not looked that far back".
+   */
+  const scanOf = async (
+    raw: string | undefined,
+  ): Promise<{ scan: LedgerScan | undefined; clamped: boolean; requested: bigint | null }> => {
+    const budgetMs = config.LEDGER_SCAN_BUDGET_MS;
+    if (raw === undefined) return { scan: { budgetMs }, clamped: false, requested: null };
     if (!/^\d{1,12}$/.test(raw)) throw new ValidationError("fromBlock must be a block number");
     const fromBlock = BigInt(raw);
-    if (!chainHead) return { fromBlock };
+    if (!chainHead) return { scan: { fromBlock, budgetMs }, clamped: false, requested: fromBlock };
     const head = await chainHead();
     const floor = head > config.LEDGER_MAX_SCAN_BLOCKS ? head - config.LEDGER_MAX_SCAN_BLOCKS : 0n;
-    return { fromBlock: fromBlock < floor ? floor : fromBlock };
+    const clamped = fromBlock < floor;
+    return {
+      scan: { fromBlock: clamped ? floor : fromBlock, budgetMs },
+      clamped,
+      requested: fromBlock,
+    };
   };
 
   app.get("/v1/grants/:grantId/receipts", async (c) => {
     const grantId = parseId(c.req.param("grantId"), "grantId");
-    const scan = await scanOf(c.req.query("fromBlock"));
+    const { scan } = await scanOf(c.req.query("fromBlock"));
     return c.json(
       jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId, scan) }),
     );
@@ -663,7 +733,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     const principalId = parseId(c.req.param("principalId"), "principalId");
     const ns = Number(c.req.query("ns") ?? "0");
     if (!Number.isInteger(ns) || ns < 0 || ns > 15) throw new ValidationError("ns must be 0..15");
-    const scan = await scanOf(c.req.query("fromBlock"));
+    const { scan } = await scanOf(c.req.query("fromBlock"));
     return c.json(
       jsonSafe({
         principalId,
@@ -675,11 +745,13 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
 
   app.get("/v1/principals/:principalId/timeline", async (c) => {
     const principalId = parseId(c.req.param("principalId"), "principalId");
-    const scan = await scanOf(c.req.query("fromBlock"));
+    const { scan, clamped, requested } = await scanOf(c.req.query("fromBlock"));
+    const { events, scan: report } = await requireLedger().timeline(principalId, scan);
     return c.json(
       jsonSafe({
         principalId,
-        events: await requireLedger().consentTimeline(principalId, scan),
+        events,
+        scan: { ...report, clamped, requestedFromBlock: requested },
       }),
     );
   });

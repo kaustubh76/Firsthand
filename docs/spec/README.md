@@ -28,7 +28,7 @@ Where the README and this file disagree, this file wins for encodings and the RE
 `FH_VALIDATION FH_CONFIG FH_NOT_IMPLEMENTED FH_REFUSED_ORIGIN FH_REFUSED_DUPLICATE FH_MERKLE_INVALID
 FH_SIG_INVALID FH_GRANT_NOT_LIVE FH_GRANT_RESCINDED FH_GRANT_FROZEN FH_GRANT_EXPIRED FH_RATE_LIMITED
 FH_PAYMENT_REQUIRED FH_PAYMENT_INVALID FH_NOT_FOUND FH_TRANSPORT FH_BTX_UNAVAILABLE FH_CIRCUIT_OPEN
-FH_CHAIN FH_CRYPTO`
+FH_CHAIN FH_INSUFFICIENT_FUNDS FH_CRYPTO`
 — `packages/core/src/errors.ts`; HTTP mapping via `toProblemDetails` (RFC 9457). Solidity custom
 errors share names (`RefusedOrigin`, `DuplicateRoot`, `GrantNotLive`, …). A direct rescind plan
 sent over a transport of another kind is `FH_VALIDATION` with `{path, transport}` (ADR-0012).

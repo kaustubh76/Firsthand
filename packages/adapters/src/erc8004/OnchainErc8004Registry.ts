@@ -16,6 +16,7 @@ import type {
   Erc8004Writer,
   ReputationSummary,
 } from "../ports/Erc8004Registry.js";
+import { sendWithNonceRetry } from "../tx/send.js";
 import { CARD_METADATA_KEY, IdentityRegistryAbi, ReputationRegistryAbi } from "./abi.js";
 import { type Erc8004Addresses, erc8004Addresses } from "./addresses.js";
 import { decodeAgentURI } from "./agentUri.js";
@@ -146,15 +147,19 @@ export class OnchainErc8004Registry implements Erc8004Registry, Erc8004Writer {
   }): Promise<{ agentId: bigint; txHash: Bytes32 }> {
     const a = this.#need();
     const wallet = this.#wallet();
-    const hash = await wallet.writeContract({
-      address: a.identityRegistry,
-      abi: IdentityRegistryAbi,
-      functionName: "register",
-      args: [
-        input.agentURI,
-        (input.metadata ?? []).map((m) => ({ metadataKey: m.key, metadataValue: m.value })),
-      ],
-    });
+    const hash = await sendWithNonceRetry(
+      () =>
+        wallet.writeContract({
+          address: a.identityRegistry,
+          abi: IdentityRegistryAbi,
+          functionName: "register",
+          args: [
+            input.agentURI,
+            (input.metadata ?? []).map((m) => ({ metadataKey: m.key, metadataValue: m.value })),
+          ],
+        }),
+      { account: wallet.account, chainId: wallet.chain.id },
+    );
     const receipt = await this.#o.publicClient.waitForTransactionReceipt({ hash });
     for (const log of receipt.logs) {
       try {
@@ -182,21 +187,26 @@ export class OnchainErc8004Registry implements Erc8004Registry, Erc8004Writer {
     readonly feedbackHash: Bytes32;
   }): Promise<Bytes32> {
     const a = this.#need();
-    const hash = await this.#wallet().writeContract({
-      address: a.reputationRegistry,
-      abi: ReputationRegistryAbi,
-      functionName: "giveFeedback",
-      args: [
-        input.agentId,
-        input.value,
-        input.decimals ?? 0,
-        input.tag1,
-        input.tag2,
-        input.endpoint,
-        input.feedbackURI,
-        input.feedbackHash,
-      ],
-    });
+    const wallet = this.#wallet();
+    const hash = await sendWithNonceRetry(
+      () =>
+        wallet.writeContract({
+          address: a.reputationRegistry,
+          abi: ReputationRegistryAbi,
+          functionName: "giveFeedback",
+          args: [
+            input.agentId,
+            input.value,
+            input.decimals ?? 0,
+            input.tag1,
+            input.tag2,
+            input.endpoint,
+            input.feedbackURI,
+            input.feedbackHash,
+          ],
+        }),
+      { account: wallet.account, chainId: wallet.chain.id },
+    );
     return hash as Bytes32;
   }
 

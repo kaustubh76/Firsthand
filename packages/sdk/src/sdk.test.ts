@@ -1014,9 +1014,37 @@ describe("query and publish error paths", () => {
           })
         : new Response(JSON.stringify({ accepts: [requirements] }), { status: 402 }),
     );
+    // The gateway's refusal keeps its own name: a rescinded grant is a GrantError, not a payment
+    // failure — the Recall screen prints `context.code` and `context.status` as they are.
     await expect(query(req, { signer: account, fetch: refusing })).rejects.toMatchObject({
-      code: "FH_PAYMENT_INVALID",
-      context: { code: "FH_GRANT_RESCINDED" },
+      code: "FH_GRANT_RESCINDED",
+      message: "gateway refused: FH_GRANT_RESCINDED withdrawn",
+      context: { code: "FH_GRANT_RESCINDED", status: 403 },
+    });
+    const limited = responder(
+      () =>
+        new Response(JSON.stringify({ code: "FH_RATE_LIMITED", detail: "rate limit exceeded" }), {
+          status: 429,
+          headers: { "retry-after": "7" },
+        }),
+    );
+    await expect(query(req, { signer: account, fetch: limited })).rejects.toMatchObject({
+      code: "FH_RATE_LIMITED",
+      retryable: true,
+      message: "the gateway is rate-limiting this network — retry in 7 s",
+      context: { code: "FH_RATE_LIMITED", status: 429, retryAfter: 7 },
+    });
+    const outOfGas = responder((init) =>
+      init?.headers
+        ? new Response(
+            JSON.stringify({ code: "FH_INSUFFICIENT_FUNDS", detail: "relayer 0xr is out of gas" }),
+            { status: 503 },
+          )
+        : new Response(JSON.stringify({ accepts: [requirements] }), { status: 402 }),
+    );
+    await expect(query(req, { signer: account, fetch: outOfGas })).rejects.toMatchObject({
+      code: "FH_INSUFFICIENT_FUNDS",
+      message: "gateway refused: relayer 0xr is out of gas",
     });
     const wrongPassport = responder((init) =>
       init?.headers

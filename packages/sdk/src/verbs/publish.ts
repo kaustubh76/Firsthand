@@ -84,10 +84,27 @@ async function post(
     body,
   });
   const text = await res.text();
-  if (!res.ok)
-    throw new ValidationError(`gateway rejected ${path}: ${res.status} ${text}`, {
+  if (!res.ok) {
+    // A host's edge can refuse a body before the gateway sees it (Vercel: 413 above ~4.5 MB, as
+    // an HTML page); say what it means rather than echoing the markup.
+    if (res.status === 413) {
+      throw new ValidationError(
+        `gateway rejected ${path}: the upload is larger than this gateway accepts (413)`,
+        { context: { status: 413 } },
+      );
+    }
+    const detail = (() => {
+      try {
+        const body = JSON.parse(text) as { detail?: string; error?: string; code?: string };
+        return [body.code, body.detail ?? body.error].filter(Boolean).join(" ");
+      } catch {
+        return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+      }
+    })();
+    throw new ValidationError(`gateway rejected ${path}: ${res.status} ${detail}`.trim(), {
       context: { status: res.status },
     });
+  }
   return text ? JSON.parse(text) : null;
 }
 

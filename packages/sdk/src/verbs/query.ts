@@ -7,6 +7,9 @@ import {
 } from "@firsthand/adapters/x402";
 import {
   type Bytes32,
+  ChainError,
+  type FirsthandError,
+  GrantError,
   hexToBytes,
   NotFoundError,
   type PassportSidecar,
@@ -68,6 +71,49 @@ export interface QueryResult {
   readonly paid: { readonly requirements: PaymentRequirements; readonly nonce: Bytes32 };
 }
 
+/**
+ * A gateway's "no" as the typed error it is: the RFC 9457 body's code decides the class, so a
+ * rescinded grant is a `GrantError`, a rate limit carries its `retry-after`, an empty relayer float
+ * keeps `FH_INSUFFICIENT_FUNDS`, and anything else stays a payment failure. `context` always has
+ * `{ status, code }` — the Recall screen prints exactly those two.
+ */
+async function refusal(res: Response, passport: Bytes32): Promise<FirsthandError> {
+  const body = (await res.json().catch(() => ({}))) as { code?: string; detail?: string };
+  const retryAfter = Number(res.headers.get("retry-after"));
+  const context = {
+    status: res.status,
+    code: body.code,
+    ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfter } : {}),
+  };
+  const detail = body.detail ?? `HTTP ${res.status}`;
+  switch (body.code) {
+    case "FH_RATE_LIMITED":
+      return new GrantError(
+        "FH_RATE_LIMITED",
+        `the gateway is rate-limiting this network — retry in ${context.retryAfter ?? "a few"} s`,
+        { retryable: true, context },
+      );
+    case "FH_GRANT_NOT_LIVE":
+    case "FH_GRANT_RESCINDED":
+    case "FH_GRANT_FROZEN":
+    case "FH_GRANT_EXPIRED":
+      return new GrantError(body.code, `gateway refused: ${body.code} ${detail}`, { context });
+    case "FH_INSUFFICIENT_FUNDS":
+      return new ChainError(`gateway refused: ${detail}`, {
+        code: "FH_INSUFFICIENT_FUNDS",
+        context,
+      });
+    case "FH_NOT_FOUND":
+      return new NotFoundError(`gateway does not host ${passport}`, { context });
+    default:
+      return new PaymentError(
+        "FH_PAYMENT_INVALID",
+        `gateway refused: ${body.code ?? res.status} ${detail}`.trim(),
+        { context },
+      );
+  }
+}
+
 export async function query(request: QueryRequest, deps: QueryDeps): Promise<QueryResult> {
   const doFetch = deps.fetch ?? fetch;
   const url = `${request.gatewayUrl.replace(/\/+$/, "")}/v1/query/${request.grantId}/${request.passportId}${
@@ -76,8 +122,7 @@ export async function query(request: QueryRequest, deps: QueryDeps): Promise<Que
 
   const first = await doFetch(url);
   if (first.status === 404) throw new NotFoundError(`gateway does not host ${request.passportId}`);
-  if (first.status !== 402)
-    throw new PaymentError("FH_PAYMENT_INVALID", `expected 402, got ${first.status}`);
+  if (first.status !== 402) throw await refusal(first, request.passportId);
   const offer = (await first.json()) as { accepts?: unknown[] };
   const requirements = PaymentRequirementsSchema.safeParse(offer.accepts?.[0]);
   if (!requirements.success)
@@ -88,16 +133,7 @@ export async function query(request: QueryRequest, deps: QueryDeps): Promise<Que
 
   const payment = await buildPaymentPayload(deps.signer, requirements.data);
   const paid = await doFetch(url, { headers: { "x-payment": encodePaymentHeader(payment) } });
-  if (!paid.ok) {
-    const body = (await paid.json().catch(() => ({}))) as { code?: string; detail?: string };
-    throw new PaymentError(
-      "FH_PAYMENT_INVALID",
-      `gateway refused: ${body.code ?? paid.status} ${body.detail ?? ""}`.trim(),
-      {
-        context: { status: paid.status, code: body.code },
-      },
-    );
-  }
+  if (!paid.ok) throw await refusal(paid, request.passportId);
   const served = ServedQuerySchema.parse(await paid.json());
   const sidecar = parseSidecar(served.sidecar);
   const id = passportId(sidecar.signed.passport);

@@ -12,7 +12,6 @@ import {
   BaseError,
   type Chain,
   ContractFunctionRevertedError,
-  decodeErrorResult,
   encodeFunctionData,
   type PublicClient,
   type Transport,
@@ -26,6 +25,12 @@ import type {
   AnchorWriter,
 } from "../ports/AnchorWriter.js";
 import type { PreparedTx, TxTransport } from "../ports/TxTransport.js";
+import {
+  classifySendError,
+  explainRevert,
+  insufficientFundsError,
+  sendWithNonceRetry,
+} from "../tx/send.js";
 
 export interface OnchainAnchorWriterOptions {
   readonly address: Address;
@@ -150,7 +155,10 @@ export class OnchainAnchorWriter implements AnchorWriter {
     }
 
     try {
-      const hash = await wallet.writeContract(simulatedRequest);
+      const hash = await sendWithNonceRetry(() => wallet.writeContract(simulatedRequest), {
+        account: wallet.account,
+        chainId: wallet.chain.id,
+      });
       const receipt = await this.#public.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") {
         throw new ChainError("anchor transaction reverted", { context: { hash } });
@@ -165,6 +173,13 @@ export class OnchainAnchorWriter implements AnchorWriter {
       };
     } catch (cause) {
       if (cause instanceof ChainError) throw cause;
+      if (classifySendError(cause).kind === "funds") {
+        throw insufficientFundsError(
+          `anchor: the paying key ${wallet.account.address} is out of gas`,
+          wallet.account.address,
+          cause,
+        );
+      }
       throw new ChainError("anchor failed", { cause, retryable: true });
     }
   }
@@ -277,41 +292,41 @@ export class OnchainAnchorWriter implements AnchorWriter {
   }
 }
 
-/** Turns a viem simulation failure into a ChainError carrying the decoded custom error, when there is one. */
+/**
+ * Turns a viem simulation failure into a ChainError carrying the decoded custom error, when there
+ * is one — from `simulateContract` (typed revert) or a plain `call` (raw revert bytes on the RPC
+ * error), decoded against the caller's ABI and whatever it may call into. An RPC failure during
+ * simulation is retryable and says so; it is not a revert.
+ */
 export function decodeRevert(
   cause: unknown,
   message: string,
   abis: readonly Abi[] = [],
 ): ChainError {
+  const failure = classifySendError(cause);
+  if (failure.kind === "rpc") {
+    return new ChainError(`${message}: the RPC is busy (${failure.detail})`, {
+      cause,
+      retryable: true,
+    });
+  }
+  const why = explainRevert(cause, [...abis, PassportAnchorsBaselineAbi]);
+  if (why.reason !== null || why.raw !== null || failure.kind === "revert") {
+    const reason = why.reason ?? "unknown";
+    const selector =
+      cause instanceof BaseError
+        ? ((
+            cause.walk(
+              (e) => e instanceof ContractFunctionRevertedError,
+            ) as ContractFunctionRevertedError | null
+          )?.signature ?? null)
+        : null;
+    return new ChainError(`${message}: ${reason}`, {
+      cause,
+      context: { reason, args: why.args, raw: why.raw, selector },
+    });
+  }
   if (cause instanceof BaseError) {
-    const reverted = cause.walk((e) => e instanceof ContractFunctionRevertedError);
-    if (reverted instanceof ContractFunctionRevertedError) {
-      let reason = reverted.data?.errorName ?? reverted.reason;
-      let args = (reverted.data?.args ?? []).map((a) => (typeof a === "bigint" ? a.toString() : a));
-      const raw = reverted.raw;
-      // Nested reverts (token, ledger, libraries) are not in the caller's ABI: try the extra ones.
-      if (!reason && raw) {
-        for (const abi of abis) {
-          try {
-            const decoded = decodeErrorResult({ abi, data: raw });
-            reason = decoded.errorName;
-            args = (decoded.args ?? []).map((a) => (typeof a === "bigint" ? a.toString() : a));
-            break;
-          } catch {
-            // not this ABI
-          }
-        }
-      }
-      return new ChainError(`${message}: ${reason ?? "unknown"}`, {
-        cause,
-        context: {
-          reason: reason ?? "unknown",
-          args,
-          raw: raw ?? null,
-          selector: reverted.signature ?? null,
-        },
-      });
-    }
     return new ChainError(`${message}: ${cause.shortMessage}`, { cause, retryable: true });
   }
   return new ChainError(message, { cause, retryable: true });

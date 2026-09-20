@@ -21,15 +21,20 @@ const defaults: Record<string, string> = {
   RELAY_FAUCET_MINT: "true",
   // ERC-8004 reference registries are live on Monad testnet: paid queries feed buyer reputation.
   ERC8004_FEEDBACK: "true",
-  // A judge's own history: ?fromBlock= may reach back 20 000 blocks (~2.2 h at 0.4 s), ≤ 200 paced
-  // eth_getLogs calls, inside the function's 60 s.
-  LEDGER_MAX_SCAN_BLOCKS: "20000",
+  // A judge's own history: ?fromBlock= may reach back 12 000 blocks (~80 min at 0.4 s) — four
+  // event walks of 120 windows each, four in flight at 20 starts/s ≈ 25 s — and the scan stops at
+  // its budget with `scan.partial` rather than hitting the function's 60 s; the browser's journal
+  // carries what is older.
+  LEDGER_MAX_SCAN_BLOCKS: "12000",
+  LEDGER_SCAN_BUDGET_MS: "40000",
   // Vercel rejects request bodies above ~4.5 MB before the function runs (measured: 5 MB → 413);
   // publish a limit the PWA can honour instead of letting a photo fail at the edge.
   MAX_UPLOAD_BYTES: String(4 * 1024 * 1024),
-  // A stranger looping on the relay burns the relayer float, so the public defaults are tight.
-  RATE_LIMIT_CAPACITY: "20",
-  RATE_LIMIT_REFILL_PER_SECOND: "0.2",
+  // Per IP, per function instance. A judging room shares one NAT and runs the ~12-relay script
+  // more than once, so the burst is generous; the refill still bounds a stranger looping on the
+  // relay (the faucet is capped per call as well, RELAY_FAUCET_MAX_UNITS).
+  RATE_LIMIT_CAPACITY: "60",
+  RATE_LIMIT_REFILL_PER_SECOND: "0.5",
   ...(env["RELAYER_PRIVATE_KEY"] ? { SETTLEMENT_MODE: "onchain" } : {}),
   ...(env["BLOB_READ_WRITE_TOKEN"] ? { BLOB_STORE: "vercel", CATALOG: "vercel" } : {}),
   CAPTURE_URL: "https://firsthand-capture.vercel.app",

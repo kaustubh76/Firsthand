@@ -4,7 +4,9 @@ import type {
   AnchorView,
   ConsentEvent,
   ConsentLedger,
+  ConsentTimeline,
   LedgerScan,
+  LedgerScanReport,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
 
@@ -47,10 +49,17 @@ export interface LogsConsentLedgerOptions {
   /** Max blocks per `eth_getLogs` call. 100 is Monad's public limit; anvil and archives allow more. */
   readonly maxRange?: bigint;
   /**
-   * Minimum gap between RPC calls, in ms. Monad's public endpoint caps throughput at 25 requests/s
-   * (measured 2026-09-16) across *all* in-flight scans, so this is paced instance-wide, not per call.
+   * Minimum gap between RPC call *starts*, in ms. Monad's public endpoint caps throughput at 25
+   * requests/s (measured 2026-09-16) across *all* in-flight scans, so this is paced instance-wide,
+   * not per call.
    */
   readonly minRequestIntervalMs?: number;
+  /**
+   * Requests in flight at once (default 4). Pacing starts rather than completions keeps a scan at
+   * the rate cap whatever the RPC's latency: 480 windows at 50 ms is 24 s, not 480 round trips.
+   */
+  readonly maxInFlight?: number;
+  readonly now?: () => number;
 }
 
 /**
@@ -62,37 +71,68 @@ export interface LogsConsentLedgerOptions {
  * everything else left as bigint. FROZEN and EXPIRED are *derived* states, not events — they are
  * computed from liveness and grant terms at query time, exactly as `effectiveStatus` does on chain.
  */
+/** One scan's yield plus how far back it got. */
+interface Scanned<T> {
+  readonly items: T[];
+  readonly report: LedgerScanReport;
+}
+
 export class LogsConsentLedger implements ConsentLedger {
   readonly #o: LogsConsentLedgerOptions;
-  #queue: Promise<void> = Promise.resolve();
+  #inFlight = 0;
+  #nextStart = 0;
+  readonly #waiters: (() => void)[] = [];
 
   constructor(options: LogsConsentLedgerOptions) {
     this.#o = options;
   }
 
   /**
-   * Splits a scan into windows the RPC will accept. Both limits are real on Monad's public endpoint:
-   * 100 blocks per `eth_getLogs` and 25 requests/second (measured 2026-09-16), and the second is
-   * global, so requests are paced instance-wide — `consentTimeline` fans out four scans at once.
+   * Splits a scan into windows the RPC will accept and walks them newest-first. Both limits are
+   * real on Monad's public endpoint: 100 blocks per `eth_getLogs` and 25 requests/second (measured
+   * 2026-09-16), and the second is global, so requests are paced instance-wide — `timeline` fans out
+   * three scans at once. With a `budgetMs` the walk stops issuing windows when the budget is spent:
+   * the newest history is what comes back, and the report says how far back it reached.
    */
   async #scan<T>(
     query: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>,
     scan?: LedgerScan,
-  ): Promise<T[]> {
+  ): Promise<Scanned<T>> {
+    const started = (this.#o.now ?? Date.now)();
+    const deadline =
+      scan?.budgetMs === undefined ? Number.POSITIVE_INFINITY : started + scan.budgetMs;
     // cacheTime 0: viem caches block numbers for ~4 s, which would hide a rescission that just landed.
     const head = await this.#paced(() => this.#o.publicClient.getBlockNumber({ cacheTime: 0 }));
     const lookback = this.#o.lookbackBlocks ?? 500n;
     const from = scan?.fromBlock ?? this.#o.fromBlock ?? (head > lookback ? head - lookback : 0n);
     const max = this.#o.maxRange ?? 100n;
     const windows: [bigint, bigint][] = [];
-    for (let start = from; start <= head; start += max) {
-      const end = start + max - 1n > head ? head : start + max - 1n;
+    for (let end = head; end >= from; end -= max) {
+      const start = end - max + 1n < from ? from : end - max + 1n;
       windows.push([start, end]);
+      if (start === 0n) break;
     }
-    const chunks = await Promise.all(
-      windows.map(([a, b]) => this.#paced(() => this.#withRetry(() => query(a, b)))),
-    );
-    return chunks.flat();
+    const chunks: (readonly T[])[] = [];
+    let coveredFrom = head + 1n;
+    let partial = false;
+    const pending: Promise<void>[] = [];
+    for (const [a, b] of windows) {
+      if ((this.#o.now ?? Date.now)() >= deadline) {
+        partial = true;
+        break;
+      }
+      pending.push(
+        this.#paced(() => this.#withRetry(() => query(a, b))).then((rows) => {
+          chunks.push(rows);
+        }),
+      );
+      coveredFrom = a;
+    }
+    await Promise.all(pending);
+    return {
+      items: chunks.flat(),
+      report: { fromBlock: partial ? coveredFrom : from, toBlock: head, partial },
+    };
   }
 
   /** Throughput caps are transient; a range or argument error is not. */
@@ -110,22 +150,31 @@ export class LogsConsentLedger implements ConsentLedger {
     throw lastError;
   }
 
-  /** One queue for the whole instance: pacing each scan separately still blows a global cap. */
-  #paced<T>(fn: () => Promise<T>): Promise<T> {
+  /**
+   * One scheduler for the whole instance: pacing each scan separately still blows a global cap.
+   * Starts are spaced `minRequestIntervalMs` apart and at most `maxInFlight` calls run at once.
+   */
+  async #paced<T>(fn: () => Promise<T>): Promise<T> {
     const gap = this.#o.minRequestIntervalMs ?? 50;
-    const run = this.#queue.then(async () => {
-      if (gap > 0) await new Promise((r) => setTimeout(r, gap));
-      return fn();
-    });
-    this.#queue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+    const maxInFlight = Math.max(1, this.#o.maxInFlight ?? 4);
+    while (this.#inFlight >= maxInFlight) {
+      await new Promise<void>((resolve) => this.#waiters.push(resolve));
+    }
+    this.#inFlight++;
+    try {
+      const now = Date.now();
+      const start = Math.max(now, this.#nextStart);
+      this.#nextStart = start + gap;
+      if (start > now) await new Promise((r) => setTimeout(r, start - now));
+      return await fn();
+    } finally {
+      this.#inFlight--;
+      this.#waiters.shift()?.();
+    }
   }
 
   async receiptsForGrant(grantId: Bytes32, scan?: LedgerScan): Promise<readonly ReceiptView[]> {
-    const logs = await this.#scan(
+    const { items: logs } = await this.#scan(
       (fromBlock, toBlock) =>
         this.#o.publicClient.getLogs({
           address: this.#o.receiptLedger,
@@ -153,7 +202,7 @@ export class LogsConsentLedger implements ConsentLedger {
     ns: number,
     scan?: LedgerScan,
   ): Promise<readonly AnchorView[]> {
-    const logs = await this.#scan(
+    const { items: logs } = await this.#scan(
       (fromBlock, toBlock) =>
         this.#o.publicClient.getLogs({
           address: this.#o.passportAnchors,
@@ -181,6 +230,10 @@ export class LogsConsentLedger implements ConsentLedger {
    * block, not the log's own.
    */
   async consentTimeline(principalId: Bytes32, scan?: LedgerScan): Promise<readonly ConsentEvent[]> {
+    return (await this.timeline(principalId, scan)).events;
+  }
+
+  async timeline(principalId: Bytes32, scan?: LedgerScan): Promise<ConsentTimeline> {
     const [enrolled, attested, granted] = await Promise.all([
       this.#scan(
         (fromBlock, toBlock) =>
@@ -216,7 +269,7 @@ export class LogsConsentLedger implements ConsentLedger {
         scan,
       ),
     ]);
-    const grantIds = granted.map((l) => l.args.grantId as Bytes32);
+    const grantIds = granted.items.map((l) => l.args.grantId as Bytes32);
     const rescinded = grantIds.length
       ? await this.#scan(
           (fromBlock, toBlock) =>
@@ -229,16 +282,25 @@ export class LogsConsentLedger implements ConsentLedger {
             }),
           scan,
         )
-      : [];
+      : null;
+    const reports = [enrolled.report, attested.report, granted.report, rescinded?.report].filter(
+      (r): r is LedgerScanReport => r !== undefined,
+    );
+    // The conservative view of four walks: the newest "oldest block reached", partial if any was.
+    const report: LedgerScanReport = {
+      fromBlock: reports.reduce((max, r) => (r.fromBlock > max ? r.fromBlock : max), 0n),
+      toBlock: reports.reduce((max, r) => (r.toBlock > max ? r.toBlock : max), 0n),
+      partial: reports.some((r) => r.partial),
+    };
 
     const events: ConsentEvent[] = [
-      ...enrolled.map((l) =>
+      ...enrolled.items.map((l) =>
         this.#event("enrolled", principalId, null, l.blockNumber, l.transactionHash),
       ),
-      ...attested.map((l) =>
+      ...attested.items.map((l) =>
         this.#event("attested", principalId, null, l.blockNumber, l.transactionHash),
       ),
-      ...granted.map((l) => {
+      ...granted.items.map((l) => {
         const a = l.args as {
           grantId: Bytes32;
           granteeCard: Bytes32;
@@ -252,7 +314,7 @@ export class LogsConsentLedger implements ConsentLedger {
           termsHash: a.termsHash,
         };
       }),
-      ...rescinded.map((l) => {
+      ...(rescinded?.items ?? []).map((l) => {
         const a = l.args as { grantId: Bytes32; effectiveBlock: bigint };
         return this.#event(
           "rescinded",
@@ -264,9 +326,12 @@ export class LogsConsentLedger implements ConsentLedger {
       }),
     ];
     const blocks = await this.#timestamps(events.map((e) => e.blockNumber));
-    return events
-      .map((e) => ({ ...e, timestamp: blocks.get(e.blockNumber) ?? 0n }))
-      .sort((a, b) => Number(a.blockNumber - b.blockNumber));
+    return {
+      events: events
+        .map((e) => ({ ...e, timestamp: blocks.get(e.blockNumber) ?? 0n }))
+        .sort((a, b) => Number(a.blockNumber - b.blockNumber)),
+      scan: report,
+    };
   }
 
   #event(
@@ -286,14 +351,17 @@ export class LogsConsentLedger implements ConsentLedger {
     };
   }
 
+  /** Block timestamps for the events, through the same scheduler — they count against the cap too. */
   async #timestamps(blockNumbers: readonly bigint[]): Promise<Map<bigint, bigint>> {
     const unique = [...new Set(blockNumbers)];
     const blocks = await Promise.all(
       unique.map((blockNumber) =>
-        this.#o.publicClient
-          .getBlock({ blockNumber })
-          .then((b) => [blockNumber, b.timestamp] as const)
-          .catch(() => [blockNumber, 0n] as const),
+        this.#paced(() =>
+          this.#o.publicClient
+            .getBlock({ blockNumber })
+            .then((b) => [blockNumber, b.timestamp] as const)
+            .catch(() => [blockNumber, 0n] as const),
+        ),
       ),
     );
     return new Map(blocks);

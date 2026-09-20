@@ -20,5 +20,7 @@ pnpm --filter firsthand-gateway dev     # memory mode: no network, in-process gr
 pnpm --filter firsthand-gateway test:anvil   # Phase 3 gate against anvil --odyssey + MockUSDC
 ```
 Errors are RFC 9457 problem+json with FIRSTHAND codes (`FH_GRANT_RESCINDED` 403, `FH_RATE_LIMITED`
-429, `FH_PAYMENT_INVALID` 402, `FH_NOT_FOUND` 404); rate limiting is a pre-filter only — the
-`ReceiptLedger` is the truth. The relayer key pays gas for `RoyaltyRouter.settle` and nothing else.
+429 with `retry-after`, `FH_PAYMENT_INVALID` 402, `FH_NOT_FOUND` 404, `FH_INSUFFICIENT_FUNDS` 503
+when the relayer float is empty, `FH_CHAIN` 502 with the decoded revert reason in `detail`); rate
+limiting is a pre-filter only — the `ReceiptLedger` is the truth. The relayer key pays gas for
+`RoyaltyRouter.settle`, the relay and ERC-8004 feedback, and for nothing a user authorises.

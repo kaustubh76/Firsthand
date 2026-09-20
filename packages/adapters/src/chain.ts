@@ -5,6 +5,7 @@ import {
   createWalletClient,
   defineChain,
   http,
+  nonceManager,
   type PublicClient,
   type Transport,
   type WalletClient,
@@ -53,7 +54,9 @@ export function createChainClients(options: ChainClientsOptions): ChainClients {
   if (options.privateKey === undefined) {
     return { chain, publicClient, walletClient: null, account: null };
   }
-  const account = privateKeyToAccount(options.privateKey);
+  // One key, many senders: the nonce manager hands concurrent sends in this process distinct
+  // pending nonces; collisions with *other* processes are retried by `sendWithNonceRetry`.
+  const account = privateKeyToAccount(options.privateKey, { nonceManager });
   const walletClient = createWalletClient({ chain, transport, account, ...clientOptions });
   return { chain, publicClient, walletClient, account };
 }

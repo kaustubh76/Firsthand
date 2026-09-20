@@ -125,7 +125,13 @@ WebAuthn PRF output is the only long-lived root and it is evaluated on demand, n
   label — all public. Approving it is a passkey-signed grant; a hostile link can only ask.
 - **Upload bounds:** the function accepts bodies to `limits.maxUploadBytes` (4 MiB hosted;
   Vercel rejects larger bodies before the code runs) and the audit routes scan at most
-  `LEDGER_MAX_SCAN_BLOCKS` per request, so one caller cannot turn a request into unbounded RPC work.
+  `LEDGER_MAX_SCAN_BLOCKS` per request inside a `LEDGER_SCAN_BUDGET_MS` wall-clock budget, so one
+  caller cannot turn a request into unbounded RPC work; the response says what the scan covered.
+- **What the relay will pay for:** four authority contracts (signature in calldata), plus the
+  faucet double's `mint` capped per call at `RELAY_FAUCET_MAX_UNITS` — the relay is a gas float
+  for a demo, never a treasury. Errors name themselves: a decoded revert, a rate limit with
+  `retry-after`, `FH_INSUFFICIENT_FUNDS` when the float is empty. None of them carries key
+  material; the cause chain stays in the log.
 
 ## 9. Reporting
 

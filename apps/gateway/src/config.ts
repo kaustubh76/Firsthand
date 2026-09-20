@@ -35,6 +35,8 @@ export const GatewayConfigSchema = z.object({
    * set this against a real stablecoin — mint would simply revert, but the intent is wrong.
    */
   RELAY_FAUCET_MINT: z.coerce.boolean().default(false),
+  /** Largest MockUSDC amount one relayed `mint` may carry (base units; default 1 USDC = 100 queries). */
+  RELAY_FAUCET_MAX_UNITS: z.coerce.bigint().positive().default(1_000_000n),
   /** Deployment block: where the Consent Ledger starts scanning logs. Scanning from 0 is slow. */
   LEDGER_FROM_BLOCK: z.coerce.bigint().optional(),
   /** How far back the log-backed ledger scans when LEDGER_FROM_BLOCK is unset. */
@@ -45,6 +47,13 @@ export const GatewayConfigSchema = z.object({
   LEDGER_MIN_REQUEST_INTERVAL_MS: z.coerce.number().int().min(0).default(50),
   /** Furthest back a caller's `?fromBlock=` may reach on the audit routes (bounds one request's RPC work). */
   LEDGER_MAX_SCAN_BLOCKS: z.coerce.bigint().default(5_000n),
+  /**
+   * Wall-clock budget for one audit-route scan. Walked newest-first, so a budget that runs out
+   * still answers with the most recent history and a `scan.partial` flag — never a 504.
+   */
+  LEDGER_SCAN_BUDGET_MS: z.coerce.number().int().positive().default(40_000),
+  /** Concurrent eth_getLogs calls; starts stay paced at LEDGER_MIN_REQUEST_INTERVAL_MS. */
+  LEDGER_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(4),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
   /** /healthz reports `relayer.low` below this many MON — the refill signal. */

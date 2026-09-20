@@ -715,6 +715,58 @@ describe("HttpRelayTransport", () => {
       code: "FH_CHAIN",
     });
   });
+
+  it("keeps the gateway's own names: an empty float, a rate limit with retry-after, a decoded revert", async () => {
+    const withHeaders = (status: number, body: unknown, headers: Record<string, string>) =>
+      new HttpRelayTransport({
+        baseUrl: "http://gw",
+        fetch: (async () =>
+          new Response(JSON.stringify(body), { status, headers })) as unknown as typeof fetch,
+      });
+    await expect(
+      withHeaders(
+        503,
+        {
+          code: "FH_INSUFFICIENT_FUNDS",
+          detail: "relay: this gateway's relayer 0xr is out of gas — the operator must top it up",
+        },
+        {},
+      ).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({
+      code: "FH_INSUFFICIENT_FUNDS",
+      retryable: false,
+      message: /out of gas/,
+    });
+    await expect(
+      withHeaders(
+        429,
+        { code: "FH_RATE_LIMITED", detail: "rate limit exceeded" },
+        {
+          "retry-after": "12",
+        },
+      ).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({
+      code: "FH_RATE_LIMITED",
+      retryable: true,
+      message: "the gateway is rate-limiting this network — retry in 12 s",
+      context: expect.objectContaining({ retryAfter: 12 }),
+    });
+    await expect(
+      withHeaders(
+        502,
+        {
+          code: "FH_CHAIN",
+          detail: "relay: transaction would revert: EpochNotAttested(0x22, 7)",
+          retryable: false,
+        },
+        {},
+      ).send({ to: addr(1), data: "0x" }),
+    ).rejects.toMatchObject({
+      code: "FH_CHAIN",
+      retryable: false,
+      message: "relay: transaction would revert: EpochNotAttested(0x22, 7)",
+    });
+  });
 });
 
 describe("MonadFacilitatorClient", () => {

@@ -15,6 +15,7 @@ import {
   type SettleResult,
   splitSignature,
 } from "../ports/Settlement.js";
+import { classifySendError, insufficientFundsError, sendWithNonceRetry } from "../tx/send.js";
 
 export interface OnchainSettlementOptions {
   readonly router: Address;
@@ -75,7 +76,10 @@ export class OnchainSettlement implements Settlement {
       ]);
     }
     try {
-      const hash = await wallet.writeContract(simulated);
+      const hash = await sendWithNonceRetry(() => wallet.writeContract(simulated), {
+        account: wallet.account,
+        chainId: wallet.chain.id,
+      });
       const receipt = await this.#o.publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success")
         throw new ChainError("settlement reverted", { context: { hash } });
@@ -94,6 +98,13 @@ export class OnchainSettlement implements Settlement {
       };
     } catch (cause) {
       if (cause instanceof ChainError) throw cause;
+      if (classifySendError(cause).kind === "funds") {
+        throw insufficientFundsError(
+          `settlement: the relayer ${wallet.account.address} is out of gas — the operator must top it up`,
+          wallet.account.address,
+          cause,
+        );
+      }
       throw new ChainError("settlement failed", { cause, retryable: true });
     }
   }

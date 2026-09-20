@@ -1,4 +1,10 @@
-import { type Bytes32, ChainError, TransportError, ValidationError } from "@firsthand/core";
+import {
+  type Bytes32,
+  ChainError,
+  GrantError,
+  TransportError,
+  ValidationError,
+} from "@firsthand/core";
 import type {
   PreparedTx,
   TransportCapabilities,
@@ -60,17 +66,39 @@ export class HttpRelayTransport implements TxTransport {
       code?: string;
       error?: string;
       detail?: string;
+      retryable?: boolean;
     } | null;
     if (!res.ok) {
       const message =
         body?.detail ?? body?.error ?? `relay rejected the transaction (${res.status})`;
-      // 4xx is the caller's problem (bad target, non-zero value, would revert); 5xx is the relay's.
+      const context = { status: res.status, code: body?.code, to: tx.to };
+      // The gateway's problem body names what happened; keep that name so a screen can act on it.
+      switch (body?.code) {
+        case "FH_INSUFFICIENT_FUNDS":
+          throw new ChainError(message, { code: "FH_INSUFFICIENT_FUNDS", context });
+        case "FH_RATE_LIMITED": {
+          const retryAfter = Number(res.headers.get("retry-after"));
+          throw new GrantError(
+            "FH_RATE_LIMITED",
+            `the gateway is rate-limiting this network — retry in ${
+              Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : "a few"
+            } s`,
+            { retryable: true, context: { ...context, retryAfter } },
+          );
+        }
+        case "FH_CHAIN":
+          // A decoded revert ("would revert: EpochNotAttested(…)") or a busy RPC — the body says which.
+          throw new ChainError(message, { retryable: body?.retryable ?? false, context });
+        default:
+          break;
+      }
+      // 4xx is the caller's problem (bad target, non-zero value); 5xx is the relay's.
       if (res.status >= 500) {
-        throw new TransportError("FH_TRANSPORT", message, { retryable: true });
+        throw new TransportError("FH_TRANSPORT", message, { retryable: true, context });
       }
       throw res.status === 400 || res.status === 404
-        ? new ValidationError(message, { context: { status: res.status, to: tx.to } })
-        : new ChainError(message, { context: { status: res.status, to: tx.to } });
+        ? new ValidationError(message, { context })
+        : new ChainError(message, { context });
     }
     if (typeof body?.hash !== "string") {
       throw new ChainError("relay returned no transaction hash", { context: { to: tx.to } });

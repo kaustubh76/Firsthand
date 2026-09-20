@@ -3,6 +3,7 @@ import type {
   AnchorView,
   ConsentEvent,
   ConsentLedger,
+  ConsentTimeline,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
 
@@ -38,6 +39,10 @@ export class EnvioConsentLedger implements ConsentLedger {
 
   consentTimeline(principalId: Bytes32): Promise<readonly ConsentEvent[]> {
     return this.unimplemented("consentTimeline", { principalId });
+  }
+
+  timeline(principalId: Bytes32): Promise<ConsentTimeline> {
+    return this.unimplemented("timeline", { principalId });
   }
 
   /** Raw GraphQL call, kept so the Phase 5 queries only need to add documents. */

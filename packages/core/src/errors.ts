@@ -27,6 +27,7 @@ export type ErrorCode =
   | "FH_BTX_UNAVAILABLE"
   | "FH_CIRCUIT_OPEN"
   | "FH_CHAIN"
+  | "FH_INSUFFICIENT_FUNDS"
   | "FH_CRYPTO";
 
 export interface FirsthandErrorOptions {
@@ -159,10 +160,20 @@ export class TransportError extends FirsthandError {
   }
 }
 
-/** On-chain state disagreed with expectations (revert, reorg, unknown root). */
+/**
+ * On-chain state disagreed with expectations (revert, reorg, unknown root). `FH_INSUFFICIENT_FUNDS`
+ * names the one chain failure that is nobody's bug but the operator's: the paying key is out of gas
+ * — a judge reads "the relayer needs a top-up", not "submission failed".
+ */
 export class ChainError extends FirsthandError {
-  constructor(message: string, options: FirsthandErrorOptions = {}) {
-    super("FH_CHAIN", message, options);
+  constructor(
+    message: string,
+    options: FirsthandErrorOptions & {
+      readonly code?: Extract<ErrorCode, "FH_CHAIN" | "FH_INSUFFICIENT_FUNDS">;
+    } = {},
+  ) {
+    const { code, ...rest } = options;
+    super(code ?? "FH_CHAIN", message, rest);
   }
 }
 
@@ -207,6 +218,7 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FH_BTX_UNAVAILABLE: 503,
   FH_CIRCUIT_OPEN: 503,
   FH_CHAIN: 502,
+  FH_INSUFFICIENT_FUNDS: 503,
   FH_CRYPTO: 500,
 };
 

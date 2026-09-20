@@ -135,6 +135,7 @@ describe("errors", () => {
       [new PaymentError("FH_PAYMENT_REQUIRED", "p"), 402],
       [new TransportError("FH_CIRCUIT_OPEN", "t"), 503],
       [new ChainError("c"), 502],
+      [new ChainError("out of gas", { code: "FH_INSUFFICIENT_FUNDS" }), 503],
       [new CryptoError("k"), 500],
     ];
     for (const [err, status] of samples) {

@@ -1,6 +1,6 @@
 # firsthand-mcp
 
-MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_accept_terms`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_rescind`, `firsthand_status`
+MCP server exposing `firsthand_enroll`, `firsthand_attest`, `firsthand_deposit`, `firsthand_import`, `firsthand_grant`, `firsthand_register_card`, `firsthand_accept_terms`, `firsthand_list_passports`, `firsthand_request_access`, `firsthand_query`, `firsthand_export_manifest`, `firsthand_rescind`, `firsthand_status`
 over stdio. Runs on the **user's** machine and may derive keys (README §22, §13 "malicious MCP client":
 a hostile client can only pollute its own user's locker — deposits are valid only under derived keys).
 
@@ -28,10 +28,12 @@ GATEWAY_URL=https://firsthand-gateway.vercel.app
 RPC_URL=https://testnet-rpc.monad.xyz  DEPLOYMENTS_FILE=$PWD/deployments/10143.json
 ```
 
-1. The human stamps something at <https://firsthand-capture.vercel.app> and shares the passport id
-   (it is public — the gateway serves the sidecar to anyone).
-2. `firsthand_request_access({ passportId })` reads the sidecar (principal, namespace, price),
-   registers the agent's card, accepts those exact terms on chain, and returns an **approval link**.
+1. The human stamps something at <https://firsthand-capture.vercel.app> and shares their locker
+   link (Locker → *Share your locker*: `?principal=<id>`) — or a passport id; both are public.
+2. `firsthand_list_passports({ principalId })` shows what they published (namespace, epoch, price);
+   `firsthand_request_access({ principalId })` (or `{ passportId }`) reads the sidecar, registers
+   the agent's card, accepts those exact terms on chain, funds the agent from the faucet double where
+   the gateway relays it, and returns an **approval link**.
 3. The human opens the link: the Locker shows "*label* asks for namespace *n*" → *Approve with
    passkey*. One grant transaction; the wrap is published for the gateway.
 4. `firsthand_query({ gatewayUrl, grantId, passportId })` pays 0.001 USDC over x402 and opens the

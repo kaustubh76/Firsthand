@@ -44,6 +44,7 @@ h2 {
 }
 .segmented {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   margin: 0.75rem 0;
 }
@@ -112,6 +113,7 @@ details.refusal summary {
 }
 nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -181,4 +183,12 @@ code {
   font-size: 0.92em;
   overflow-x: auto;
   display: block;
+}
+dl dd {
+  margin-left: 0;
+  word-break: break-all;
+}
+img,
+video {
+  max-width: 100%;
 }

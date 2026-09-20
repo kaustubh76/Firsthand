@@ -336,3 +336,19 @@ testnet), the MCP↔PWA PRF handoff, and buyer-side USDC funding inside `firstha
 
 The browser tier now activates from the Capture card and reads the Evidence tab; passes on anvil,
 Monad testnet and the live links.
+
+### Update — supply is discoverable; the app is phone-shaped; the relay is operable (20 Sep 2026)
+
+- **Passports by principal.** The catalog port gains `listByPrincipal` (memory, fs and object-store
+  backends keep a per-principal index beside the sidecars); the gateway serves
+  `GET /v1/principals/:id/passports?ns=`; the MCP gains `firsthand_list_passports` and
+  `firsthand_request_access` takes a `principalId`; the Locker has **Share your locker**
+  (`?principal=<id>`), which opens the Verify tab listing what that principal published. The demand
+  loop no longer starts with a passport id somebody had to be told — it starts with a link.
+- **Phone-shaped.** The browser tier walks every screen at 390 px and fails on any horizontal
+  overflow; the nav and segmented controls wrap, tables scroll within their box.
+- **Operable relay.** `/healthz` reports the relayer's float (`balanceMon`, `low` below
+  `RELAYER_LOW_WATERMARK_MON`); the browser tier prints it for hosted runs.
+- **The judge's path.** `docs/JUDGES.md` is Readme §19 beat by beat against the live app, with the
+  two beats that cannot be shown and why; the README carries a status block pointing at the app,
+  the evidence and the guides — the spec itself is unchanged.

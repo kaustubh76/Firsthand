@@ -74,3 +74,13 @@ export function dismissRequest(card: Bytes32, ns: number): GrantRequest[] {
   save(list);
   return list;
 }
+
+/** A shared locker: `?principal=<id>` opens the Verify tab listing what that principal published. */
+export function parsePrincipalLink(search: string): Bytes32 | null {
+  const id = new URLSearchParams(search).get("principal")?.toLowerCase() ?? "";
+  return HEX32.test(id) ? (id as Bytes32) : null;
+}
+
+export function lockerLink(appUrl: string, principalId: Bytes32): string {
+  return `${appUrl.replace(/\/+$/, "")}/?principal=${principalId}`;
+}

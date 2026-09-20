@@ -1,18 +1,29 @@
 import type { Bytes32, PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Hex } from "../components/Tx.js";
 import type { AppConfig } from "../lib/config.js";
 import type { CaptureClient } from "../lib/locker.js";
-import { fetchSidecar } from "../lib/sidecars.js";
+import { fetchSidecar, type ListedPassport, listPassports } from "../lib/sidecars.js";
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
  * verified here against the chain — origin signatures, Merkle inclusion, anchoring, finality — or
  * look up a passport id the gateway hosts and see what a buyer would see before paying.
  */
-export function Verify({ config, client }: { config: AppConfig; client: CaptureClient }) {
+export function Verify({
+  config,
+  client,
+  principal,
+}: {
+  config: AppConfig;
+  client: CaptureClient;
+  /** A shared locker link opened this tab: list that principal's passports first. */
+  principal?: Bytes32 | null;
+}) {
   const [text, setText] = useState("");
+  const [principalId, setPrincipalId] = useState<string>(principal ?? "");
+  const [listing, setListing] = useState<ListedPassport[] | null>(null);
   const [verdict, setVerdict] = useState<ManifestVerdict | null>(null);
   const [passportId, setPassportId] = useState("");
   const [sidecar, setSidecar] = useState<
@@ -67,6 +78,23 @@ export function Verify({ config, client }: { config: AppConfig; client: CaptureC
     if (file) setText(await file.text());
   };
 
+  const listPrincipal = (id: string = principalId) =>
+    run("list", async () => {
+      setListing(null);
+      if (!config.gatewayUrl) throw new Error("no gateway configured");
+      const p = id.trim().toLowerCase() as Bytes32;
+      if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a principal id is 32 bytes of hex");
+      setListing(await listPassports(config.gatewayUrl, p));
+    });
+  // A shared locker link lists on arrival (once per link; the button re-lists on demand).
+  const [listedFor, setListedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (principal && config.live && listedFor !== principal) {
+      setListedFor(principal);
+      void listPrincipal(principal);
+    }
+  });
+
   return (
     <section>
       <h1>Verify</h1>
@@ -118,6 +146,46 @@ export function Verify({ config, client }: { config: AppConfig; client: CaptureC
             ))}
           </ul>
         </div>
+      )}
+
+      <h2>A locker</h2>
+      <p className="hint">
+        A human shares their locker as a link (<code>?principal=…</code>). Everything they published
+        on this gateway is listed here — namespace, epoch, price — the buyer's starting point.
+      </p>
+      <input
+        value={principalId}
+        onChange={(e) => setPrincipalId(e.target.value)}
+        placeholder="0x… principal id"
+        data-testid="principal-input"
+      />
+      <button
+        type="button"
+        onClick={() => listPrincipal()}
+        disabled={principalId.trim() === "" || busy !== null || !config.live}
+      >
+        {busy === "list" ? "Listing…" : "List passports"}
+      </button>
+      {listing && (
+        <ul data-testid="principal-listing">
+          {listing.length === 0 && <li className="hint">nothing published on this gateway</li>}
+          {listing.map((p) => (
+            <li key={p.passportId}>
+              <Hex value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} · {p.price}{" "}
+              units/query{" "}
+              <button
+                type="button"
+                className="inline"
+                onClick={() => {
+                  setPassportId(p.passportId);
+                  void lookup();
+                }}
+              >
+                look up
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
       <h2>A passport</h2>

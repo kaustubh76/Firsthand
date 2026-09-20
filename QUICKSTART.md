@@ -77,6 +77,7 @@ the relayer submits and pays. Transaction hashes print as explorer links.
 
 | You want to… | Go to |
 |---|---|
+| judge it in three minutes | [`docs/JUDGES.md`](docs/JUDGES.md) — Readme §19 against the live app |
 | understand the mechanism | [`Readme.md`](Readme.md) — the frozen spec |
 | see the whole system at once | [`docs/diagrams/firsthand-product.excalidraw`](docs/diagrams/firsthand-product.excalidraw) |
 | read the measurements | [`experiments/README.md`](experiments/README.md) — including the two hypotheses that failed |

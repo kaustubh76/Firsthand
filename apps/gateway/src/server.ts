@@ -159,6 +159,7 @@ export function createGateway(
   let deployment: Deployment | null = null;
   let ledger: ConsentLedger | null = null;
   let chainHead: (() => Promise<bigint>) | null = null;
+  let relayerFloat: (() => Promise<{ address: Address; balanceWei: bigint }>) | null = null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
     const d = readDeployment(config);
@@ -175,6 +176,13 @@ export function createGateway(
     payTo = d.RoyaltyRouter.toLowerCase() as Address;
     usdc = d.USDC.toLowerCase() as Address;
     chainHead = () => clients.publicClient.getBlockNumber({ cacheTime: 0 });
+    if (clients.walletClient) {
+      const address = clients.walletClient.account.address.toLowerCase() as Address;
+      relayerFloat = async () => ({
+        address,
+        balanceWei: await clients.publicClient.getBalance({ address }),
+      });
+    }
     anchors = new OnchainAnchorWriter({
       address: passportAnchors,
       layout: d.anchorsLayout,
@@ -273,12 +281,30 @@ export function createGateway(
     }),
   );
 
-  app.get("/healthz", (c) =>
+  // The relay spends the relayer's float; an operator (or the browser tier) reads it here rather
+  // than discovering an empty account from a failed relay.
+  const floatOf = async () => {
+    if (!relayerFloat) return null;
+    try {
+      const { address, balanceWei } = await relayerFloat();
+      const balanceMon = Number(balanceWei) / 1e18;
+      return {
+        address,
+        balanceWei: balanceWei.toString(),
+        balanceMon: Number(balanceMon.toFixed(4)),
+        low: balanceMon < config.RELAYER_LOW_WATERMARK_MON,
+      };
+    } catch {
+      return { error: "balance unavailable" };
+    }
+  };
+  app.get("/healthz", async (c) =>
     c.json({
       ok: true,
       x402: config.X402_MODE,
       settlement: settlement.kind,
       blobs: config.BLOB_STORE,
+      relayer: await floatOf(),
     }),
   );
 
@@ -368,6 +394,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         query: "/v1/query/:grantId/:passportId",
         relay: "POST /v1/relay",
         passport: "/v1/passports/:id",
+        passports: "/v1/principals/:principalId/passports?ns=",
         blob: "/v1/blobs/:id",
         wrap: "/v1/grants/:grantId/wrap",
         anchors: "/v1/anchors/:root",
@@ -528,6 +555,26 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     const scan = await scanOf(c.req.query("fromBlock"));
     return c.json(
       jsonSafe({ grantId, receipts: await requireLedger().receiptsForGrant(grantId, scan) }),
+    );
+  });
+
+  /** Supply, discoverable: what a principal has published, for a buyer that was handed a locker link. */
+  app.get("/v1/principals/:principalId/passports", async (c) => {
+    const principalId = parseId(c.req.param("principalId"), "principalId");
+    const nsRaw = c.req.query("ns");
+    const ns = nsRaw === undefined ? undefined : Number(nsRaw);
+    if (ns !== undefined && (!Number.isInteger(ns) || ns < 0 || ns > 15)) {
+      throw new ValidationError("ns must be 0..15");
+    }
+    const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? "100") || 100));
+    return c.json(
+      jsonSafe({
+        principalId,
+        passports: await serving.passportsOf(principalId, {
+          ...(ns === undefined ? {} : { ns }),
+          limit,
+        }),
+      }),
     );
   });
 

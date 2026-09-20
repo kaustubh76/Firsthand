@@ -7,7 +7,7 @@ import {
   ValidationError,
 } from "@firsthand/core";
 import type { ObjectStoreClient } from "../ports/ObjectStore.js";
-import type { PassportCatalog } from "../ports/PassportCatalog.js";
+import { LIST_LIMIT, type PassportCatalog } from "../ports/PassportCatalog.js";
 
 export interface ObjectPassportCatalogOptions {
   readonly client: ObjectStoreClient;
@@ -30,6 +30,27 @@ export class ObjectPassportCatalog implements PassportCatalog {
     const id = passportId(sidecar.signed.passport);
     const body = new TextEncoder().encode(JSON.stringify(sidecarToWire(sidecar)));
     await this.#client.put(this.keyFor(id), body, "application/json");
+    // The per-principal index: a zero-byte marker per passport under a listable prefix.
+    await this.#client.put(
+      `${this.indexPrefix(sidecar.principalId)}${id}`,
+      new Uint8Array(),
+      "application/octet-stream",
+    );
+  }
+
+  async listByPrincipal(principalId: Bytes32, limit = LIST_LIMIT): Promise<Bytes32[]> {
+    const prefix = this.indexPrefix(principalId);
+    const keys = await this.#client.list(prefix, limit);
+    return keys
+      .map((k) => k.slice(prefix.length))
+      .filter((n): n is Bytes32 => /^0x[0-9a-f]{64}$/.test(n));
+  }
+
+  private indexPrefix(principalId: Bytes32): string {
+    if (!/^0x[0-9a-f]{64}$/.test(principalId)) {
+      throw new ValidationError("principal id must be 32-byte hex");
+    }
+    return `${this.#prefix}/by-principal/${principalId}/`;
   }
 
   async get(id: Bytes32): Promise<PassportSidecar | null> {

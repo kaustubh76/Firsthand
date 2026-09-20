@@ -140,6 +140,24 @@ describe("gateway serving path (memory mode)", () => {
     const s = await scenario();
     const url = `/v1/query/${s.grantId}/${s.r.passportId}`;
 
+    // Discovery: a buyer handed the principal's locker link lists what it can buy.
+    const listed = (await (
+      await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports`)
+    ).json()) as { passports: { passportId: string; ns: number; price: string }[] };
+    expect(listed.passports).toEqual([
+      expect.objectContaining({ passportId: s.r.passportId, ns: 0, price: "1000" }),
+    ]);
+    expect(
+      (
+        (await (
+          await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports?ns=3`)
+        ).json()) as { passports: unknown[] }
+      ).passports,
+    ).toEqual([]);
+    expect(
+      (await s.gw.app.request(`/v1/principals/${s.sidecar.principalId}/passports?ns=99`)).status,
+    ).toBe(400);
+
     const offer = await s.gw.app.request(url);
     expect(offer.status).toBe(402);
     const body = (await offer.json()) as {

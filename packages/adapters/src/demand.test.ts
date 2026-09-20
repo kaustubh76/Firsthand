@@ -82,6 +82,18 @@ function describeCatalogConformance(name: string, make: () => PassportCatalog) {
       expect(back?.signed.passport.epoch).toBe(5n);
       expect(back?.proof.siblings).toHaveLength(8);
       expect(await c.get(b32(99))).toBeNull();
+      // Discovery: a buyer lists what a principal published without being handed ids.
+      expect(await c.listByPrincipal(sidecar.principalId)).toEqual([id]);
+      expect(await c.listByPrincipal(b32(0x77))).toEqual([]);
+      const second: PassportSidecar = {
+        ...sidecar,
+        signed: { ...sidecar.signed, passport: { ...sidecar.signed.passport, nonce: b32(4) } },
+      };
+      await c.put(second);
+      const listed = await c.listByPrincipal(sidecar.principalId);
+      expect(listed).toHaveLength(2);
+      expect(listed).toContain(passportId(second.signed.passport));
+      expect(await c.listByPrincipal(sidecar.principalId, 1)).toHaveLength(1);
     });
   });
 }
@@ -99,7 +111,10 @@ describe("ObjectPassportCatalog", () => {
     const client = new MemoryObjectStoreClient();
     await new ObjectPassportCatalog({ client, prefix: "gw/" }).put(sidecar);
     const id = passportId(sidecar.signed.passport);
-    expect([...client.objects.keys()]).toEqual([`gw/${id.slice(2, 4)}/${id}.json`]);
+    expect([...client.objects.keys()]).toEqual([
+      `gw/${id.slice(2, 4)}/${id}.json`,
+      `gw/by-principal/${sidecar.principalId}/${id}`,
+    ]);
     expect(client.objects.get(`gw/${id.slice(2, 4)}/${id}.json`)?.contentType).toBe(
       "application/json",
     );

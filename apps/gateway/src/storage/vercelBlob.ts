@@ -1,5 +1,5 @@
 import type { ObjectStoreClient } from "@firsthand/adapters";
-import { BlobNotFoundError, get, head, put } from "@vercel/blob";
+import { BlobNotFoundError, get, head, list, put } from "@vercel/blob";
 
 export interface VercelBlobClientOptions {
   readonly token: string;
@@ -38,6 +38,21 @@ export function createVercelBlobClient(options: VercelBlobClientOptions): Object
         if (error instanceof BlobNotFoundError) return false;
         throw error;
       }
+    },
+    async list(prefix, limit) {
+      const out: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await list({
+          prefix,
+          limit: Math.min(1000, limit - out.length),
+          token,
+          ...(cursor ? { cursor } : {}),
+        });
+        for (const b of page.blobs) out.push(b.pathname);
+        cursor = page.hasMore ? page.cursor : undefined;
+      } while (cursor && out.length < limit);
+      return out.slice(0, limit);
     },
   };
 }

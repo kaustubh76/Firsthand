@@ -4,7 +4,7 @@ import { loadJournal, updateJournal } from "./journal.js";
 import { mergeLedger } from "./ledgerMerge.js";
 import { describeLiveness, livenessOf } from "./liveness.js";
 import { canonicalJson, mediaCap, metaHashOf } from "./media.js";
-import { parseGrantRequest, requestLink } from "./requests.js";
+import { lockerLink, parseGrantRequest, parsePrincipalLink, requestLink } from "./requests.js";
 
 const store = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -78,6 +78,11 @@ describe("grant requests", () => {
     expect(parseGrantRequest("?grant=0x12&pub=0x34")).toBeNull();
     expect(parseGrantRequest(`?grant=${card}&pub=${pub}&ns=99`)).toBeNull();
     expect(parseGrantRequest("")).toBeNull();
+    const principal = `0x${"77".repeat(32)}` as const;
+    expect(parsePrincipalLink(new URL(lockerLink("https://app.example", principal)).search)).toBe(
+      principal,
+    );
+    expect(parsePrincipalLink("?principal=0x12")).toBeNull();
   });
 });
 

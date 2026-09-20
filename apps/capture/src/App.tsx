@@ -4,7 +4,7 @@ import { type AppConfig, loadConfig } from "./lib/config.js";
 import { describeLiveness, fetchLiveness, type Liveness } from "./lib/liveness.js";
 import { type CaptureClient, createClient, openSession } from "./lib/locker.js";
 import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
-import { absorbRequestFromUrl, type GrantRequest } from "./lib/requests.js";
+import { absorbRequestFromUrl, type GrantRequest, parsePrincipalLink } from "./lib/requests.js";
 import { Capture } from "./routes/Capture.js";
 import { Enroll } from "./routes/Enroll.js";
 import { Evidence } from "./routes/Evidence.js";
@@ -37,7 +37,13 @@ export function App() {
   const [session, setSession] = useState<LockerSession | null>(null);
   // A buyer's access request arrives as a link; it opens the Locker once the passkey has unlocked.
   const [requests, setRequests] = useState<GrantRequest[]>(() => absorbRequestFromUrl());
-  const [route, setRoute] = useState<Route>(() => (requests.length > 0 ? "locker" : "capture"));
+  // A shared locker link (`?principal=`) opens Verify listing that principal — no locker needed.
+  const [sharedPrincipal] = useState(() =>
+    typeof location === "undefined" ? null : parsePrincipalLink(location.search),
+  );
+  const [route, setRoute] = useState<Route>(() =>
+    sharedPrincipal ? "verify" : requests.length > 0 ? "locker" : "capture",
+  );
   const [error, setError] = useState<string | null>(null);
   const [liveness, setLiveness] = useState<Liveness>({ kind: "unknown" });
 
@@ -108,7 +114,11 @@ export function App() {
         <button type="button" className="inline" onClick={() => setRoute("capture")}>
           ← back
         </button>
-        {route === "verify" ? <Verify config={config} client={client} /> : <Evidence />}
+        {route === "verify" ? (
+          <Verify config={config} client={client} principal={sharedPrincipal} />
+        ) : (
+          <Evidence />
+        )}
       </main>
     ) : null;
   if (publicRoute) return publicRoute;
@@ -195,7 +205,7 @@ export function App() {
           onActivated={() => void refreshLiveness()}
         />
       )}
-      {route === "verify" && <Verify config={config} client={client} />}
+      {route === "verify" && <Verify config={config} client={client} principal={sharedPrincipal} />}
       {route === "evidence" && <Evidence />}
     </main>
   );

@@ -47,6 +47,8 @@ export const GatewayConfigSchema = z.object({
   LEDGER_MAX_SCAN_BLOCKS: z.coerce.bigint().default(5_000n),
   /** Settlement relayer for SETTLEMENT_MODE=onchain. Pays gas; never a user key. */
   RELAYER_PRIVATE_KEY: privateKey.optional(),
+  /** /healthz reports `relayer.low` below this many MON — the refill signal. */
+  RELAYER_LOW_WATERMARK_MON: z.coerce.number().nonnegative().default(0.5),
 
   X402_MODE: z.enum(["memory", "monad"]).default("memory"),
   X402_FACILITATOR_URL: z.string().url().optional(),

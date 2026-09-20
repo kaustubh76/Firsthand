@@ -11,4 +11,6 @@ export interface ObjectStoreClient {
   get(pathname: string): Promise<Uint8Array | null>;
   /** Never throws; `false` on any failure to look up. */
   exists(pathname: string): Promise<boolean>;
+  /** Pathnames under a prefix, at most `limit`; the catalog's per-principal index depends on it. */
+  list(prefix: string, limit: number): Promise<string[]>;
 }

@@ -20,7 +20,7 @@ import { fetchReceipts, fetchTimeline } from "../lib/ledger.js";
 import { mergeLedger } from "../lib/ledgerMerge.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
-import { dismissRequest, type GrantRequest } from "../lib/requests.js";
+import { dismissRequest, type GrantRequest, lockerLink } from "../lib/requests.js";
 import { fetchSidecar } from "../lib/sidecars.js";
 import { NS, PRICE_UNITS, termsFor } from "../lib/terms.js";
 
@@ -279,6 +279,27 @@ export function LockerView({
         </ul>
       )}
 
+      <h2>Share your locker</h2>
+      <p className="hint">
+        A buyer starts from this link: it lists what you published (never the plaintext) and lets an
+        agent ask for access — <code>firsthand_request_access</code> in the MCP takes a principal
+        id.
+      </p>
+      <p>
+        <code className="hex" data-testid="locker-link">
+          {lockerLink(location.origin, principalId)}
+        </code>{" "}
+        <button
+          type="button"
+          className="inline"
+          onClick={() =>
+            void navigator.clipboard?.writeText(lockerLink(location.origin, principalId))
+          }
+        >
+          copy
+        </button>
+      </p>
+
       <h2>Deposits</h2>
       {journal.deposits.length === 0 ? (
         <p className="hint">Nothing yet — stamp something on the Capture tab.</p>
@@ -439,7 +460,7 @@ export function LockerView({
         );
       })()}
       <p className="hint">
-        The gateway reads a bounded window of blocks per request; rows marked <em>local record</em>
+        The gateway reads a bounded window of blocks per request; rows marked <em>local record</em>{" "}
         are this browser's own transactions from beyond that window.
       </p>
 

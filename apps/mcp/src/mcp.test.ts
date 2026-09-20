@@ -66,6 +66,7 @@ describe("firsthand-mcp", () => {
       "firsthand_export_manifest",
       "firsthand_grant",
       "firsthand_import",
+      "firsthand_list_passports",
       "firsthand_query",
       "firsthand_register_card",
       "firsthand_request_access",
@@ -82,6 +83,12 @@ describe("firsthand-mcp", () => {
     });
     expect(request.isError).toBe(true);
     expect(textOf(request as { content: unknown }).message).toMatch(/no buyer keys/);
+    const listing = await client.callTool({
+      name: "firsthand_list_passports",
+      arguments: { principalId: `0x${"11".repeat(32)}` },
+    });
+    expect(listing.isError).toBe(true);
+    expect(textOf(listing as { content: unknown }).message).toMatch(/GATEWAY_URL/);
     const manifest = await client.callTool({
       name: "firsthand_export_manifest",
       arguments: {

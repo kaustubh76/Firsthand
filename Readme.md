@@ -5,6 +5,8 @@
 
 *Monad Metropolis 2026 · Track 04: Trust, Identity & AI Infrastructure · Build window Sep 1 – Oct 13, judging Oct 14–27, winners Nov 3 · Solo: Kaushtubh (Cipher)*
 
+> **Status (Sep 2026).** This document is the frozen spec; the build is live. **Try it:** <https://firsthand-capture.vercel.app> (passkey → capture → paid query → withdraw consent, on Monad testnet) · gateway <https://firsthand-gateway.vercel.app> · the measured evidence is the app's *Evidence* tab and [`experiments/README.md`](experiments/README.md) · judges start at [`docs/JUDGES.md`](docs/JUDGES.md), developers at [`QUICKSTART.md`](QUICKSTART.md), progress and honest gaps in [`docs/PROGRESS.md`](docs/PROGRESS.md).
+
 ---
 
 ## 1. Executive Summary

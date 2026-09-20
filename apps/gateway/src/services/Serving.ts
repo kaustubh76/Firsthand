@@ -146,6 +146,41 @@ export class Serving {
 
   // ── serve ───────────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * What a principal has published, with the fields a buyer decides on: namespace, epoch, price,
+   * terms. Ids come from the catalog's index; each sidecar is one catalog read.
+   */
+  async passportsOf(
+    principalId: Bytes32,
+    options: { ns?: number; limit: number },
+  ): Promise<
+    {
+      passportId: Bytes32;
+      ns: number;
+      epoch: bigint;
+      batchRoot: Bytes32;
+      termsHash: Bytes32;
+      price: bigint;
+    }[]
+  > {
+    const ids = await this.#d.catalog.listByPrincipal(principalId);
+    const out = [];
+    for (const id of ids) {
+      if (out.length >= options.limit) break;
+      const s = await this.#d.catalog.get(id);
+      if (!s || (options.ns !== undefined && s.ns !== options.ns)) continue;
+      out.push({
+        passportId: id,
+        ns: s.ns,
+        epoch: s.signed.passport.epoch,
+        batchRoot: s.batchRoot,
+        termsHash: s.signed.passport.termsHash,
+        price: s.terms.price,
+      });
+    }
+    return out;
+  }
+
   async sidecar(id: Bytes32): Promise<PassportSidecar> {
     const s = await this.#d.catalog.get(id);
     if (!s) throw new NotFoundError(`unknown passport ${id}`);

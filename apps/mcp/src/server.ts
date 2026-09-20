@@ -35,6 +35,7 @@ import {
   ExportManifestInputSchema,
   GrantInputSchema,
   ImportInputSchema,
+  ListPassportsInputSchema,
   QueryInputSchema,
   RegisterCardInputSchema,
   RequestAccessInputSchema,
@@ -142,6 +143,29 @@ async function fundBuyer(
   } catch (error) {
     return { funded: false, reason: (error as Error).message };
   }
+}
+
+interface ListedPassport {
+  passportId: Bytes32;
+  ns: number;
+  epoch: string;
+  batchRoot: Bytes32;
+  termsHash: Bytes32;
+  price: string;
+}
+
+/** Supply, discoverable: what a principal has published on this gateway. */
+async function listPassports(
+  gatewayUrl: string,
+  principalId: string,
+  ns: number | undefined,
+  limit: number,
+): Promise<ListedPassport[]> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (ns !== undefined) q.set("ns", String(ns));
+  const res = await fetch(`${gatewayUrl}/v1/principals/${principalId}/passports?${q.toString()}`);
+  if (!res.ok) throw new Error(`gateway answered ${res.status} listing ${principalId}`);
+  return ((await res.json()) as { passports: ListedPassport[] }).passports;
 }
 
 /** Builds the MCP server with the three verbs plus `firsthand_status`. */
@@ -504,6 +528,30 @@ export function createMcpServer(deps: McpDeps): McpServer {
   );
 
   server.registerTool(
+    "firsthand_list_passports",
+    {
+      title: "List what a principal has published",
+      description:
+        "Buyer side: given a principal id (from a shared locker link), list the passports the gateway hosts for it — namespace, epoch, price per query, terms hash — so the agent can choose what to ask access to.",
+      inputSchema: ListPassportsInputSchema.shape,
+    },
+    async (input) => {
+      try {
+        if (!deps.gatewayUrl) throw new Error("GATEWAY_URL is required");
+        const passports = await listPassports(
+          deps.gatewayUrl,
+          input.principalId,
+          input.ns,
+          input.limit,
+        );
+        return text({ principalId: input.principalId, count: passports.length, passports });
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "firsthand_request_access",
     {
       title: "Ask a human for access to a passport",
@@ -516,8 +564,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
         if (!deps.buyer)
           throw new Error("no buyer keys configured (BUYER_PRIVATE_KEY, GRANTEE_SEED_HEX)");
         if (!deps.gatewayUrl) throw new Error("GATEWAY_URL is required to read the sidecar");
-        const res = await fetch(`${deps.gatewayUrl}/v1/passports/${input.passportId}`);
-        if (res.status === 404) throw new Error(`the gateway does not host ${input.passportId}`);
+        let passportId = input.passportId;
+        if (!passportId) {
+          // A locker link names a principal, not a passport: take the newest one they published.
+          if (!input.principalId) throw new Error("give a passportId or a principalId");
+          const listed = await listPassports(deps.gatewayUrl, input.principalId, input.ns, 1);
+          passportId = listed[0]?.passportId;
+          if (!passportId)
+            throw new Error(
+              `principal ${input.principalId} has published nothing the gateway hosts`,
+            );
+        }
+        const res = await fetch(`${deps.gatewayUrl}/v1/passports/${passportId}`);
+        if (res.status === 404) throw new Error(`the gateway does not host ${passportId}`);
         if (!res.ok) throw new Error(`gateway answered ${res.status}`);
         const sidecar = parseSidecar(await res.json());
         const buyer = await deps.buyer();
@@ -534,6 +593,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
           from: input.label,
         });
         return text({
+          passportId,
           principalId: sidecar.principalId,
           ns: sidecar.ns,
           terms: {

@@ -321,6 +321,8 @@ async function main() {
     ok(`H1 paged vs baseline: ${deltas.join(" · ")} · BTX marked not measurable · S4 shown`);
 
     step("external demand: a buyer outside the browser asks, the human approves, the buyer pays");
+    await page.getByRole("button", { name: "locker" }).click();
+    await page.getByTestId("locker-link").waitFor({ timeout: 10_000 });
     const chain = disco.chainId === "31337" ? anvil : monadTestnet;
     const chainId = BigInt(disco.chainId as string);
     const anchorsAddress = disco.contracts["PassportAnchors"] as Address;
@@ -340,7 +342,22 @@ async function main() {
       transport: relay,
     });
     const wait = (hash: Bytes32) => reader.publicClient.waitForTransactionReceipt({ hash });
-    // The same handshake firsthand_request_access performs: sidecar → card → terms → link.
+    // The same handshake firsthand_request_access performs — starting from the *locker link*, not a
+    // passport id: list what the principal published, pick the note, then sidecar → card → terms.
+    const principalIdOnPage = (await page.getByTestId("locker-link").textContent()) ?? "";
+    const sharedPrincipal = /principal=(0x[0-9a-f]{64})/.exec(principalIdOnPage)?.[1] as Bytes32;
+    if (!sharedPrincipal) throw new Error(`no locker link on the page: ${principalIdOnPage}`);
+    const catalogue = (await (
+      await fetch(`${gatewayUrl}/v1/principals/${sharedPrincipal}/passports`)
+    ).json()) as { passports: { passportId: Bytes32; ns: number; price: string }[] };
+    if (!catalogue.passports.some((p) => p.passportId === passportId)) {
+      throw new Error(
+        `the principal's listing does not include the note: ${JSON.stringify(catalogue)}`,
+      );
+    }
+    ok(
+      `locker link lists ${catalogue.passports.length} passports for the principal (note included)`,
+    );
     const sidecar = parseSidecar(
       await (await fetch(`${gatewayUrl}/v1/passports/${passportId}`)).json(),
     );
@@ -404,6 +421,48 @@ async function main() {
     ok(
       `outsider's compliance file verifies (${buyersVerdict.assets.length} asset, receipt ${served.result.receipt.receiptId.slice(0, 10)}…)`,
     );
+
+    step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");
+    const phone = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const mobile = await phone.newPage();
+    const mcdp = await phone.newCDPSession(mobile);
+    await mcdp.send("WebAuthn.enable", { enableUI: false });
+    await mcdp.send("WebAuthn.addVirtualAuthenticator", {
+      options: {
+        protocol: "ctap2",
+        transport: "internal",
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        hasPrf: true,
+        automaticPresenceSimulation: true,
+      },
+    });
+    const overflow = async (label: string) => {
+      // A mobile viewport widens itself to the widest element, so compare against the device width,
+      // not innerWidth (which would grow with the overflow and hide it).
+      const sw = await mobile.evaluate(() => document.documentElement.scrollWidth);
+      await mobile.screenshot({ path: join(out, `mobile-${label}.png`), fullPage: true });
+      if (sw > 390) throw new Error(`${label}: page is ${sw}px wide on a 390px phone`);
+      ok(`${label}: fits (${sw}/390px)`);
+    };
+    await mobile.goto(`${appUrl}/?gateway=${encodeURIComponent(gatewayUrl)}`);
+    await mobile.locator("h1").first().waitFor({ timeout: 10_000 });
+    await overflow("enrol");
+    await mobile.getByRole("button", { name: "Create passkey" }).click();
+    await mobile.locator("nav").waitFor({ timeout: 20_000 });
+    await overflow("capture");
+    for (const tab of ["locker", "recall", "verify", "evidence"] as const) {
+      await mobile.locator("nav").getByRole("button", { name: tab }).click();
+      await mobile.locator("h1").first().waitFor({ timeout: 10_000 });
+      await overflow(tab);
+    }
+    await phone.close();
 
     if (pageErrors.length > 0) throw new Error(`page errors:\n  ${pageErrors.join("\n  ")}`);
     await page.screenshot({ path: join(out, "final.png"), fullPage: true });

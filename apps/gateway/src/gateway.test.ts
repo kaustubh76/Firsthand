@@ -118,9 +118,17 @@ describe("gateway", () => {
       }),
       { logger: noopLogger },
     );
+    const health = (await (await relayed.app.request("/healthz")).json()) as {
+      settlement: string;
+      relayer: { address?: string; error?: string } | null;
+    };
+    expect(health.settlement).toBe("onchain");
+    // With a relayer configured, /healthz reports the float (here the node is unreachable: honest).
+    expect(health.relayer).toEqual({ error: "balance unavailable" });
+    // Without a relayer key there is nothing to report.
     expect(
-      ((await (await relayed.app.request("/healthz")).json()) as { settlement: string }).settlement,
-    ).toBe("onchain");
+      ((await (await gw.app.request("/healthz")).json()) as { relayer: unknown }).relayer,
+    ).toBeNull();
     expect(() =>
       createGateway(loadConfig({ DEPLOYMENTS_FILE: file, CHAIN_ID: "10143" }), {
         logger: noopLogger,

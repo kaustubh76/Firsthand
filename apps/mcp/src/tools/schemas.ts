@@ -53,15 +53,31 @@ export const QueryInputSchema = z.object({
 });
 
 export const RequestAccessInputSchema = z.object({
-  passportId: hex32.describe(
-    "A passport the gateway hosts — its sidecar names the principal and terms",
-  ),
+  passportId: hex32
+    .optional()
+    .describe("A passport the gateway hosts — its sidecar names the principal and terms"),
+  principalId: hex32
+    .optional()
+    .describe("Or a principal (from a shared locker link): the newest passport sets the terms"),
+  ns: z
+    .number()
+    .int()
+    .min(0)
+    .max(15)
+    .optional()
+    .describe("With principalId: restrict to a namespace"),
   label: z.string().max(64).default("an agent").describe("How the human will see this buyer"),
   appUrl: z
     .string()
     .url()
     .default("https://firsthand-capture.vercel.app")
     .describe("The capture app the human uses; the approval link opens there"),
+});
+
+export const ListPassportsInputSchema = z.object({
+  principalId: hex32.describe("The principal whose published passports to list"),
+  ns: z.number().int().min(0).max(15).optional(),
+  limit: z.number().int().min(1).max(100).default(50),
 });
 
 export const ExportManifestInputSchema = z.object({

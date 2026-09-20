@@ -23,4 +23,8 @@ export class MemoryObjectStoreClient implements ObjectStoreClient {
   async exists(pathname: string): Promise<boolean> {
     return this.objects.has(pathname);
   }
+
+  async list(prefix: string, limit: number): Promise<string[]> {
+    return [...this.objects.keys()].filter((k) => k.startsWith(prefix)).slice(0, limit);
+  }
 }

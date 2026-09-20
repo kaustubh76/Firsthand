@@ -26,6 +26,10 @@ export function Evidence() {
         <a href={`${REPO}/blob/main/experiments/README.md`} target="_blank" rel="noreferrer">
           experiments/README.md
         </a>
+        ; the three-minute script against this app is{" "}
+        <a href={`${REPO}/blob/main/docs/JUDGES.md`} target="_blank" rel="noreferrer">
+          docs/JUDGES.md
+        </a>
         .
       </p>
 

@@ -12,7 +12,6 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { Delegate } from "../components/Delegate.js";
 import { Portability } from "../components/Portability.js";
-import { Hex, Tx } from "../components/Tx.js";
 import { activate as activateLocker, reattest as reattestLocker } from "../lib/activation.js";
 import { formatUsdc } from "../lib/agent.js";
 import { type AgentInfo, bindingHolds, fetchAgent } from "../lib/agents.js";
@@ -27,6 +26,7 @@ import type { CaptureClient } from "../lib/locker.js";
 import { dismissRequest, type GrantRequest, lockerLink } from "../lib/requests.js";
 import { fetchSidecar } from "../lib/sidecars.js";
 import { NS, PRICE_UNITS, termsFor } from "../lib/terms.js";
+import { Hash, Tx } from "../ui/index.js";
 
 /**
  * The locker's own view: activation on chain, what has been anchored, the Consent Ledger (what the
@@ -259,7 +259,7 @@ export function LockerView({
     <section>
       <h1>Locker</h1>
       <p className="lede">
-        principal <Hex value={principalId} /> · epoch {session.locker.currentEpoch().toString()} ·
+        principal <Hash value={principalId} /> · epoch {session.locker.currentEpoch().toString()} ·
         pending {session.batcher.pendingCount()}
       </p>
       {!config.live && (
@@ -308,7 +308,7 @@ export function LockerView({
           {batches.map((b) => (
             <li key={b.root}>
               ns {b.ns} · epoch {b.epoch.toString()} · {b.passports.length} passport
-              {b.passports.length === 1 ? "" : "s"} · root <Hex value={b.root} n={6} />
+              {b.passports.length === 1 ? "" : "s"} · root <Hash value={b.root} n={6} />
               {b.anchor.txHash && (
                 <>
                   {" "}
@@ -361,7 +361,7 @@ export function LockerView({
                 ({d.kind}, ns {d.ns})
               </span>
               <br />
-              <Hex value={d.passportId} />
+              <Hash value={d.passportId} />
               {d.anchorTx && (
                 <>
                   {" "}
@@ -388,7 +388,7 @@ export function LockerView({
               return (
                 <li key={`${r.card}-${r.ns}`}>
                   <strong>{r.label}</strong> asks for namespace {r.ns} · card{" "}
-                  <Hex value={r.card} n={6} />
+                  <Hash value={r.card} n={6} />
                   <br />
                   <span className="hint" data-testid="agent-identity">
                     {!r.agentId
@@ -434,8 +434,8 @@ export function LockerView({
         <ul data-testid="grants">
           {grants.map((g) => (
             <li key={g.grantId}>
-              grant <Hex value={g.grantId} /> → card <Hex value={g.granteeCard} n={6} /> · ns {g.ns}{" "}
-              · <Tx hash={g.txHash} chainId={config.chainId} label="granted" />
+              grant <Hash value={g.grantId} /> → card <Hash value={g.granteeCard} n={6} /> · ns{" "}
+              {g.ns} · <Tx hash={g.txHash} chainId={config.chainId} label="granted" />
               {g.rescinded ? (
                 <>
                   {" "}
@@ -520,7 +520,7 @@ export function LockerView({
                       `block ${e.blockNumber.toString()}`
                     )}
                   </td>
-                  <td>{e.grantId ? <Hex value={e.grantId} n={6} /> : ""}</td>
+                  <td>{e.grantId ? <Hash value={e.grantId} n={6} /> : ""}</td>
                   <td>{e.txHash ? <Tx hash={e.txHash} chainId={config.chainId} /> : ""}</td>
                 </tr>
               ))}

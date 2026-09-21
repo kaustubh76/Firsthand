@@ -8,7 +8,6 @@ import {
 } from "@firsthand/sdk/browser";
 import { useState } from "react";
 import { ActivationCard } from "../components/ActivationCard.js";
-import { Hex, Tx } from "../components/Tx.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Landed, land } from "../lib/deposits.js";
 import { reportFailure } from "../lib/failures.js";
@@ -16,6 +15,7 @@ import type { Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
 import { NS, termsFor } from "../lib/terms.js";
+import { Hash, Tx } from "../ui/index.js";
 
 type Mode = "text" | "media" | "import";
 
@@ -312,7 +312,7 @@ export function Capture({
             <li key={entry.passportId}>
               <strong>{entry.label}</strong>
               <br />
-              passport <Hex value={entry.passportId} /> · blob <Hex value={entry.blobId} n={6} />
+              passport <Hash value={entry.passportId} /> · blob <Hash value={entry.blobId} n={6} />
               {entry.anchorTx && (
                 <>
                   {" "}

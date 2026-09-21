@@ -9,7 +9,6 @@ import {
 } from "@firsthand/sdk/browser";
 import { useMemo, useState } from "react";
 import { ActivationCard } from "../components/ActivationCard.js";
-import { Hex, Tx } from "../components/Tx.js";
 import {
   type DemoAgent,
   formatUsdc,
@@ -25,6 +24,7 @@ import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
+import { Hash, Tx } from "../ui/index.js";
 
 type StepId = "buyer" | "grant" | "query" | "rescind" | "refused";
 interface StepState {
@@ -157,7 +157,7 @@ export function Recall({
       say(
         "buyer",
         <>
-          buyer <Hex value={agent.address} n={6} /> · card <Hex value={agent.cardId} n={6} /> · no
+          buyer <Hash value={agent.address} n={6} /> · card <Hash value={agent.cardId} n={6} /> · no
           ERC-8004 identity (a demo agent holds no gas; a real one registers with its own key)
         </>,
       );
@@ -228,7 +228,7 @@ export function Recall({
       say(
         "grant",
         <>
-          grant <Hex value={plan.grantId} n={6} /> — {tx(sent.txHash)} · wrap published
+          grant <Hash value={plan.grantId} n={6} /> — {tx(sent.txHash)} · wrap published
         </>,
       );
     });
@@ -255,7 +255,7 @@ export function Recall({
       say(
         "query",
         <>
-          receipt <Hex value={opened.result.receipt.receiptId} n={6} />
+          receipt <Hash value={opened.result.receipt.receiptId} n={6} />
           {opened.result.receipt.txHash && <> — {tx(opened.result.receipt.txHash, "settled")}</>}
         </>,
       );
@@ -381,7 +381,7 @@ export function Recall({
       </button>
       {grantId && (
         <p className="hint">
-          grant <Hex value={grantId} n={6} /> — also listed under Locker → Grants
+          grant <Hash value={grantId} n={6} /> — also listed under Locker → Grants
         </p>
       )}
       {buyerFile && (

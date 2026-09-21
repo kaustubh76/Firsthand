@@ -1,7 +1,6 @@
 import type { Bytes32, PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
-import { Hex } from "../components/Tx.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { explainFailure } from "../lib/failures.js";
@@ -13,6 +12,7 @@ import {
   fetchSidecar,
   type Listing,
 } from "../lib/sidecars.js";
+import { Hash } from "../ui/index.js";
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
@@ -159,7 +159,7 @@ export function Verify({
           <ul>
             {verdict.assets.map((a) => (
               <li key={a.passportId}>
-                <Hex value={a.passportId} /> —{" "}
+                <Hash value={a.passportId} /> —{" "}
                 {a.ok ? "ok" : <span className="error">{a.reason}</span>}
               </li>
             ))}
@@ -198,7 +198,7 @@ export function Verify({
           ))}
           {listing.passports.map((p) => (
             <li key={p.passportId}>
-              <Hex value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} ·{" "}
+              <Hash value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} ·{" "}
               <span data-testid="class">{className(p.class)}</span> · {p.price} units/query{" "}
               <button
                 type="button"
@@ -240,8 +240,8 @@ export function Verify({
       {agent && agent !== "missing" && (
         <p data-testid="agent-view">
           #{agent.agentId}
-          {agent.name ? ` “${agent.name}”` : ""} · owner <Hex value={agent.owner} n={6} /> · card{" "}
-          {agent.cardId ? <Hex value={agent.cardId} n={6} /> : "none bound"} ·{" "}
+          {agent.name ? ` “${agent.name}”` : ""} · owner <Hash value={agent.owner} n={6} /> · card{" "}
+          {agent.cardId ? <Hash value={agent.cardId} n={6} /> : "none bound"} ·{" "}
           {agent.reputation.paidQueriesHere} paid queries credited by this gateway ·{" "}
           {agent.reputation.firsthandFeedbackAll} FIRSTHAND feedback entries overall
         </p>
@@ -266,27 +266,27 @@ export function Verify({
         <dl data-testid="passport-view">
           <dt>origin (deposit key)</dt>
           <dd>
-            <Hex value={sidecar.sidecar.signed.passport.origin} n={8} />
+            <Hash value={sidecar.sidecar.signed.passport.origin} n={8} />
           </dd>
           <dt>principal · namespace · epoch</dt>
           <dd>
-            <Hex value={sidecar.sidecar.principalId} n={6} /> · {sidecar.sidecar.ns} ·{" "}
+            <Hash value={sidecar.sidecar.principalId} n={6} /> · {sidecar.sidecar.ns} ·{" "}
             {sidecar.sidecar.signed.passport.epoch.toString()}
           </dd>
           <dt>terms</dt>
           <dd>
             {sidecar.sidecar.terms.price.toString()} USDC units per query · scope{" "}
             {sidecar.sidecar.terms.scope} · rate limit {sidecar.sidecar.terms.rateLimit} · payee{" "}
-            <Hex value={sidecar.sidecar.terms.payees[0] ?? ""} n={6} />
+            <Hash value={sidecar.sidecar.terms.payees[0] ?? ""} n={6} />
           </dd>
           <dt>batch root</dt>
           <dd>
-            <Hex value={sidecar.sidecar.batchRoot} n={8} /> —{" "}
+            <Hash value={sidecar.sidecar.batchRoot} n={8} /> —{" "}
             {sidecar.anchored ? `anchored at block ${sidecar.block?.toString()}` : "NOT anchored"}
           </dd>
           <dt>ciphertext</dt>
           <dd>
-            <Hex value={sidecar.sidecar.blobRef} n={6} /> (served only to a live grant, paid per
+            <Hash value={sidecar.sidecar.blobRef} n={6} /> (served only to a live grant, paid per
             query)
           </dd>
         </dl>

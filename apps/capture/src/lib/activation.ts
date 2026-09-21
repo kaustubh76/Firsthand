@@ -18,9 +18,9 @@ export interface Activated {
 export async function activate(session: LockerSession, client: CaptureClient): Promise<Activated> {
   const principalId = session.locker.principalId;
   const enrolled = await session.enroll();
-  await client.waitForTx?.(enrolled.txHash);
+  await client.waitForTx?.(enrolled.txHash, "Enrolled");
   const attested = await session.attest();
-  await client.waitForTx?.(attested.txHash);
+  await client.waitForTx?.(attested.txHash, "Attested");
   let enrolBlock: string | null = null;
   if (client.publicClient) {
     const receipt = await client.publicClient.getTransactionReceipt({ hash: enrolled.txHash });
@@ -37,7 +37,7 @@ export async function activate(session: LockerSession, client: CaptureClient): P
 /** A new epoch needs a fresh root; the principal stays enrolled. */
 export async function reattest(session: LockerSession, client: CaptureClient): Promise<Bytes32> {
   const attested = await session.attest();
-  await client.waitForTx?.(attested.txHash);
+  await client.waitForTx?.(attested.txHash, "Attested");
   updateJournal(session.locker.principalId, (j) => {
     j.attestTx = attested.txHash;
   });

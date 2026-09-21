@@ -28,7 +28,11 @@ export interface CaptureClient {
    * transaction, so dependent calls — attest after enroll, anchor after attest — must wait, or they
    * simulate against state that does not exist yet and are refused.
    */
-  readonly waitForTx: ((hash: Bytes32) => Promise<void>) | null;
+  /**
+   * Wait for a relayed transaction to be included. The label is what the app shows for it while
+   * it waits ("enrolled", "granted"…); the shell wraps this to raise toasts and a timeline row.
+   */
+  readonly waitForTx: ((hash: Bytes32, label?: string) => Promise<void>) | null;
 }
 
 /**

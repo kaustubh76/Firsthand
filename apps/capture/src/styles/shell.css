@@ -93,9 +93,8 @@
 /* The strip keeps its class and data attributes: the browser tier reads them. */
 .status {
   display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.4rem;
+  align-items: flex-start;
+  gap: 0.5rem;
   margin: 0;
   padding: 0.25rem 0.7rem 0.25rem 0.55rem;
   border-radius: 999px;
@@ -109,9 +108,13 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+.status-text {
+  min-width: 0;
+}
 .status .dot {
   width: 0.5rem;
   height: 0.5rem;
+  margin-top: 0.45em;
   border-radius: 50%;
   background: var(--faint);
   flex: none;

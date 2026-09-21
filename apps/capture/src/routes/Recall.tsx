@@ -168,14 +168,14 @@ export function Recall({
             "this gateway does not relay the faucet mint; the buyer cannot fund itself",
           );
         const minted = await mintUsdc(relay, usdc, agent.address, 100_000n);
-        await waitForTx?.(minted.hash);
+        await waitForTx?.(minted.hash, "Buyer funded");
         say("buyer", <>funded with 0.1 USDC from the faucet double — {tx(minted.hash)}</>);
       } else {
         say("buyer", <>already holds {formatUsdc(balance)}</>);
       }
       if (!agent.persisted.cardRegisteredTx) {
         const sent = await agent.session.registerCard();
-        await waitForTx?.(sent.txHash);
+        await waitForTx?.(sent.txHash, "Buyer card registered");
         agent.persisted.cardRegisteredTx = sent.txHash;
         saveAgentRecord(agent.persisted);
         say("buyer", <>card registered — {tx(sent.txHash)}</>);
@@ -186,7 +186,7 @@ export function Recall({
       if (!agent.persisted.accepted[acceptKey]) {
         const accept = agent.session.acceptTerms(principalId, terms);
         const sent = await accept.send();
-        await waitForTx?.(sent.txHash);
+        await waitForTx?.(sent.txHash, "Terms accepted");
         agent.persisted.accepted[acceptKey] = accept.plan.termsHash;
         saveAgentRecord(agent.persisted);
         say(
@@ -211,7 +211,7 @@ export function Recall({
         termsHash,
         term: 4n,
       });
-      await waitForTx?.(sent.txHash);
+      await waitForTx?.(sent.txHash, "Granted");
       await publishWrap({ gatewayUrl }, plan.grantId, plan.wrap);
       grant = plan.grantId;
       setGrantId(plan.grantId);
@@ -303,7 +303,7 @@ export function Recall({
     const ok4 = await step("rescind", async () => {
       if (!grant) throw new Error("no grant");
       const sent = await session.sendRescind(session.planRescind(grant));
-      await waitForTx?.(sent.txHash);
+      await waitForTx?.(sent.txHash, "Consent withdrawn");
       mutate((j) => {
         const g = j.grants.find((x) => x.grantId === grant);
         if (g) g.rescindTx = sent.txHash;

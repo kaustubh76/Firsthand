@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
+import { ToastProvider } from "./hooks/useToasts.js";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/ui.css";
@@ -40,7 +41,9 @@ if (!root) throw new Error("#root missing");
 createRoot(root).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

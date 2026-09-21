@@ -151,7 +151,7 @@ export function LockerView({
         termsHash,
         term: 4n,
       });
-      await waitForTx?.(sent.txHash);
+      await waitForTx?.(sent.txHash, "Granted");
       await publishWrap({ gatewayUrl: config.gatewayUrl }, plan.grantId, plan.wrap);
       const known = r.agentId ? agents[`${r.card}:${r.agentId}`] : undefined;
       mutate((j) =>
@@ -198,7 +198,7 @@ export function LockerView({
     run(`rescind:${grantId}`, async () => {
       // Direct rescission: one passkey-signed transaction, effective at its own block.
       const sent = await session.sendRescind(session.planRescind(grantId));
-      await waitForTx?.(sent.txHash);
+      await waitForTx?.(sent.txHash, "Consent withdrawn");
       mutate((j) => {
         const g = j.grants.find((x) => x.grantId === grantId);
         if (g) g.rescindTx = sent.txHash;

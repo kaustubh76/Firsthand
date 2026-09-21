@@ -1,16 +1,11 @@
 import type { LockerSession } from "@firsthand/sdk/browser";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "./hooks/useTheme.js";
+import { TxContext, useTxTracker } from "./hooks/useTx.js";
 import { type AppConfig, loadConfig } from "./lib/config.js";
 import { EPOCH_REASONS, type Failure, onFailure } from "./lib/failures.js";
-import {
-  describeFloat,
-  describeRollover,
-  fetchHealth,
-  type GatewayHealth,
-  rolloverIn,
-} from "./lib/health.js";
-import { describeLiveness, fetchLiveness, type Liveness } from "./lib/liveness.js";
+import { fetchHealth, type GatewayHealth } from "./lib/health.js";
+import { fetchLiveness, type Liveness } from "./lib/liveness.js";
 import { type CaptureClient, createClient, openSession } from "./lib/locker.js";
 import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
 import { absorbRequestFromUrl, type GrantRequest, parsePrincipalLink } from "./lib/requests.js";
@@ -19,24 +14,25 @@ import { Enroll } from "./routes/Enroll.js";
 import { Evidence } from "./routes/Evidence.js";
 import { LockerView } from "./routes/Locker.js";
 import { Recall } from "./routes/Recall.js";
+import { Unlock } from "./routes/Unlock.js";
 import { Verify } from "./routes/Verify.js";
+import { Header } from "./shell/Header.js";
+import { LoadingFrame } from "./shell/LoadingFrame.js";
+import { Nav } from "./shell/Nav.js";
+import { initialRoute, NavigationContext, type Navigator, type Route } from "./shell/navigation.js";
+import { PublicFrame } from "./shell/PublicFrame.js";
+import { StatusStrip } from "./shell/StatusStrip.js";
+import { Button, Icon } from "./ui/index.js";
 
-type Route = "capture" | "locker" | "recall" | "verify" | "evidence";
-
-const hostOf = (url: string | null): string => {
-  try {
-    return url ? new URL(url).host : "no gateway";
-  } catch {
-    return url ?? "no gateway";
-  }
-};
+const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
 
 export function App() {
   useTheme();
+
   // Addresses come from the gateway's discovery document, so this is async — the browser has no
   // deployment file to read.
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [client, setClient] = useState<CaptureClient | null>(null);
+  const [rawClient, setRawClient] = useState<CaptureClient | null>(null);
   const [connecting, setConnecting] = useState<{ attempt: number; of: number } | null>(null);
   const discovering = useRef(false);
   // A hosted gateway can take a cold start: discovery retries, says which attempt it is on, and
@@ -47,7 +43,7 @@ export function App() {
     try {
       const c = await loadConfig({ onAttempt: (attempt, of) => setConnecting({ attempt, of }) });
       setConfig(c);
-      setClient(createClient(c));
+      setRawClient(createClient(c));
     } finally {
       discovering.current = false;
       setConnecting(null);
@@ -57,10 +53,14 @@ export function App() {
     void discover();
   }, [discover]);
 
+  // Every relayed transaction the routes wait for becomes a toast and a timeline row.
+  const tracker = useTxTracker(rawClient, config?.chainId ?? null);
+  const client = tracker.client;
+
   // The venue's float and the epoch clock, on every screen: a judge sees "relayer low" or "epoch
   // rolls over in 40 min" before a tap fails, not after.
   const [health, setHealth] = useState<GatewayHealth | null>(null);
-  const [now, setNow] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  const [now, setNow] = useState(nowSeconds);
   const refreshHealth = useCallback(async () => {
     if (config?.live) setHealth(await fetchHealth(config));
   }, [config]);
@@ -68,10 +68,11 @@ export function App() {
     void refreshHealth();
     const timer = setInterval(() => {
       void refreshHealth();
-      setNow(BigInt(Math.floor(Date.now() / 1000)));
+      setNow(nowSeconds());
     }, 60_000);
     return () => clearInterval(timer);
   }, [refreshHealth]);
+
   const [outOfGas, setOutOfGas] = useState<Failure | null>(null);
   const [credentialId, setCredentialId] = useState<Uint8Array | null>(savedCredentialId);
   const [session, setSession] = useState<LockerSession | null>(null);
@@ -83,16 +84,49 @@ export function App() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [config, discover, session]);
+
   // A buyer's access request arrives as a link; it opens the Locker once the passkey has unlocked.
   const [requests, setRequests] = useState<GrantRequest[]>(() => absorbRequestFromUrl());
   // A shared locker link (`?principal=`) opens Verify listing that principal — no locker needed.
   const [sharedPrincipal] = useState(() =>
     typeof location === "undefined" ? null : parsePrincipalLink(location.search),
   );
+
+  // Routing: state mirrored into the hash; `go()` may name a card to scroll to and focus.
   const [route, setRoute] = useState<Route>(() =>
-    sharedPrincipal ? "verify" : requests.length > 0 ? "locker" : "capture",
+    initialRoute({
+      sharedPrincipal: sharedPrincipal !== null,
+      hasRequests: requests.length > 0,
+      hash: typeof location === "undefined" ? "" : location.hash,
+    }),
   );
-  const [error, setError] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const go = useCallback((r: Route, t?: string) => {
+    setRoute(r);
+    setTarget(t ?? null);
+  }, []);
+  const navigator = useMemo<Navigator>(() => ({ route, target, go }), [route, target, go]);
+  useEffect(() => {
+    if (typeof history !== "undefined" && location.hash !== `#${route}`) {
+      history.replaceState(null, "", `#${route}`);
+    }
+  }, [route]);
+  useEffect(() => {
+    if (!target) return;
+    const frame = requestAnimationFrame(() => {
+      const el = document.getElementById(target);
+      if (el) {
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
+        el.focus({ preventScroll: true });
+      }
+      setTarget(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [target]);
+
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
   const [liveness, setLiveness] = useState<Liveness>({ kind: "unknown" });
 
   const refreshLiveness = useCallback(
@@ -129,196 +163,137 @@ export function App() {
 
   async function unlock(id: Uint8Array) {
     if (!client) return;
+    setUnlocking(true);
+    setUnlockError(null);
     try {
       const s = await openSession(client.client, prfSourceFor(id));
       setSession(s);
       void refreshLiveness(s);
     } catch (e) {
-      setError((e as Error).message);
+      setUnlockError((e as Error).message);
+    } finally {
+      setUnlocking(false);
     }
   }
 
-  // The status strip is on every screen, so nobody mistakes the offline demo for the chain.
-  const float = describeFloat(health);
-  const rollover = config ? rolloverIn(config.epochs, now) : null;
-  const status = (
-    <p
-      className="status"
-      data-live={config?.live ?? "loading"}
-      data-liveness={liveness.kind}
-      data-relayer={health?.relayer ? (health.relayer.low ? "low" : "ok") : "unknown"}
-    >
-      {config === null || connecting
-        ? `connecting to gateway…${
-            connecting && connecting.attempt > 1 ? ` (${connecting.attempt}/${connecting.of})` : ""
-          }`
-        : config.live
-          ? `live · chain ${config.chainId} · ${hostOf(config.gatewayUrl)}${
-              liveness.kind === "unknown" ? "" : ` · ${describeLiveness(liveness)}`
-            }${rollover === null ? "" : ` · ${describeRollover(rollover)}`}`
-          : `offline · ${config.reason}`}
-      {float && (
-        <span className="float" data-testid="relayer-float">
-          {" "}
-          · {float}
-        </span>
-      )}
-      {config && !config.live && !connecting && (
-        <>
-          {" "}
-          <button type="button" className="inline" onClick={() => void discover()}>
-            retry
-          </button>
-        </>
-      )}
-    </p>
-  );
   const header = (
-    <header className="masthead">
-      <div>
-        <span className="brand">FIRSTHAND</span>
-        <span className="tagline">
-          the data locker that can prove what's inside it — deposit · query · rescind
-        </span>
-      </div>
-      {status}
-      {outOfGas && (
-        <p className="banner" role="alert" data-testid="out-of-gas">
-          The venue's relayer is out of gas — nothing can be written on chain until its operator
-          tops it up. Reading, verifying and the evidence still work.{" "}
-          <button type="button" className="inline" onClick={() => setOutOfGas(null)}>
-            dismiss
-          </button>
-        </p>
-      )}
-    </header>
+    <Header
+      status={
+        <StatusStrip
+          config={config}
+          connecting={connecting}
+          liveness={liveness}
+          health={health}
+          now={now}
+          onRetry={() => void discover()}
+        />
+      }
+      outOfGas={outOfGas}
+      onDismissOutOfGas={() => setOutOfGas(null)}
+    />
   );
-  // Verification needs no locker: a buyer, a judge, anyone with a manifest or a passport id.
-  const verifyLink = (
-    <p className="hint">
-      No locker needed to{" "}
-      <button type="button" className="inline" onClick={() => setRoute("verify")}>
+
+  // Verification needs no locker: a buyer, a judge, anyone with a manifest or a passport id. (Their
+  // names must stay free of "capture", "locker", "recall" — the browser tier clicks nav buttons by
+  // those names, unscoped.)
+  const publicLinks = (
+    <p className="public-links">
+      <Icon name="shield" />
+      <span>No passkey needed to</span>
+      <Button variant="inline" onClick={() => go("verify")}>
         verify a manifest or a passport
-      </button>{" "}
-      or to read{" "}
-      <button type="button" className="inline" onClick={() => setRoute("evidence")}>
+      </Button>
+      <span>or to read</span>
+      <Button variant="inline" onClick={() => go("evidence")}>
         the measured evidence
-      </button>
+      </Button>
       .
     </p>
   );
-  const publicRoute =
-    config && client && session === null && (route === "verify" || route === "evidence") ? (
-      <div className="app">
-        <main>
-          {header}
-          <button type="button" className="inline" onClick={() => setRoute("capture")}>
-            ← back
-          </button>
-          {route === "verify" ? (
-            <Verify config={config} client={client} principal={sharedPrincipal} />
-          ) : (
-            <Evidence />
-          )}
-        </main>
-      </div>
-    ) : null;
-  if (publicRoute) return publicRoute;
+
+  let body: ReactElement;
   if (!config || !client) {
-    return (
-      <div className="app">
-        <main>
-          {header}
-          <section>
-            <p>Loading…</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-  if (credentialId === null) {
-    return (
-      <div className="app">
-        <main>
-          {header}
-          <Enroll
-            onEnrolled={(id) => {
-              setCredentialId(id);
-              void unlock(id);
-            }}
-          />
-          {verifyLink}
-        </main>
-      </div>
-    );
-  }
-  if (session === null) {
-    return (
-      <div className="app">
-        <main>
-          {header}
-          <section>
-            <h1>Unlock</h1>
-            <p className="lede">
-              Your locker's keys derive from the passkey's PRF output on every unlock; nothing is
-              stored but the credential id.
-            </p>
-            <button type="button" onClick={() => unlock(credentialId)}>
-              Tap passkey
-            </button>
-            {error && <p className="error">{error}</p>}
-          </section>
-          {verifyLink}
-        </main>
-      </div>
-    );
-  }
-  return (
-    <div className="app">
-      <main>
-        {header}
-        <nav>
-          {(["capture", "locker", "recall", "verify", "evidence"] as const).map((r) => (
-            <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>
-              {r}
-              {r === "locker" && requests.length > 0 ? ` (${requests.length})` : ""}
-            </button>
-          ))}
-        </nav>
-        {route === "capture" && (
-          <Capture
-            session={session}
-            config={config}
-            client={client}
-            liveness={liveness}
-            onActivated={() => void refreshLiveness()}
-          />
-        )}
-        {route === "locker" && (
-          <LockerView
-            session={session}
-            config={config}
-            client={client}
-            liveness={liveness}
-            onActivated={() => void refreshLiveness()}
-            requests={requests}
-            onRequests={setRequests}
-          />
-        )}
-        {route === "recall" && (
-          <Recall
-            session={session}
-            config={config}
-            client={client}
-            liveness={liveness}
-            onActivated={() => void refreshLiveness()}
-          />
-        )}
-        {route === "verify" && (
+    body = <LoadingFrame />;
+  } else if (session === null && (route === "verify" || route === "evidence")) {
+    body = (
+      <PublicFrame onBack={() => go("capture")}>
+        {route === "verify" ? (
           <Verify config={config} client={client} principal={sharedPrincipal} />
+        ) : (
+          <Evidence />
         )}
-        {route === "evidence" && <Evidence />}
+      </PublicFrame>
+    );
+  } else if (credentialId === null) {
+    body = (
+      <main>
+        <Enroll
+          onEnrolled={(id) => {
+            setCredentialId(id);
+            void unlock(id);
+          }}
+        />
+        {publicLinks}
       </main>
-    </div>
+    );
+  } else if (session === null) {
+    body = (
+      <main>
+        <Unlock onUnlock={() => void unlock(credentialId)} busy={unlocking} error={unlockError} />
+        {publicLinks}
+      </main>
+    );
+  } else {
+    body = (
+      <>
+        <Nav badges={{ locker: requests.length }} />
+        <main>
+          {route === "capture" && (
+            <Capture
+              session={session}
+              config={config}
+              client={client}
+              liveness={liveness}
+              onActivated={() => void refreshLiveness()}
+            />
+          )}
+          {route === "locker" && (
+            <LockerView
+              session={session}
+              config={config}
+              client={client}
+              liveness={liveness}
+              onActivated={() => void refreshLiveness()}
+              requests={requests}
+              onRequests={setRequests}
+            />
+          )}
+          {route === "recall" && (
+            <Recall
+              session={session}
+              config={config}
+              client={client}
+              liveness={liveness}
+              onActivated={() => void refreshLiveness()}
+            />
+          )}
+          {route === "verify" && (
+            <Verify config={config} client={client} principal={sharedPrincipal} />
+          )}
+          {route === "evidence" && <Evidence />}
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <NavigationContext.Provider value={navigator}>
+      <TxContext.Provider value={tracker}>
+        <div className="app">
+          {header}
+          {body}
+        </div>
+      </TxContext.Provider>
+    </NavigationContext.Provider>
   );
 }

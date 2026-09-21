@@ -179,8 +179,19 @@ async function localEnv(root: string): Promise<DemoEnv> {
 }
 
 /** True when the recorded deployment still has code — a restarted anvil forgets everything. */
+/** The contracts the demo path touches; the lens is recorded but not deployed on a local chain. */
+const REQUIRED_CONTRACTS = [
+  "PrincipalRegistry",
+  "PassportAnchors",
+  "GrantManager",
+  "Rescissions",
+  "ReceiptLedger",
+  "RoyaltyRouter",
+  "USDC",
+] as const;
+
 /**
- * True once every contract the deployment file names has code. Checking one address is not enough:
+ * True once every contract the demo needs has code. Checking the registry alone is not enough:
  * forge writes the file while the last broadcast (MockUSDC, deployed after the registry) can still
  * be in flight, and a gateway started in that gap publishes an asset the chain does not have yet —
  * the buyer's first balanceOf then fails with "returned no data".
@@ -189,7 +200,7 @@ async function codeAt(deploymentsFile: string): Promise<boolean> {
   try {
     const { readFileSync } = await import("node:fs");
     const d = JSON.parse(readFileSync(deploymentsFile, "utf8")) as Record<string, unknown>;
-    const addresses = Object.values(d).filter(
+    const addresses = REQUIRED_CONTRACTS.map((k) => d[k]).filter(
       (v): v is string => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v),
     );
     if (addresses.length === 0) return false;

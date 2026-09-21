@@ -11,6 +11,7 @@ import { ActivationCard } from "../components/ActivationCard.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Landed, land } from "../lib/deposits.js";
 import { reportFailure } from "../lib/failures.js";
+import { updateJournal } from "../lib/journal.js";
 import type { Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
@@ -187,6 +188,9 @@ export function Capture({
       } catch (e) {
         const err = e as Error & { code?: string };
         setRefusal(`${err.code ?? "refused"}: ${err.message}`);
+        updateJournal(session.locker.principalId, (j) => {
+          j.refusalAt = Date.now();
+        });
       }
     });
 
@@ -214,6 +218,7 @@ export function Capture({
       {mode === "text" && (
         <>
           <textarea
+            id="capture-note"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="What did you observe?"
@@ -337,7 +342,7 @@ export function Capture({
         </ul>
       )}
 
-      <details className="refusal">
+      <details className="refusal" id="capture-refusal">
         <summary>The refusal — try to launder a scraped datum</summary>
         <p className="hint">
           Forges a well-formed passport signed by another locker's key and asks this locker to

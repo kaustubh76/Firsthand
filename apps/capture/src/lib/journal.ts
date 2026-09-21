@@ -54,10 +54,22 @@ export interface Journal {
   grants: GrantEntry[];
   receipts: ReceiptEntry[];
   delegations?: DelegationEntry[];
+  /** Beats of the three-minute script this browser has been through (the journey rail reads them). */
+  refusalAt?: number;
+  manifestAt?: number;
+  evidenceSeenAt?: number;
 }
 
 const KEY = (principalId: string) => `firsthand.journal.${principalId}`;
 const EMPTY = (): Journal => ({ deposits: [], grants: [], receipts: [] });
+
+// One snapshot per principal, replaced on every save, so React can subscribe to the journal as an
+// external store: a deposit landed on the Capture tab shows up in the Locker's tiles at once.
+const snapshots = new Map<string, Journal>();
+const listeners = new Set<() => void>();
+const notify = () => {
+  for (const l of listeners) l();
+};
 
 export function loadJournal(principalId: string): Journal {
   try {
@@ -76,6 +88,35 @@ export function saveJournal(principalId: string, journal: Journal): void {
   } catch {
     // storage unavailable: the session still works, it just will not remember across reloads
   }
+  snapshots.set(principalId, journal);
+  notify();
+}
+
+/** The current journal, referentially stable until the next save (for useSyncExternalStore). */
+export function journalSnapshot(principalId: string): Journal {
+  const cached = snapshots.get(principalId);
+  if (cached) return cached;
+  const loaded = loadJournal(principalId);
+  snapshots.set(principalId, loaded);
+  return loaded;
+}
+
+export function subscribeJournal(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Forget what this browser recorded about a locker; the chain keeps the truth. */
+export function clearJournal(principalId: string): void {
+  try {
+    localStorage.removeItem(KEY(principalId));
+  } catch {
+    // nothing to remove
+  }
+  snapshots.set(principalId, EMPTY());
+  notify();
 }
 
 /** Mutate-and-save in one step; returns the new journal for state updates. */

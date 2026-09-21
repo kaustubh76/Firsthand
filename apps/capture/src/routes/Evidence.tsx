@@ -15,7 +15,7 @@ export function Evidence() {
   const S2 = s2Cards();
   const S4 = s4Card();
   return (
-    <section data-testid="evidence">
+    <section data-testid="evidence" id="evidence">
       <h1>Evidence</h1>
       <p className="lede">
         Measured, not narrated. Every number below is read from{" "}

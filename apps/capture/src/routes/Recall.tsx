@@ -376,7 +376,13 @@ export function Recall({
           </select>
         </label>
       )}
-      <button type="button" onClick={runAll} disabled={!ready || running} data-testid="run-recall">
+      <button
+        type="button"
+        id="recall-run"
+        onClick={runAll}
+        disabled={!ready || running}
+        data-testid="run-recall"
+      >
         {running ? "Running…" : "Run the first recall"}
       </button>
       {grantId && (

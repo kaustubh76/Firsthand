@@ -1,5 +1,7 @@
 import type { LockerSession } from "@firsthand/sdk/browser";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useJournal } from "./hooks/useJournal.js";
+import { useJourney } from "./hooks/useJourney.js";
 import { useTheme } from "./hooks/useTheme.js";
 import { TxContext, useTxTracker } from "./hooks/useTx.js";
 import { type AppConfig, loadConfig } from "./lib/config.js";
@@ -17,6 +19,7 @@ import { Recall } from "./routes/Recall.js";
 import { Unlock } from "./routes/Unlock.js";
 import { Verify } from "./routes/Verify.js";
 import { Header } from "./shell/Header.js";
+import { JourneyRail } from "./shell/JourneyRail.js";
 import { LoadingFrame } from "./shell/LoadingFrame.js";
 import { Nav } from "./shell/Nav.js";
 import { initialRoute, NavigationContext, type Navigator, type Route } from "./shell/navigation.js";
@@ -125,9 +128,30 @@ export function App() {
     return () => cancelAnimationFrame(frame);
   }, [target]);
 
+  const [liveness, setLiveness] = useState<Liveness>({ kind: "unknown" });
+
+  // The journey rail: seven beats of the script, lit by the credential, the chain and the journal.
+  const [journal, mutateJournal] = useJournal(session?.locker.principalId ?? null);
+  const journeyInputs = useMemo(
+    () => ({
+      unlocked: session !== null,
+      live: config?.live ?? false,
+      liveness,
+      journal: session ? journal : null,
+    }),
+    [session, config?.live, liveness, journal],
+  );
+  const journey = useJourney(journeyInputs);
+  useEffect(() => {
+    if (session && route === "evidence" && !journal.evidenceSeenAt) {
+      mutateJournal((j) => {
+        j.evidenceSeenAt = Date.now();
+      });
+    }
+  }, [session, route, journal.evidenceSeenAt, mutateJournal]);
+
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
-  const [liveness, setLiveness] = useState<Liveness>({ kind: "unknown" });
 
   const refreshLiveness = useCallback(
     async (s: LockerSession | null = session) => {
@@ -227,6 +251,7 @@ export function App() {
   } else if (credentialId === null) {
     body = (
       <main>
+        <JourneyRail steps={journey} />
         <Enroll
           onEnrolled={(id) => {
             setCredentialId(id);
@@ -239,6 +264,7 @@ export function App() {
   } else if (session === null) {
     body = (
       <main>
+        <JourneyRail steps={journey} />
         <Unlock onUnlock={() => void unlock(credentialId)} busy={unlocking} error={unlockError} />
         {publicLinks}
       </main>
@@ -246,6 +272,7 @@ export function App() {
   } else {
     body = (
       <>
+        <JourneyRail steps={journey} />
         <Nav badges={{ locker: requests.length }} />
         <main>
           {route === "capture" && (

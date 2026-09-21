@@ -240,6 +240,11 @@ export function LockerView({
         : 0n;
       const verdict = await verifyManifest(m, { anchors: client.anchors, headBlock });
       setManifest({ text: serialiseManifest(m), verdict });
+      if (verdict.ok) {
+        mutate((j) => {
+          j.manifestAt = Date.now();
+        });
+      }
     });
 
   const download = () => {
@@ -487,7 +492,7 @@ export function LockerView({
         </p>
       )}
 
-      <h2>Consent Ledger</h2>
+      <h2 id="locker-ledger">Consent Ledger</h2>
       <p className="hint">
         What the chain says about this principal, read from event logs by the gateway
         {journal.enrolBlock ? ` since block ${journal.enrolBlock}` : ""}.{" "}

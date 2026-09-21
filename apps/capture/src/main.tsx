@@ -1,7 +1,11 @@
 import { Component, type ErrorInfo, type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
-import "./styles.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/ui.css";
+import "./styles/shell.css";
+import "./styles/routes.css";
 
 /** A render-time exception must show up as words, never as an empty page. */
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -15,12 +19,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <section>
+      <section className="crash">
         <h1>FIRSTHAND</h1>
         <p className="error">Something broke while rendering: {this.state.error.message}</p>
-        <button type="button" onClick={() => location.reload()}>
-          Reload
-        </button>
+        <p className="hint">
+          Nothing on chain is affected; the locker's keys live in your passkey, not on this page.
+        </p>
+        <div className="btn-row">
+          <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+            Reload
+          </button>
+        </div>
       </section>
     );
   }

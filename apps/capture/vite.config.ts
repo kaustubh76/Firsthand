@@ -12,8 +12,8 @@ export default defineConfig({
         short_name: "FIRSTHAND",
         description:
           "One tap: stamp what you capture with a passport of origin, price and consent.",
-        theme_color: "#0b0b0f",
-        background_color: "#0b0b0f",
+        theme_color: "#0a0b10",
+        background_color: "#0a0b10",
         display: "standalone",
         icons: [
           { src: "icon.svg", sizes: "any", type: "image/svg+xml" },

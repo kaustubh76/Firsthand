@@ -1,5 +1,6 @@
 import type { LockerSession } from "@firsthand/sdk/browser";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTheme } from "./hooks/useTheme.js";
 import { type AppConfig, loadConfig } from "./lib/config.js";
 import { EPOCH_REASONS, type Failure, onFailure } from "./lib/failures.js";
 import {
@@ -31,6 +32,7 @@ const hostOf = (url: string | null): string => {
 };
 
 export function App() {
+  useTheme();
   // Addresses come from the gateway's discovery document, so this is async — the browser has no
   // deployment file to read.
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -207,104 +209,116 @@ export function App() {
   );
   const publicRoute =
     config && client && session === null && (route === "verify" || route === "evidence") ? (
-      <main>
-        {header}
-        <button type="button" className="inline" onClick={() => setRoute("capture")}>
-          ← back
-        </button>
-        {route === "verify" ? (
-          <Verify config={config} client={client} principal={sharedPrincipal} />
-        ) : (
-          <Evidence />
-        )}
-      </main>
+      <div className="app">
+        <main>
+          {header}
+          <button type="button" className="inline" onClick={() => setRoute("capture")}>
+            ← back
+          </button>
+          {route === "verify" ? (
+            <Verify config={config} client={client} principal={sharedPrincipal} />
+          ) : (
+            <Evidence />
+          )}
+        </main>
+      </div>
     ) : null;
   if (publicRoute) return publicRoute;
   if (!config || !client) {
     return (
-      <main>
-        {header}
-        <section>
-          <p>Loading…</p>
-        </section>
-      </main>
+      <div className="app">
+        <main>
+          {header}
+          <section>
+            <p>Loading…</p>
+          </section>
+        </main>
+      </div>
     );
   }
   if (credentialId === null) {
     return (
-      <main>
-        {header}
-        <Enroll
-          onEnrolled={(id) => {
-            setCredentialId(id);
-            void unlock(id);
-          }}
-        />
-        {verifyLink}
-      </main>
+      <div className="app">
+        <main>
+          {header}
+          <Enroll
+            onEnrolled={(id) => {
+              setCredentialId(id);
+              void unlock(id);
+            }}
+          />
+          {verifyLink}
+        </main>
+      </div>
     );
   }
   if (session === null) {
     return (
-      <main>
-        {header}
-        <section>
-          <h1>Unlock</h1>
-          <p className="lede">
-            Your locker's keys derive from the passkey's PRF output on every unlock; nothing is
-            stored but the credential id.
-          </p>
-          <button type="button" onClick={() => unlock(credentialId)}>
-            Tap passkey
-          </button>
-          {error && <p className="error">{error}</p>}
-        </section>
-        {verifyLink}
-      </main>
+      <div className="app">
+        <main>
+          {header}
+          <section>
+            <h1>Unlock</h1>
+            <p className="lede">
+              Your locker's keys derive from the passkey's PRF output on every unlock; nothing is
+              stored but the credential id.
+            </p>
+            <button type="button" onClick={() => unlock(credentialId)}>
+              Tap passkey
+            </button>
+            {error && <p className="error">{error}</p>}
+          </section>
+          {verifyLink}
+        </main>
+      </div>
     );
   }
   return (
-    <main>
-      {header}
-      <nav>
-        {(["capture", "locker", "recall", "verify", "evidence"] as const).map((r) => (
-          <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>
-            {r}
-            {r === "locker" && requests.length > 0 ? ` (${requests.length})` : ""}
-          </button>
-        ))}
-      </nav>
-      {route === "capture" && (
-        <Capture
-          session={session}
-          config={config}
-          client={client}
-          liveness={liveness}
-          onActivated={() => void refreshLiveness()}
-        />
-      )}
-      {route === "locker" && (
-        <LockerView
-          session={session}
-          config={config}
-          client={client}
-          liveness={liveness}
-          onActivated={() => void refreshLiveness()}
-          requests={requests}
-          onRequests={setRequests}
-        />
-      )}
-      {route === "recall" && (
-        <Recall
-          session={session}
-          config={config}
-          client={client}
-          liveness={liveness}
-          onActivated={() => void refreshLiveness()}
-        />
-      )}
-      {route === "verify" && <Verify config={config} client={client} principal={sharedPrincipal} />}
-      {route === "evidence" && <Evidence />}
-    </main>
+    <div className="app">
+      <main>
+        {header}
+        <nav>
+          {(["capture", "locker", "recall", "verify", "evidence"] as const).map((r) => (
+            <button type="button" key={r} onClick={() => setRoute(r)} aria-current={route === r}>
+              {r}
+              {r === "locker" && requests.length > 0 ? ` (${requests.length})` : ""}
+            </button>
+          ))}
+        </nav>
+        {route === "capture" && (
+          <Capture
+            session={session}
+            config={config}
+            client={client}
+            liveness={liveness}
+            onActivated={() => void refreshLiveness()}
+          />
+        )}
+        {route === "locker" && (
+          <LockerView
+            session={session}
+            config={config}
+            client={client}
+            liveness={liveness}
+            onActivated={() => void refreshLiveness()}
+            requests={requests}
+            onRequests={setRequests}
+          />
+        )}
+        {route === "recall" && (
+          <Recall
+            session={session}
+            config={config}
+            client={client}
+            liveness={liveness}
+            onActivated={() => void refreshLiveness()}
+          />
+        )}
+        {route === "verify" && (
+          <Verify config={config} client={client} principal={sharedPrincipal} />
+        )}
+        {route === "evidence" && <Evidence />}
+      </main>
+    </div>
   );
 }

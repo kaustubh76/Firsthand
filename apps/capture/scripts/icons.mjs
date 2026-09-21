@@ -13,7 +13,7 @@ try {
   for (const size of [192, 512]) {
     const page = await browser.newPage({ viewport: { width: size, height: size } });
     await page.setContent(
-      `<html><body style="margin:0;background:#0b0b0f">${svg.replace(/<svg /, `<svg width="${size}" height="${size}" `)}</body></html>`,
+      `<html><body style="margin:0;background:#0a0b10">${svg.replace(/<svg /, `<svg width="${size}" height="${size}" `)}</body></html>`,
     );
     const png = await page.screenshot({ type: "png", omitBackground: false });
     writeFileSync(join(root, "public", `icon-${size}.png`), png);

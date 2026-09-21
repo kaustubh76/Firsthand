@@ -1,9 +1,11 @@
 import type { Bytes32, PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
+import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { explainFailure } from "../lib/failures.js";
+import { blockTime, pluralise } from "../lib/format.js";
 import type { CaptureClient } from "../lib/locker.js";
 import {
   className,
@@ -12,7 +14,9 @@ import {
   fetchSidecar,
   type Listing,
 } from "../lib/sidecars.js";
-import { Hash } from "../ui/index.js";
+import { Button, Card, EmptyState, Field, Hash, Icon, Notice, Pill } from "../ui/index.js";
+
+type Action = "verify" | "list" | "agent" | "lookup";
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
@@ -29,6 +33,7 @@ export function Verify({
   /** A shared locker link opened this tab: list that principal's passports first. */
   principal?: Bytes32 | null;
 }) {
+  const actions = useAsyncActions<Action>({ explain: explainFailure });
   const [text, setText] = useState("");
   const [principalId, setPrincipalId] = useState<string>(principal ?? "");
   const [listing, setListing] = useState<Listing | null>(null);
@@ -41,23 +46,9 @@ export function Verify({
     | "missing"
     | null
   >(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async (label: string, fn: () => Promise<void>) => {
-    setBusy(label);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(explainFailure(e));
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const verify = () =>
-    run("verify", async () => {
+    actions.run("verify", async () => {
       setVerdict(null);
       const parsed = JSON.parse(text) as unknown;
       const headBlock = client.publicClient
@@ -66,13 +57,13 @@ export function Verify({
       setVerdict(await verifyManifest(parsed, { anchors: client.anchors, headBlock }));
     });
 
-  const lookup = () =>
-    run("lookup", async () => {
+  const lookup = (id: string = passportId) =>
+    actions.run("lookup", async () => {
       setSidecar(null);
       if (!config.gatewayUrl) throw new Error("no gateway configured");
-      const id = passportId.trim().toLowerCase() as Bytes32;
-      if (!/^0x[0-9a-f]{64}$/.test(id)) throw new Error("a passport id is 32 bytes of hex");
-      const found = await fetchSidecar(config.gatewayUrl, id);
+      const p = id.trim().toLowerCase() as Bytes32;
+      if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a passport id is 32 bytes of hex");
+      const found = await fetchSidecar(config.gatewayUrl, p);
       if (!found) {
         setSidecar("missing");
         return;
@@ -81,7 +72,7 @@ export function Verify({
         client.anchors.isAnchored(found.batchRoot),
         client.anchors.anchorBlock(found.batchRoot),
       ]);
-      setSidecar({ id, sidecar: found, anchored, block });
+      setSidecar({ id: p, sidecar: found, anchored, block });
     });
 
   const onFile = async (file: File | null) => {
@@ -89,15 +80,16 @@ export function Verify({
   };
 
   const listPrincipal = (id: string = principalId) =>
-    run("list", async () => {
+    actions.run("list", async () => {
       setListing(null);
       if (!config.gatewayUrl) throw new Error("no gateway configured");
       const p = id.trim().toLowerCase() as Bytes32;
       if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a principal id is 32 bytes of hex");
       setListing(await fetchListing(config.gatewayUrl, p));
     });
+
   const lookupAgent = () =>
-    run("agent", async () => {
+    actions.run("agent", async () => {
       setAgent(null);
       if (!config.gatewayUrl) throw new Error("no gateway configured");
       if (!/^\d{1,20}$/.test(agentId.trim())) throw new Error("an ERC-8004 agent id is a number");
@@ -114,185 +106,310 @@ export function Verify({
     }
   });
 
+  const offline = !config.live;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
   return (
     <section>
-      <h1>Verify</h1>
-      <p className="lede">
-        What a buyer does before paying, with nothing but a browser: verify a Lineage Manifest
-        against the chain, or inspect a passport the gateway hosts. No passkey, no account.
-      </p>
+      <div className="screen-head">
+        <span className="eyebrow">Verify</span>
+        <h1>What a buyer checks before paying</h1>
+        <p className="lede">
+          With nothing but a browser: verify a Lineage Manifest against the chain, or inspect a
+          passport the gateway hosts. No passkey, no account.
+        </p>
+      </div>
+      {offline && (
+        <Notice tone="warn">Offline ({config.reason}) — verification needs a chain to read.</Notice>
+      )}
 
-      <h2>Lineage Manifest</h2>
-      <p className="hint">
-        Paste or upload the JSON a seller or buyer exported. Each asset is checked for its origin
-        signature, Merkle inclusion under its batch root, that the root is anchored on chain, and
-        finality — ≤ 8 hashes per asset.
-      </p>
-      <input
-        type="file"
-        accept=".json,application/json"
-        data-testid="manifest-input"
-        onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-      />
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder='{"version":1,"domain":…,"assets":[…]}'
-        rows={6}
-        data-testid="manifest-text"
-      />
-      <button
-        type="button"
-        onClick={verify}
-        disabled={text.trim() === "" || busy !== null || !config.live}
+      <Card
+        id="verify-manifest"
+        icon="shield"
+        title="Lineage Manifest"
+        subtitle="Paste or upload the JSON a seller or buyer exported. Each asset is checked for its origin signature, Merkle inclusion under its batch root, that the root is anchored on chain, and finality — ≤ 8 hashes per asset."
       >
-        {busy === "verify" ? "Verifying…" : "Verify against the chain"}
-      </button>
-      {verdict && (
-        <div data-testid="verdict" data-ok={verdict.ok}>
-          <p>
-            <strong>{verdict.ok ? "verifies" : "FAILS"}</strong> · {verdict.assets.length} asset
-            {verdict.assets.length === 1 ? "" : "s"} · {verdict.hashesPerAsset} hashes/asset ·{" "}
-            {verdict.ms.toFixed(0)} ms ({verdict.merkleMs.toFixed(0)} ms Merkle + anchoring,{" "}
-            {verdict.signatureMs.toFixed(0)} ms signatures)
-          </p>
-          <ul>
-            {verdict.assets.map((a) => (
-              <li key={a.passportId}>
-                <Hash value={a.passportId} /> —{" "}
-                {a.ok ? "ok" : <span className="error">{a.reason}</span>}
+        <label className="dropzone">
+          <span className="dropzone-title">
+            <Icon name="upload" />
+            Upload a manifest file
+          </span>
+          <input
+            type="file"
+            accept=".json,application/json"
+            data-testid="manifest-input"
+            onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        <Field label="…or paste it">
+          {(id) => (
+            <textarea
+              id={id}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder='{"version":1,"domain":…,"assets":[…]}'
+              rows={6}
+              data-testid="manifest-text"
+              spellCheck={false}
+            />
+          )}
+        </Field>
+        <div className="btn-row">
+          <Button
+            variant="primary"
+            icon="shield"
+            onClick={verify}
+            pending={actions.is("verify")}
+            pendingLabel="Verifying…"
+            disabled={text.trim() === "" || actions.busy !== null || offline}
+          >
+            Verify against the chain
+          </Button>
+        </div>
+        {actions.errorFor("verify") && <Notice tone="bad">{actions.errorFor("verify")}</Notice>}
+        {verdict && (
+          <div className="verdict" data-testid="verdict" data-ok={verdict.ok}>
+            <p className="verdict-line">
+              <Pill tone={verdict.ok ? "ok" : "bad"} dot>
+                <strong>{verdict.ok ? "verifies" : "FAILS"}</strong>
+              </Pill>
+              <span>· {pluralise(verdict.assets.length, "asset")}</span>
+              <span>· {verdict.hashesPerAsset} hashes/asset</span>
+              <span>
+                · {verdict.ms.toFixed(0)} ms ({verdict.merkleMs.toFixed(0)} ms Merkle + anchoring,{" "}
+                {verdict.signatureMs.toFixed(0)} ms signatures)
+              </span>
+            </p>
+            <ul className="asset-list">
+              {verdict.assets.map((a) => (
+                <li key={a.passportId}>
+                  <Icon name={a.ok ? "check" : "x"} className={a.ok ? "ok" : "bad"} />
+                  <Hash value={a.passportId} />
+                  {a.ok ? (
+                    <Pill tone="ok">ok</Pill>
+                  ) : (
+                    <Pill tone="bad">
+                      <span className="error">{a.reason}</span>
+                    </Pill>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+
+      <Card
+        id="verify-locker"
+        icon="lock"
+        title="A locker"
+        subtitle="A human shares their locker as a link (?principal=…). Everything they published on this gateway is listed here — namespace, epoch, class, price — the buyer's starting point."
+      >
+        <div className="field-row">
+          <Field label="Principal id">
+            {(id) => (
+              <input
+                id={id}
+                value={principalId}
+                onChange={(e) => setPrincipalId(e.target.value)}
+                placeholder="0x… principal id"
+                data-testid="principal-input"
+                spellCheck={false}
+              />
+            )}
+          </Field>
+          <Button
+            icon="eye"
+            onClick={() => listPrincipal()}
+            pending={actions.is("list")}
+            pendingLabel="Listing…"
+            disabled={principalId.trim() === "" || actions.busy !== null || offline}
+          >
+            List passports
+          </Button>
+        </div>
+        {actions.errorFor("list") && <Notice tone="bad">{actions.errorFor("list")}</Notice>}
+        {listing && (
+          <ul className="cards" data-testid="principal-listing">
+            {listing.passports.length === 0 && (
+              <li className="hint">nothing published on this gateway</li>
+            )}
+            {Object.entries(listing.freshness).map(([ns, f]) => (
+              <li key={`fresh-${ns}`} className="hint" data-testid="freshness">
+                <Icon name="clock" /> ns {ns}: {describeFreshness(f, nowSeconds)} — a market signal
+                from the newest anchor's block time (README §7.3), not a protocol rule
+              </li>
+            ))}
+            {listing.passports.map((p) => (
+              <li key={p.passportId} className="listing-row">
+                <div className="row-head">
+                  <span className="row-meta">
+                    <Hash value={p.passportId} n={8} copy />
+                    <Pill tone="accent" data-testid="class">
+                      {className(p.class)}
+                    </Pill>
+                  </span>
+                  <Button
+                    variant="inline"
+                    onClick={() => {
+                      setPassportId(p.passportId);
+                      void lookup(p.passportId);
+                    }}
+                  >
+                    look up
+                  </Button>
+                </div>
+                <div className="row-meta">
+                  <span>ns {p.ns}</span>
+                  <span>epoch {p.epoch}</span>
+                  <span>{p.price} units/query</span>
+                  {p.capturedAt && blockTime(p.capturedAt) && (
+                    <span>captured {blockTime(p.capturedAt)}</span>
+                  )}
+                  {p.sourceTag && (
+                    <span>
+                      source <Hash value={p.sourceTag} n={4} />
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
+        )}
+      </Card>
+
+      <Card
+        id="verify-agent"
+        icon="key"
+        title="An agent (ERC-8004)"
+        subtitle="Buyers can be ERC-8004 agents: an on-chain identity that names its FIRSTHAND card. The gateway credits every paid query to the agent's reputation — what a human sees before granting."
+      >
+        <div className="field-row">
+          <Field label="Agent id">
+            {(id) => (
+              <input
+                id={id}
+                value={agentId}
+                onChange={(e) => setAgentId(e.target.value)}
+                placeholder="agent id (e.g. 42)"
+                inputMode="numeric"
+                data-testid="agent-input"
+              />
+            )}
+          </Field>
+          <Button
+            icon="eye"
+            onClick={lookupAgent}
+            pending={actions.is("agent")}
+            pendingLabel="Looking up…"
+            disabled={agentId.trim() === "" || actions.busy !== null || offline}
+          >
+            Look up agent
+          </Button>
         </div>
-      )}
+        {actions.errorFor("agent") && <Notice tone="bad">{actions.errorFor("agent")}</Notice>}
+        {agent === "missing" && (
+          <EmptyState
+            icon="key"
+            title="No such agent"
+            hint="Not on this chain's registry — or this gateway names no registry."
+          />
+        )}
+        {agent && agent !== "missing" && (
+          <dl className="kv" data-testid="agent-view">
+            <dt>agent</dt>
+            <dd>
+              #{agent.agentId}
+              {agent.name ? ` “${agent.name}”` : ""}
+            </dd>
+            <dt>owner</dt>
+            <dd>
+              <Hash value={agent.owner} n={6} copy />
+            </dd>
+            <dt>card</dt>
+            <dd>{agent.cardId ? <Hash value={agent.cardId} n={6} copy /> : "none bound"}</dd>
+            <dt>reputation</dt>
+            <dd>
+              {agent.reputation.paidQueriesHere} paid queries credited by this gateway ·{" "}
+              {agent.reputation.firsthandFeedbackAll} FIRSTHAND feedback entries overall
+            </dd>
+          </dl>
+        )}
+      </Card>
 
-      <h2>A locker</h2>
-      <p className="hint">
-        A human shares their locker as a link (<code>?principal=…</code>). Everything they published
-        on this gateway is listed here — namespace, epoch, price — the buyer's starting point.
-      </p>
-      <input
-        value={principalId}
-        onChange={(e) => setPrincipalId(e.target.value)}
-        placeholder="0x… principal id"
-        data-testid="principal-input"
-      />
-      <button
-        type="button"
-        onClick={() => listPrincipal()}
-        disabled={principalId.trim() === "" || busy !== null || !config.live}
+      <Card
+        id="verify-passport"
+        icon="stamp"
+        title="A passport"
+        subtitle="What the gateway hosts for one id: origin, terms, batch root and its anchor — everything but the plaintext."
       >
-        {busy === "list" ? "Listing…" : "List passports"}
-      </button>
-      {listing && (
-        <ul data-testid="principal-listing">
-          {listing.passports.length === 0 && (
-            <li className="hint">nothing published on this gateway</li>
-          )}
-          {Object.entries(listing.freshness).map(([ns, f]) => (
-            <li key={`fresh-${ns}`} className="hint" data-testid="freshness">
-              ns {ns}: {describeFreshness(f, Math.floor(Date.now() / 1000))} — a market signal from
-              the newest anchor's block time (README §7.3), not a protocol rule
-            </li>
-          ))}
-          {listing.passports.map((p) => (
-            <li key={p.passportId}>
-              <Hash value={p.passportId} n={8} /> · ns {p.ns} · epoch {p.epoch} ·{" "}
-              <span data-testid="class">{className(p.class)}</span> · {p.price} units/query{" "}
-              <button
-                type="button"
-                className="inline"
-                onClick={() => {
-                  setPassportId(p.passportId);
-                  void lookup();
-                }}
-              >
-                look up
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h2>An agent (ERC-8004)</h2>
-      <p className="hint">
-        Buyers can be ERC-8004 agents: an on-chain identity that names its FIRSTHAND card. The
-        gateway credits every paid query to the agent's reputation — what a human sees before
-        granting.
-      </p>
-      <input
-        value={agentId}
-        onChange={(e) => setAgentId(e.target.value)}
-        placeholder="agent id (e.g. 42)"
-        data-testid="agent-input"
-      />
-      <button
-        type="button"
-        onClick={lookupAgent}
-        disabled={agentId.trim() === "" || busy !== null || !config.live}
-      >
-        {busy === "agent" ? "Looking up…" : "Look up agent"}
-      </button>
-      {agent === "missing" && (
-        <p className="hint">no such agent on this chain's registry (or no registry here)</p>
-      )}
-      {agent && agent !== "missing" && (
-        <p data-testid="agent-view">
-          #{agent.agentId}
-          {agent.name ? ` “${agent.name}”` : ""} · owner <Hash value={agent.owner} n={6} /> · card{" "}
-          {agent.cardId ? <Hash value={agent.cardId} n={6} /> : "none bound"} ·{" "}
-          {agent.reputation.paidQueriesHere} paid queries credited by this gateway ·{" "}
-          {agent.reputation.firsthandFeedbackAll} FIRSTHAND feedback entries overall
-        </p>
-      )}
-
-      <h2>A passport</h2>
-      <input
-        value={passportId}
-        onChange={(e) => setPassportId(e.target.value)}
-        placeholder="0x… passport id"
-        data-testid="passport-input"
-      />
-      <button
-        type="button"
-        onClick={lookup}
-        disabled={passportId.trim() === "" || busy !== null || !config.live}
-      >
-        {busy === "lookup" ? "Looking up…" : "Look up"}
-      </button>
-      {sidecar === "missing" && <p className="hint">the gateway does not host that passport</p>}
-      {sidecar && sidecar !== "missing" && (
-        <dl data-testid="passport-view">
-          <dt>origin (deposit key)</dt>
-          <dd>
-            <Hash value={sidecar.sidecar.signed.passport.origin} n={8} />
-          </dd>
-          <dt>principal · namespace · epoch</dt>
-          <dd>
-            <Hash value={sidecar.sidecar.principalId} n={6} /> · {sidecar.sidecar.ns} ·{" "}
-            {sidecar.sidecar.signed.passport.epoch.toString()}
-          </dd>
-          <dt>terms</dt>
-          <dd>
-            {sidecar.sidecar.terms.price.toString()} USDC units per query · scope{" "}
-            {sidecar.sidecar.terms.scope} · rate limit {sidecar.sidecar.terms.rateLimit} · payee{" "}
-            <Hash value={sidecar.sidecar.terms.payees[0] ?? ""} n={6} />
-          </dd>
-          <dt>batch root</dt>
-          <dd>
-            <Hash value={sidecar.sidecar.batchRoot} n={8} /> —{" "}
-            {sidecar.anchored ? `anchored at block ${sidecar.block?.toString()}` : "NOT anchored"}
-          </dd>
-          <dt>ciphertext</dt>
-          <dd>
-            <Hash value={sidecar.sidecar.blobRef} n={6} /> (served only to a live grant, paid per
-            query)
-          </dd>
-        </dl>
-      )}
-      {error && <p className="error">{error}</p>}
-      {!config.live && <p className="error">Offline ({config.reason}).</p>}
+        <div className="field-row">
+          <Field label="Passport id">
+            {(id) => (
+              <input
+                id={id}
+                value={passportId}
+                onChange={(e) => setPassportId(e.target.value)}
+                placeholder="0x… passport id"
+                data-testid="passport-input"
+                spellCheck={false}
+              />
+            )}
+          </Field>
+          <Button
+            icon="eye"
+            onClick={() => lookup()}
+            pending={actions.is("lookup")}
+            pendingLabel="Looking up…"
+            disabled={passportId.trim() === "" || actions.busy !== null || offline}
+          >
+            Look up
+          </Button>
+        </div>
+        {actions.errorFor("lookup") && <Notice tone="bad">{actions.errorFor("lookup")}</Notice>}
+        {sidecar === "missing" && (
+          <EmptyState
+            icon="stamp"
+            title="Not hosted here"
+            hint="The gateway does not host that passport."
+          />
+        )}
+        {sidecar && sidecar !== "missing" && (
+          <dl className="kv" data-testid="passport-view">
+            <dt>origin (deposit key)</dt>
+            <dd>
+              <Hash value={sidecar.sidecar.signed.passport.origin} n={8} copy />
+            </dd>
+            <dt>principal · namespace · epoch</dt>
+            <dd>
+              <Hash value={sidecar.sidecar.principalId} n={6} /> · {sidecar.sidecar.ns} ·{" "}
+              {sidecar.sidecar.signed.passport.epoch.toString()}
+            </dd>
+            <dt>terms</dt>
+            <dd>
+              {sidecar.sidecar.terms.price.toString()} USDC units per query · scope{" "}
+              {sidecar.sidecar.terms.scope} · rate limit {sidecar.sidecar.terms.rateLimit} · payee{" "}
+              <Hash value={sidecar.sidecar.terms.payees[0] ?? ""} n={6} />
+            </dd>
+            <dt>batch root</dt>
+            <dd>
+              <Hash value={sidecar.sidecar.batchRoot} n={8} /> ·{" "}
+              {sidecar.anchored ? (
+                <Pill tone="ok" dot>
+                  anchored at block {sidecar.block?.toString()}
+                </Pill>
+              ) : (
+                <Pill tone="bad">NOT anchored</Pill>
+              )}
+            </dd>
+            <dt>ciphertext</dt>
+            <dd>
+              <Hash value={sidecar.sidecar.blobRef} n={6} /> (served only to a live grant, paid per
+              query)
+            </dd>
+          </dl>
+        )}
+      </Card>
     </section>
   );
 }

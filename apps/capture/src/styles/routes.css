@@ -518,3 +518,14 @@ button:not([class]):hover:not(:disabled) {
 button:not([class]):disabled {
   opacity: 0.5;
 }
+.asset-list .icon.ok {
+  color: var(--ok);
+}
+.asset-list .icon.bad {
+  color: var(--bad);
+}
+.evidence-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}

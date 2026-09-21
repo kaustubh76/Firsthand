@@ -7,8 +7,10 @@ import {
   serialiseManifest,
   verifyManifest,
 } from "@firsthand/sdk/browser";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { ActivationCard } from "../components/ActivationCard.js";
+import { useJournal } from "../hooks/useJournal.js";
+import { useToasts } from "../hooks/useToasts.js";
 import {
   type DemoAgent,
   formatUsdc,
@@ -20,16 +22,27 @@ import {
 import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
 import { reportFailure } from "../lib/failures.js";
-import { type Journal, loadJournal, updateJournal } from "../lib/journal.js";
+import { pluralise } from "../lib/format.js";
 import { describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
-import { Hash, Tx } from "../ui/index.js";
+import { useNavigation } from "../shell/navigation.js";
+import {
+  Button,
+  Card,
+  Field,
+  Hash,
+  Notice,
+  Pill,
+  Timeline,
+  type TimelineItem,
+  Tx,
+} from "../ui/index.js";
 
 type StepId = "buyer" | "grant" | "query" | "rescind" | "refused";
 interface StepState {
   status: "idle" | "running" | "done" | "failed";
-  lines: React.ReactNode[];
+  lines: ReactNode[];
 }
 const STEPS: { id: StepId; title: string; what: string }[] = [
   {
@@ -86,7 +99,9 @@ export function Recall({
   onActivated: () => void;
 }) {
   const principalId = session.locker.principalId;
-  const [journal, setJournal] = useState<Journal>(() => loadJournal(principalId));
+  const [journal, mutate] = useJournal(principalId);
+  const toasts = useToasts();
+  const nav = useNavigation();
   const published = journal.deposits.filter((d) => d.published);
   const [passportId, setPassportId] = useState<Bytes32 | "">(
     (published.find((d) => d.kind === "text") ?? published[0])?.passportId ?? "",
@@ -116,9 +131,8 @@ export function Recall({
 
   const set = (id: StepId, patch: Partial<StepState>) =>
     setSteps((s) => ({ ...s, [id]: { ...s[id], ...patch } }));
-  const say = (id: StepId, line: React.ReactNode) =>
+  const say = (id: StepId, line: ReactNode) =>
     setSteps((s) => ({ ...s, [id]: { ...s[id], lines: [...s[id].lines, line] } }));
-  const mutate = (fn: (j: Journal) => void) => setJournal(updateJournal(principalId, fn));
 
   async function step(id: StepId, fn: () => Promise<void>): Promise<boolean> {
     set(id, { status: "running", lines: [] });
@@ -252,6 +266,14 @@ export function Recall({
           {shown === null ? " (binary — hash matches the passport)" : <>: “{shown}”</>}
         </>,
       );
+      const req = opened.result.paid.requirements;
+      say(
+        "query",
+        <>
+          paid {req.maxAmountRequired} units to <Hash value={req.payTo} n={6} /> over x402 (
+          {req.scheme} · {req.network})
+        </>,
+      );
       say(
         "query",
         <>
@@ -308,7 +330,13 @@ export function Recall({
         const g = j.grants.find((x) => x.grantId === grant);
         if (g) g.rescindTx = sent.txHash;
       });
-      say("rescind", <>withdrawn — {tx(sent.txHash)}</>);
+      say(
+        "rescind",
+        <>
+          withdrawn — {tx(sent.txHash)} · {sent.encryptedMempool ? "encrypted" : "public"} mempool (
+          {sent.plan.path})
+        </>,
+      );
     });
     if (!ok4) return setRunning(false);
 
@@ -330,27 +358,69 @@ export function Recall({
       }
     });
     setRunning(false);
+    toasts.push({
+      tone: "success",
+      title: "First recall complete",
+      detail: "granted · paid · withdrawn · refused — every step on chain",
+      action: { label: "View", onClick: () => nav.go("locker", "locker-ledger") },
+    });
   }
+
+  const STATUS_PILL: Record<
+    StepState["status"],
+    { tone: "neutral" | "pending" | "ok" | "bad"; text: string }
+  > = {
+    idle: { tone: "neutral", text: "waiting" },
+    running: { tone: "pending", text: "running" },
+    done: { tone: "ok", text: "done" },
+    failed: { tone: "bad", text: "failed" },
+  };
+  const items: TimelineItem[] = STEPS.map((s) => {
+    const st = steps[s.id];
+    return {
+      id: s.id,
+      status: st.status,
+      testId: `step-${s.id}`,
+      title: (
+        <>
+          <strong>{s.title}</strong>
+          <Pill tone={STATUS_PILL[st.status].tone} dot={st.status === "running"}>
+            {STATUS_PILL[st.status].text}
+          </Pill>
+        </>
+      ),
+      meta: <span>{s.what}</span>,
+      body:
+        st.lines.length > 0
+          ? st.lines.map((line, i) => (
+              <p key={`${s.id}-${i}-${st.lines.length}`} className="line">
+                {line}
+              </p>
+            ))
+          : undefined,
+    };
+  });
+  const done = STEPS.filter((s) => steps[s.id].status === "done").length;
 
   return (
     <section>
-      <h1>Recall</h1>
-      <p className="lede">
-        The other two verbs, against your own passport: an agent pays to query it, you withdraw
-        consent, the same query is refused. Real transactions on chain {config.chainId.toString()}.
-      </p>
+      <div className="screen-head">
+        <span className="eyebrow">Query · Rescind</span>
+        <h1>Recall</h1>
+        <p className="lede">
+          The other two verbs, against your own passport: an agent pays to query it, you withdraw
+          consent, the same query is refused. Real transactions on chain {config.chainId.toString()}
+          .
+        </p>
+      </div>
       {!config.live && (
-        <p className="error">
-          Offline ({config.reason}) — the recall needs a gateway with a relay.
-        </p>
-      )}
-      {config.live && published.length === 0 && (
-        <p className="hint">
-          Stamp and anchor something on the Capture tab first — the buyer needs a passport to pay
-          for.
-        </p>
+        <Notice tone="warn">
+          Offline ({config.reason}) — the recall needs a gateway with a relay. Point the app at one
+          from Settings.
+        </Notice>
       )}
       <ActivationCard
+        id="recall-activation"
         session={session}
         config={config}
         client={client}
@@ -359,69 +429,100 @@ export function Recall({
         what="The recall"
       />
       {config.live && !config.faucet && (
-        <p className="hint">
+        <Notice tone="info">
           This gateway does not relay the faucet mint, so the demo buyer can only run if it already
           holds USDC.
-        </p>
+        </Notice>
       )}
-      {published.length > 0 && (
-        <label className="field">
-          passport to sell
-          <select value={passportId} onChange={(e) => setPassportId(e.target.value as Bytes32)}>
-            {published.map((d) => (
-              <option key={d.passportId} value={d.passportId}>
-                {d.label} — {d.passportId.slice(0, 12)}…
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <button
-        type="button"
+
+      <Card
         id="recall-run"
-        onClick={runAll}
-        disabled={!ready || running}
-        data-testid="run-recall"
+        icon="replay"
+        tone="accent"
+        title="Run the first recall"
+        subtitle="A demo buyer in this browser stands in for an AI agent: it funds itself, accepts your terms, pays per query. You grant and withdraw with your passkey."
+        actions={
+          done > 0 && (
+            <Pill tone={done === STEPS.length ? "ok" : "pending"} dot={running}>
+              {done}/{STEPS.length} steps
+            </Pill>
+          )
+        }
       >
-        {running ? "Running…" : "Run the first recall"}
-      </button>
-      {grantId && (
-        <p className="hint">
-          grant <Hash value={grantId} n={6} /> — also listed under Locker → Grants
-        </p>
-      )}
+        {config.live && published.length === 0 ? (
+          <Notice tone="info">
+            Stamp and anchor something on the Capture tab first — the buyer needs a passport to pay
+            for.
+          </Notice>
+        ) : (
+          <div className="recall-controls">
+            {published.length > 0 && (
+              <Field label="Passport to sell">
+                {(id) => (
+                  <select
+                    id={id}
+                    value={passportId}
+                    onChange={(e) => setPassportId(e.target.value as Bytes32)}
+                  >
+                    {published.map((d) => (
+                      <option key={d.passportId} value={d.passportId}>
+                        {d.label} — {d.passportId.slice(0, 12)}…
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            )}
+            <Button
+              variant="primary"
+              icon="replay"
+              onClick={runAll}
+              disabled={!ready || running}
+              pending={running}
+              pendingLabel="Running…"
+              data-testid="run-recall"
+            >
+              Run the first recall
+            </Button>
+          </div>
+        )}
+        {blocked && config.live && <Notice tone="warn">{blocked}.</Notice>}
+        {grantId && (
+          <p className="row-meta">
+            <span>
+              grant <Hash value={grantId} n={6} copy />
+            </span>
+            <span>also listed under the Locker's grants</span>
+          </p>
+        )}
+      </Card>
+
+      <Timeline items={items} className="steps-timeline" />
+
       {buyerFile && (
-        <p className="hint">
-          <button
-            type="button"
-            className="inline"
-            onClick={() =>
-              downloadJson(`buyer-lineage-${(grantId ?? "").slice(2, 10)}.json`, buyerFile.text)
-            }
-          >
-            download the buyer's compliance file
-          </button>{" "}
-          ({buyerFile.assets} asset, {buyerFile.ok ? "verified" : "unverified"}) — paste it into
-          Verify to check it yourself.
-        </p>
+        <Card
+          id="recall-buyer-file"
+          icon="shield"
+          tone={buyerFile.ok ? "ok" : "bad"}
+          title="The buyer's compliance file"
+          subtitle="Sidecar + receipt per served query, verified against the chain before it is handed over — no locker, no gateway call."
+        >
+          <div className="btn-row">
+            <Button
+              icon="download"
+              onClick={() =>
+                downloadJson(`buyer-lineage-${(grantId ?? "").slice(2, 10)}.json`, buyerFile.text)
+              }
+            >
+              download the buyer's compliance file
+            </Button>
+            <Pill tone={buyerFile.ok ? "ok" : "bad"} dot>
+              {pluralise(buyerFile.assets, "asset")} · {buyerFile.ok ? "verified" : "unverified"}
+            </Pill>
+            <span className="hint">paste it into Verify to check it yourself.</span>
+          </div>
+        </Card>
       )}
-      <ol className="steps">
-        {STEPS.map((s) => {
-          const st = steps[s.id];
-          return (
-            <li key={s.id} data-status={st.status} data-testid={`step-${s.id}`}>
-              <strong>{s.title}</strong>
-              <span className="badge">{st.status}</span>
-              <p className="hint">{s.what}</p>
-              {st.lines.map((line, i) => (
-                <p key={`${s.id}-${i}-${st.lines.length}`} className="line">
-                  {line}
-                </p>
-              ))}
-            </li>
-          );
-        })}
-      </ol>
     </section>
   );
 }

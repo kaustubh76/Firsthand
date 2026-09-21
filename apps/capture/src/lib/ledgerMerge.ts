@@ -9,6 +9,10 @@ export interface LedgerRow {
   readonly grantId: Bytes32 | null;
   /** Block number when the gateway saw the event; null for a journal-only row. */
   readonly blockNumber: bigint | null;
+  /** Block time (seconds) from the chain, or the browser's clock (ms → s) for a journal row. */
+  readonly timestamp: bigint | null;
+  readonly granteeCard: Bytes32 | null;
+  readonly ns: number | null;
   readonly source: "chain" | "local";
 }
 
@@ -31,19 +35,49 @@ export function mergeLedger(
       txHash: e.txHash,
       grantId: e.grantId,
       blockNumber: e.blockNumber,
+      timestamp: e.timestamp,
+      granteeCard: e.granteeCard ?? null,
+      ns: e.ns ?? null,
       source: "chain",
     });
   }
-  const local = (kind: ConsentEventKind, txHash: Bytes32 | undefined, grantId: Bytes32 | null) => {
+  // Grant details travel with a `granted` event; a rescission names only the grant, so both rows
+  // borrow card and namespace from the journal when it knows the grant.
+  const byGrant = new Map(journal.grants.map((g) => [g.grantId, g]));
+  for (const [k, row] of rows) {
+    if (row.grantId && (row.granteeCard === null || row.ns === null)) {
+      const g = byGrant.get(row.grantId);
+      if (g)
+        rows.set(k, { ...row, granteeCard: row.granteeCard ?? g.granteeCard, ns: row.ns ?? g.ns });
+    }
+  }
+  const local = (
+    kind: ConsentEventKind,
+    txHash: Bytes32 | undefined,
+    grantId: Bytes32 | null,
+    at: number | undefined,
+  ) => {
     if (!txHash) return;
     const k = key(kind, txHash, grantId);
-    if (!rows.has(k)) rows.set(k, { kind, txHash, grantId, blockNumber: null, source: "local" });
+    const g = grantId ? byGrant.get(grantId) : undefined;
+    if (!rows.has(k)) {
+      rows.set(k, {
+        kind,
+        txHash,
+        grantId,
+        blockNumber: null,
+        timestamp: at ? BigInt(Math.floor(at / 1000)) : null,
+        granteeCard: g?.granteeCard ?? null,
+        ns: g?.ns ?? null,
+        source: "local",
+      });
+    }
   };
-  local("enrolled", journal.enrolTx, null);
-  local("attested", journal.attestTx, null);
+  local("enrolled", journal.enrolTx, null, undefined);
+  local("attested", journal.attestTx, null, undefined);
   for (const g of journal.grants) {
-    local("granted", g.txHash, g.grantId);
-    local("rescinded", g.rescindTx, g.grantId);
+    local("granted", g.txHash, g.grantId, g.at);
+    local("rescinded", g.rescindTx, g.grantId, undefined);
   }
   const order: Record<ConsentEventKind, number> = {
     enrolled: 0,

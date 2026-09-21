@@ -249,10 +249,6 @@ details.refusal[open] summary {
     grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
     align-items: start;
   }
-  .locker-aside {
-    position: sticky;
-    top: var(--space-4);
-  }
 }
 .identity {
   display: flex;

@@ -31,11 +31,13 @@ export interface Toaster {
 }
 
 const TTL_MS: Record<ToastTone, number | null> = {
-  info: 6_000,
-  success: 6_000,
+  info: 5_000,
+  success: 4_500,
   error: null,
   pending: null,
 };
+/** At most this many on screen; the oldest non-sticky one makes room. */
+const MAX_VISIBLE = 3;
 
 const ToastContext = createContext<Toaster>({
   toasts: [],
@@ -78,7 +80,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (toast: Omit<Toast, "id">) => {
       const id = ++seq.current;
-      setToasts((list) => [...list.slice(-4), { ...toast, id }]);
+      setToasts((list) => {
+        const next = [...list, { ...toast, id }];
+        while (next.length > MAX_VISIBLE) {
+          const i = next.findIndex((t) => t.tone !== "pending" && !t.sticky);
+          if (i === -1) break;
+          const [gone] = next.splice(i, 1);
+          if (gone) {
+            const timer = timers.current.get(gone.id);
+            if (timer) clearTimeout(timer);
+            timers.current.delete(gone.id);
+          }
+        }
+        return next;
+      });
       arm(id, toast.tone, toast.sticky);
       return id;
     },

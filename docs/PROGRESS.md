@@ -451,3 +451,31 @@ itself, need the faucet first.
 
 **Still not built:** Envio handlers, the external x402 facilitator, the docs site, BTX (not on
 testnet).
+
+### Update — the interface (21 Sep 2026, later)
+
+Every verb was wired and proven, and the page was plain: one column, system font, 210 lines of
+CSS, buttons that only swapped their label while a transaction landed, a 900-character delegation
+code on screen, errors as trailing red lines. This pass redesigned `apps/capture` without touching
+a contract, a package or the browser tier — the e2e ran unchanged after every commit.
+
+- **What hooks.** The Data Passport is an object (`PassportCard`: class chip, ids, and a seal that
+  moves sealing → anchored → published as the deposit lands); the Consent Ledger is a timeline with
+  a rescission drawn as a cut; Readme §19 is a **journey rail** under the header whose seven beats
+  are derived from the credential, the chain and the journal — never from clicks; every relayed
+  transaction is a **toast** (pending → mined with the explorer link) and an Activity row; the
+  venue is one tap away in a **settings sheet** (gateway switcher on the `?gateway=` mechanism,
+  `/healthz` + discovery readout, theme, install, forget-passkey / clear-journal).
+- **Zero new dependencies.** Design tokens (dark default, light by OS or choice, reduced motion),
+  inline SVG icons, `src/ui` primitives, `src/hooks` shared by every screen. The Locker became a
+  dashboard of cards with stat tiles; Capture has tabs, drop zones and passport cards; Recall is a
+  step timeline that now shows what was paid to whom over x402 and which mempool the withdrawal
+  took; Verify shows each section's failure next to its control; Evidence is claim cards.
+- **Kept honest.** The browser tier is the UI's contract (`apps/capture/README.md` lists what a
+  redesign must preserve); it passed on a local chain after every commit, including the 390 px
+  pass. A dark-mode tour (`e2e/dark-tour.ts`) screenshots the built tree at phone and laptop widths.
+- **One harness fix on the way:** the local readiness check waited for the registry alone while
+  MockUSDC's deploy could still be in flight; it now waits for every contract the demo touches.
+
+Not done here: the hosted redeploy (the relayer float still needs the faucet before a full live run).
+

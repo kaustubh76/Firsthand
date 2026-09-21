@@ -50,6 +50,30 @@ The gateway must run with `RELAY_ENABLED=true` for anchoring to work. Without a 
 app falls back to memory adapters so `pnpm dev` still works offline — the status strip on every
 screen says `offline · <why>`, since nothing captured that way can ever be recalled.
 
+**The interface (21 Sep 2026).** Zero UI dependencies — hand-written tokens, inline SVG icons, the
+system font stack. `src/styles/tokens.css` holds every colour, size and duration (dark default,
+light under `prefers-color-scheme` or `<html data-theme>`, `--motion` zeroed under reduced motion);
+`src/ui` are the primitives (Button with a pending state, Card, Pill, StatTile, Skeleton, Tabs,
+Hash, Tx, Timeline, Notice, Sheet, Toast); `src/hooks` are what every screen shares —
+`useAsyncActions` (one pending flag and one sentence per failure), `useToasts` + `useTx` (every
+relayed transaction is a toast and an Activity row), `useJournal` (the localStorage journal as a
+live store), `useJourney` (Readme §19's beats derived from the credential, the chain and the
+journal), `useTheme`, `useInstallPrompt`, `useClipboard`. `src/shell` is the frame — header with
+the status strip, the journey rail, the one `<nav>`, the settings sheet (gateway switcher on the
+`?gateway=` mechanism, `/healthz` + discovery readout, theme, install, local resets). The screens
+are `src/routes` (the Locker split into `routes/locker/*` cards). Deposits render as
+`components/PassportCard` — the Data Passport as an object with a seal that moves as `land()`
+reports phases.
+
+**The browser tier is the UI's contract.** `e2e/capture.e2e.ts` clicks by role and name and reads
+`data-testid`s; a redesign keeps: the `.status` element and its text order (`live · chain N · host`),
+exactly one `<nav>` rendered only after unlock, no other button named with *capture* / *locker* /
+*recall* (the test clicks nav buttons by those names unscoped), one `<h1>` per frame, the passport
+id as the first `<code>` inside `[data-testid=landed]` and exactly one element there saying
+"published", exact kind text in the Consent Ledger, one `.error` in the activation card, and
+`scrollWidth ≤ 390` on every screen. `e2e/dark-tour.ts` is a visual tour (not a test) that
+screenshots the built tree in dark mode at phone and laptop widths against a local chain.
+
 **Browser tier:** `pnpm --filter firsthand-capture e2e` drives the committed `deploy/capture` tree
 in headless Chromium with a virtual PRF passkey (local anvil by default, `E2E_TESTNET=1`, or
 `E2E_GATEWAY_URL=`/`E2E_APP_URL=` for the hosted links).

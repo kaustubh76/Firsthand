@@ -7,7 +7,7 @@ Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's c
 
 | Beat (Readme §19) | Tap | What you see / what landed |
 | --- | --- | --- |
-| 0:00 **Problem** | — | The masthead: *the data locker that can prove what's inside it*. The status strip says `live · chain 10143 · firsthand-gateway.vercel.app`. |
+| 0:00 **Problem** | — | The masthead: *the data locker that can prove what's inside it*. The status strip says `live · chain 10143 · firsthand-gateway.vercel.app`. Under it, **The script**: the seven beats of this table as a rail lit by real state — done beats checked, the next one lit, a tap jumps to it. The gear opens **Settings**: the venue's health and float, a gateway switcher, theme, install. |
 | **Enrol** | *Create passkey* | One WebAuthn tap; the PRF output derives every key. Nothing but a credential id is stored. |
 | **Activate** | the card on Capture: *Activate on chain (enroll + attest)* | Two relayed transactions (`PrincipalRegistry.enroll`, `attest`) — the browser holds no key and pays no gas. The strip now reads `attested for epoch N`. |
 | 0:20 **Deposit** | Capture → *Note* → type → *Stamp passport* | Passport minted under the passkey, sealed client-side, batch anchored (`PassportAnchors.anchor`), ciphertext + sidecar published — *published ↗* opens the gateway's copy. *Photo / clip* does the same for the camera (≤ 4 MiB hosted), *Import export* mints one passport per ChatGPT/Claude conversation. |

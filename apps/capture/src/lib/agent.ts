@@ -41,6 +41,15 @@ const hex = (bytes: Uint8Array): `0x${string}` =>
 const bytes = (h: `0x${string}`): Uint8Array =>
   Uint8Array.from(h.slice(2).match(/.{2}/g) ?? [], (b) => Number.parseInt(b, 16));
 
+/** Drop the demo buyer's keys; the next recall mints a fresh one. */
+export function clearAgentRecord(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // nothing stored
+  }
+}
+
 export function loadAgentRecord(): AgentRecord {
   try {
     const raw = localStorage.getItem(KEY);

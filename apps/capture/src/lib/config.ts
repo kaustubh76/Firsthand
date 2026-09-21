@@ -23,6 +23,10 @@ export interface AppConfig {
   readonly faucet: boolean;
   /** Largest ciphertext the gateway accepts; captures are sized under it (null: unknown). */
   readonly maxUploadBytes: number | null;
+  /** What the relay will carry (`<address>` or `<address>:<selector>`), as discovery lists it. */
+  readonly relayAllow: readonly string[];
+  /** True when the gateway names ERC-8004 registries: buyers can be identified agents. */
+  readonly erc8004: boolean;
   /** True when the app can actually reach a chain; false means memory doubles (offline dev). */
   readonly live: boolean;
   /** Why `live` is false, in words a judge can act on. `null` when live. */
@@ -41,6 +45,7 @@ interface Discovery {
   limits?: { maxUploadBytes?: number };
   contracts?: Record<string, string> | null;
   epochs?: { genesis: string; length: string } | null;
+  erc8004?: { identityRegistry?: string; reputationRegistry?: string } | null;
 }
 
 const ZERO = `0x${"00".repeat(20)}` as Address;
@@ -89,6 +94,8 @@ function fallback(): AppConfig {
     usdc: null,
     faucet: false,
     maxUploadBytes: null,
+    relayAllow: [],
+    erc8004: false,
     live: false,
     reason: "no gateway configured — set VITE_GATEWAY_URL or open with ?gateway=https://…",
   };
@@ -158,6 +165,8 @@ async function discoverOnce(doFetch: typeof fetch): Promise<AppConfig> {
       usdc,
       faucet,
       maxUploadBytes: typeof d.limits?.maxUploadBytes === "number" ? d.limits.maxUploadBytes : null,
+      relayAllow: d.relay?.allow ?? [],
+      erc8004: Boolean(d.erc8004?.identityRegistry),
       // Anchoring needs both a relay to write through and an RPC to read receipts from.
       live: relay && Boolean(rpcUrl),
       reason: relay

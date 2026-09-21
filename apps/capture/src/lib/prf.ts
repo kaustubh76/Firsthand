@@ -18,6 +18,15 @@ export function saveCredentialId(id: Uint8Array): void {
   );
 }
 
+/** Forget the credential on this device. The passkey itself stays in the authenticator. */
+export function forgetCredentialId(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // nothing stored
+  }
+}
+
 export function prfSupported(): boolean {
   return WebAuthnPrfSource.isSupported();
 }

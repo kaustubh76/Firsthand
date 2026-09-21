@@ -7,6 +7,7 @@ export { Hash } from "./Hash.js";
 export { Icon, type IconName } from "./Icon.js";
 export { Notice } from "./Notice.js";
 export { Pill, type PillTone } from "./Pill.js";
+export { Sheet } from "./Sheet.js";
 export { Skeleton } from "./Skeleton.js";
 export { StatTile } from "./StatTile.js";
 export { Tabs } from "./Tabs.js";

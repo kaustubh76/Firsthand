@@ -4,6 +4,10 @@ import type { AppConfig } from "./config.js";
 export interface GatewayHealth {
   readonly ok: boolean;
   readonly relayer: { address: string; balanceMon: number; low: boolean } | null;
+  /** How the gateway is wired, for the settings sheet: payment scheme, settlement, blob store. */
+  readonly x402?: string | undefined;
+  readonly settlement?: string | undefined;
+  readonly blobs?: string | undefined;
 }
 
 const HEALTH_TIMEOUT_MS = 6_000;
@@ -18,14 +22,21 @@ export async function fetchHealth(config: AppConfig): Promise<GatewayHealth | nu
     const body = (await res.json()) as {
       ok?: boolean;
       relayer?: { address?: string; balanceMon?: number; low?: boolean } | null;
+      x402?: string;
+      settlement?: string;
+      blobs?: string;
     };
     const r = body.relayer;
+    const str = (v: unknown) => (typeof v === "string" ? v : undefined);
     return {
       ok: body.ok === true,
       relayer:
         r && typeof r.address === "string" && typeof r.balanceMon === "number"
           ? { address: r.address, balanceMon: r.balanceMon, low: r.low === true }
           : null,
+      x402: str(body.x402),
+      settlement: str(body.settlement),
+      blobs: str(body.blobs),
     };
   } catch {
     return null;

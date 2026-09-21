@@ -24,6 +24,7 @@ import { LoadingFrame } from "./shell/LoadingFrame.js";
 import { Nav } from "./shell/Nav.js";
 import { initialRoute, NavigationContext, type Navigator, type Route } from "./shell/navigation.js";
 import { PublicFrame } from "./shell/PublicFrame.js";
+import { SettingsSheet } from "./shell/SettingsSheet.js";
 import { StatusStrip } from "./shell/StatusStrip.js";
 import { Button, Icon } from "./ui/index.js";
 
@@ -200,8 +201,18 @@ export function App() {
     }
   }
 
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const header = (
     <Header
+      tools={
+        <Button
+          variant="ghost"
+          icon="settings"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => setSettingsOpen(true)}
+        />
+      }
       status={
         <StatusStrip
           config={config}
@@ -319,6 +330,15 @@ export function App() {
         <div className="app">
           {header}
           {body}
+          <SettingsSheet
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            config={config}
+            health={health}
+            onRefreshHealth={() => void refreshHealth()}
+            session={session}
+            now={now}
+          />
         </div>
       </TxContext.Provider>
     </NavigationContext.Provider>

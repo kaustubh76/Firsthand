@@ -18,6 +18,7 @@ export function ActivationCard({
   liveness,
   onActivated,
   what,
+  id,
 }: {
   session: LockerSession;
   config: AppConfig;
@@ -25,6 +26,8 @@ export function ActivationCard({
   liveness: Liveness;
   onActivated: () => void;
   what: string;
+  /** A jump target for the journey rail. */
+  id?: string | undefined;
 }) {
   const actions = useAsyncActions<"activate">();
   const [done, setDone] = useState<Activated | null>(null);
@@ -46,7 +49,7 @@ export function ActivationCard({
 
   if (done) {
     return (
-      <Card tone="ok" icon="check" title="On chain" data-testid="activation" compact>
+      <Card tone="ok" icon="check" title="On chain" data-testid="activation" id={id} compact>
         <p className="row-meta">
           <Tx hash={done.enrolTx} chainId={config.chainId} label="enrolled" />
           <Tx hash={done.attestTx} chainId={config.chainId} label="attested" />
@@ -62,6 +65,7 @@ export function ActivationCard({
       title={`${what} cannot anchor yet`}
       subtitle={describeLiveness(liveness)}
       data-testid="activation"
+      id={id}
     >
       <p className="hint">
         {needsFreshAttest

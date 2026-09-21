@@ -6,22 +6,32 @@ import {
   type LockerSession,
   mintPassport,
 } from "@firsthand/sdk/browser";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivationCard } from "../components/ActivationCard.js";
+import { PassportCard, type Seal } from "../components/PassportCard.js";
+import { useAsyncActions } from "../hooks/useAsyncActions.js";
+import { useToasts } from "../hooks/useToasts.js";
 import type { AppConfig } from "../lib/config.js";
-import { type Landed, land } from "../lib/deposits.js";
+import { type LandingPhase, type LandOptions, land } from "../lib/deposits.js";
 import { reportFailure } from "../lib/failures.js";
-import { updateJournal } from "../lib/journal.js";
+import { formatBytes, pluralise } from "../lib/format.js";
+import { type DepositEntry, updateJournal } from "../lib/journal.js";
 import type { Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
+import { describeUploadCap } from "../lib/settings.js";
 import { NS, termsFor } from "../lib/terms.js";
-import { Hash, Tx } from "../ui/index.js";
+import { useNavigation } from "../shell/navigation.js";
+import { Button, Icon, Notice, Tabs } from "../ui/index.js";
 
 type Mode = "text" | "media" | "import";
+type Action = "text" | "media" | "import" | "forge";
 
 const deviceClass = () => tag(navigator.userAgent.includes("Mobile") ? "mobile" : "desktop");
 const now = () => BigInt(Math.floor(Date.now() / 1000));
+
+const phaseToSeal = (phase: LandingPhase): Seal =>
+  phase === "minted" ? "anchoring" : phase === "anchored" ? "publishing" : phase;
 
 /**
  * The deposit verb, three ways in: a note, a photo or clip from the camera, a ChatGPT/Claude export.
@@ -43,31 +53,59 @@ export function Capture({
   liveness: Liveness;
   onActivated: () => void;
 }) {
+  const nav = useNavigation();
+  const toasts = useToasts();
+  const actions = useAsyncActions<Action>({ explain: reportFailure });
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [exportFile, setExportFile] = useState<File | null>(null);
   const [source, setSource] = useState<"chatgpt" | "claude">("chatgpt");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [landed, setLanded] = useState<Landed[]>([]);
+  // The latest landing only: each card moves sealing → anchored → published as land() reports.
+  const [landed, setLanded] = useState<{ entry: DepositEntry; seal: Seal }[]>([]);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
 
-  const run = async (label: string, fn: () => Promise<void>) => {
-    setBusy(label);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(reportFailure(e));
-    } finally {
-      setBusy(null);
-    }
+  // The rail can land on the refusal: open it when it is the target.
+  const [refusalOpen, setRefusalOpen] = useState(false);
+  useEffect(() => {
+    if (nav.target === "capture-refusal") setRefusalOpen(true);
+  }, [nav.target]);
+
+  const preview = useMemo(
+    () => (file?.type.startsWith("image/") ? URL.createObjectURL(file) : null),
+    [file],
+  );
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+
+  const landing: LandOptions = {
+    onPhase: (entry, phase) =>
+      setLanded((list) => {
+        const seal = phaseToSeal(phase);
+        const i = list.findIndex((x) => x.entry.passportId === entry.passportId);
+        if (i === -1) return [...list, { entry, seal }];
+        return list.map((x, k) => (k === i ? { entry, seal } : x));
+      }),
+  };
+  const toastLanded = (count: number, kindLabel: string) => {
+    if (!config.live) return;
+    toasts.push({
+      tone: "success",
+      title:
+        count === 1 ? `${kindLabel} stamped` : `Import landed · ${pluralise(count, "passport")}`,
+      detail: "sealed here, anchored on chain, published to the gateway",
+      action: { label: "View", onClick: () => nav.go("locker", "locker-deposits") },
+    });
   };
 
   const depositText = () =>
-    run("Sealing + anchoring", async () => {
+    actions.run("text", async () => {
+      setLanded([]);
       const ns = NS.captures;
       const result = await session.deposit({
         ns,
@@ -83,12 +121,14 @@ export function Capture({
       });
       const label = text.length > 48 ? `${text.slice(0, 48)}…` : text;
       setText("");
-      setLanded(await land(session, config, [{ result, label, kind: "text" }], ns));
+      await land(session, config, [{ result, label, kind: "text" }], ns, landing);
+      toastLanded(1, "Note");
     });
 
   const depositMedia = () =>
-    run("Sealing + anchoring", async () => {
+    actions.run("media", async () => {
       if (!file) return;
+      setLanded([]);
       const ns = NS.captures;
       const { bytes, meta } = await readMedia(file, mediaCap(config.maxUploadBytes));
       // The bytes are the datum; mime, size and name are committed through metaHash so a buyer can
@@ -106,19 +146,21 @@ export function Capture({
         },
       });
       setFile(null);
-      setLanded(
-        await land(
-          session,
-          config,
-          [{ result, label: `${meta.name} · ${meta.mime} · ${meta.size} B`, kind: "media" }],
-          ns,
-        ),
+      await land(
+        session,
+        config,
+        [{ result, label: `${meta.name} · ${meta.mime} · ${meta.size} B`, kind: "media" }],
+        ns,
+        landing,
       );
+      toastLanded(1, "Capture");
     });
 
   const depositImport = () =>
-    run("Minting one passport per conversation", async () => {
+    actions.run("import", async () => {
       if (!exportFile) return;
+      setLanded([]);
+      setImportNote(null);
       const ns = NS.imports;
       const contents = await exportFile.text();
       const terms = termsFor(session, ns);
@@ -147,13 +189,18 @@ export function Capture({
       }
       setExportFile(null);
       setImportNote(
-        `${results.length} conversation${results.length === 1 ? "" : "s"} minted${seen > LIMIT ? ` (first ${LIMIT})` : ""}${refused.length ? ` · ${refused.length} refused: ${refused.join("; ")}` : ""}`,
+        `${pluralise(results.length, "conversation")} minted${seen > LIMIT ? ` (first ${LIMIT})` : ""}${
+          refused.length ? ` · ${refused.length} refused: ${refused.join("; ")}` : ""
+        }`,
       );
-      if (results.length > 0) setLanded(await land(session, config, results, ns));
+      if (results.length > 0) {
+        await land(session, config, results, ns, landing);
+        toastLanded(results.length, "Conversation");
+      }
     });
 
   const tryLaundering = () =>
-    run("Forging", async () => {
+    actions.run("forge", async () => {
       setRefusal(null);
       // Someone else's locker: a throwaway PRF, a real signature — over an origin key this locker
       // never enrolled. The passport is well-formed; only its provenance is wrong.
@@ -194,114 +241,29 @@ export function Capture({
       }
     });
 
+  const busy = actions.busy !== null;
+  const cap = mediaCap(config.maxUploadBytes);
+
   return (
     <section>
-      <h1>Capture</h1>
-      <p className="lede">
-        Stamp what you make with a passport of origin, price and consent. Sealed here, anchored on
-        Monad through the relay, served by the gateway only while your consent is live.
-      </p>
-      <div className="segmented" role="tablist">
-        {(["text", "media", "import"] as const).map((m) => (
-          <button
-            type="button"
-            key={m}
-            role="tab"
-            aria-selected={mode === m}
-            onClick={() => setMode(m)}
-          >
-            {m === "text" ? "Note" : m === "media" ? "Photo / clip" : "Import export"}
-          </button>
-        ))}
+      <div className="screen-head">
+        <span className="eyebrow">Deposit</span>
+        <h1>Capture</h1>
+        <p className="lede">
+          Stamp what you make with a passport of origin, price and consent. Sealed here, anchored on
+          Monad through the relay, served by the gateway only while your consent is live.
+        </p>
       </div>
 
-      {mode === "text" && (
-        <>
-          <textarea
-            id="capture-note"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="What did you observe?"
-            rows={4}
-          />
-          <button
-            type="button"
-            onClick={depositText}
-            disabled={text.trim() === "" || busy !== null}
-          >
-            {busy ?? "Stamp passport"}
-          </button>
-        </>
-      )}
-
-      {mode === "media" && (
-        <>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            capture="environment"
-            data-testid="media-input"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {file && (
-            <p className="hint">
-              {file.name} · {file.type || "unknown type"} · {(file.size / 1024).toFixed(0)} KiB
-              {file.type.startsWith("image/") && (
-                <img className="preview" alt="" src={URL.createObjectURL(file)} />
-              )}
-            </p>
-          )}
-          <button type="button" onClick={depositMedia} disabled={!file || busy !== null}>
-            {busy ?? "Stamp passport"}
-          </button>
-          <p className="hint">
-            Captures up to {(mediaCap(config.maxUploadBytes) / 1_048_576).toFixed(1)} MiB on this
-            gateway. The bytes are sealed client-side; mime, size and name are committed in the
-            attestation, never sent in clear.
-          </p>
-        </>
-      )}
-
-      {mode === "import" && (
-        <>
-          <div className="segmented" role="tablist">
-            {(["chatgpt", "claude"] as const).map((s) => (
-              <button
-                type="button"
-                key={s}
-                role="tab"
-                aria-selected={source === s}
-                onClick={() => setSource(s)}
-              >
-                {s === "chatgpt" ? "ChatGPT conversations.json" : "Claude export"}
-              </button>
-            ))}
-          </div>
-          <input
-            type="file"
-            accept=".json,.jsonl,application/json"
-            data-testid="import-input"
-            onChange={(e) => setExportFile(e.target.files?.[0] ?? null)}
-          />
-          <button type="button" onClick={depositImport} disabled={!exportFile || busy !== null}>
-            {busy ?? "Mint one passport per conversation"}
-          </button>
-          {importNote && <p className="hint">{importNote}</p>}
-          <p className="hint">
-            The first 25 conversations of the export, each its own passport under the{" "}
-            <code>imports</code> namespace with an <code>IMPORT</code> attestation.
-          </p>
-        </>
-      )}
-
       {!config.live && (
-        <p className="error">
+        <Notice tone="warn">
           Offline: passports are minted and sealed locally but never anchored, so no buyer can fetch
-          them ({config.reason}). Open the app with <code>?gateway=https://…</code> to use another
-          gateway.
-        </p>
+          them ({config.reason}). Point the app at a gateway from Settings.
+        </Notice>
       )}
+
       <ActivationCard
+        id="capture-activation"
         session={session}
         config={config}
         client={client}
@@ -309,53 +271,190 @@ export function Capture({
         onActivated={onActivated}
         what="Captures"
       />
-      {error && <p className="error">{error}</p>}
+
+      <Tabs
+        aria-label="What to stamp"
+        value={mode}
+        onChange={setMode}
+        tabs={[
+          { id: "text", label: "Note", icon: "file" },
+          { id: "media", label: "Photo / clip", icon: "camera" },
+          { id: "import", label: "Import export", icon: "inbox" },
+        ]}
+      />
+
+      {mode === "text" && (
+        <div className="card-body">
+          <textarea
+            id="capture-note"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="What did you observe?"
+            rows={4}
+            aria-label="Note"
+          />
+          <div className="btn-row">
+            <Button
+              variant="primary"
+              icon="stamp"
+              onClick={depositText}
+              pending={actions.is("text")}
+              pendingLabel="Sealing + anchoring…"
+              disabled={text.trim() === "" || busy}
+            >
+              Stamp passport
+            </Button>
+            <span className="hint">
+              One passport per note · device-capture class ·{" "}
+              {config.live ? "anchored on chain" : "sealed locally"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {mode === "media" && (
+        <div className="card-body">
+          <label className="dropzone">
+            <span className="dropzone-title">
+              <Icon name="camera" />
+              Take a photo or clip, or choose one
+            </span>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              data-testid="media-input"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            {file && (
+              <span className="file-meta">
+                <Icon name={file.type.startsWith("video/") ? "eye" : "image"} />
+                <span>{file.name}</span>
+                <span>· {file.type || "unknown type"}</span>
+                <span>· {formatBytes(file.size)}</span>
+              </span>
+            )}
+            {preview && <img className="preview" alt="" src={preview} />}
+            <span className="hint">
+              {describeUploadCap(cap)}. The bytes are sealed client-side; mime, size and name are
+              committed in the attestation, never sent in clear.
+            </span>
+          </label>
+          <div className="btn-row">
+            <Button
+              variant="primary"
+              icon="stamp"
+              onClick={depositMedia}
+              pending={actions.is("media")}
+              pendingLabel="Sealing + anchoring…"
+              disabled={!file || busy}
+            >
+              Stamp passport
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === "import" && (
+        <div className="card-body">
+          <Tabs
+            aria-label="Export source"
+            value={source}
+            onChange={setSource}
+            tabs={[
+              { id: "chatgpt", label: "ChatGPT conversations.json" },
+              { id: "claude", label: "Claude export" },
+            ]}
+          />
+          <label className="dropzone">
+            <span className="dropzone-title">
+              <Icon name="inbox" />
+              Choose the export file
+            </span>
+            <input
+              type="file"
+              accept=".json,.jsonl,application/json"
+              data-testid="import-input"
+              onChange={(e) => setExportFile(e.target.files?.[0] ?? null)}
+            />
+            {exportFile && (
+              <span className="file-meta">
+                <Icon name="file" />
+                <span>{exportFile.name}</span>
+                <span>· {formatBytes(exportFile.size)}</span>
+              </span>
+            )}
+            <span className="hint">
+              The first 25 conversations of the export, each its own passport under the{" "}
+              <code>imports</code> namespace with an <code>IMPORT</code> attestation.
+            </span>
+          </label>
+          <div className="btn-row">
+            <Button
+              variant="primary"
+              icon="stamp"
+              onClick={depositImport}
+              pending={actions.is("import")}
+              pendingLabel="Minting one passport per conversation…"
+              disabled={!exportFile || busy}
+            >
+              Mint one passport per conversation
+            </Button>
+          </div>
+          {importNote && <Notice tone="info">{importNote}</Notice>}
+        </div>
+      )}
+
+      {actions.error && actions.busy !== "forge" && <Notice tone="bad">{actions.error}</Notice>}
 
       {landed.length > 0 && (
-        <ul className="landed" data-testid="landed">
-          {landed.map(({ entry }) => (
-            <li key={entry.passportId}>
-              <strong>{entry.label}</strong>
-              <br />
-              passport <Hash value={entry.passportId} /> · blob <Hash value={entry.blobId} n={6} />
-              {entry.anchorTx && (
-                <>
-                  {" "}
-                  · <Tx hash={entry.anchorTx} chainId={config.chainId} label="anchored" />
-                </>
-              )}
-              {entry.published && config.gatewayUrl && (
-                <>
-                  {" "}
-                  ·{" "}
-                  <a
-                    href={`${config.gatewayUrl}/v1/passports/${entry.passportId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    published ↗
-                  </a>
-                </>
-              )}
-            </li>
+        <ul className="cards" data-testid="landed">
+          {landed.map(({ entry, seal }) => (
+            <PassportCard
+              key={entry.passportId}
+              entry={entry}
+              seal={seal}
+              chainId={config.chainId}
+              gatewayUrl={config.gatewayUrl}
+            />
           ))}
         </ul>
       )}
 
-      <details className="refusal" id="capture-refusal">
-        <summary>The refusal — try to launder a scraped datum</summary>
-        <p className="hint">
-          Forges a well-formed passport signed by another locker's key and asks this locker to
-          accept it. Origin proof is checked before anything is sealed.
-        </p>
-        <button type="button" onClick={tryLaundering} disabled={busy !== null}>
-          {busy === "Forging" ? "Forging…" : "Inject a scraped datum"}
-        </button>
-        {refusal && (
-          <p className="error" data-testid="refusal">
-            {refusal}
+      <details
+        className="refusal"
+        id="capture-refusal"
+        open={refusalOpen}
+        onToggle={(e) => setRefusalOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary>
+          <Icon name="ban" />
+          The refusal — try to launder a scraped datum
+        </summary>
+        <div className="refusal-body">
+          <p className="hint">
+            Forges a well-formed passport signed by another locker's key and asks this locker to
+            accept it. Origin proof is checked before anything is sealed — a locker is worth what
+            you can prove about its contents.
           </p>
-        )}
+          <div className="btn-row">
+            <Button
+              variant="danger"
+              icon="ban"
+              onClick={tryLaundering}
+              pending={actions.is("forge")}
+              pendingLabel="Forging…"
+              disabled={busy}
+            >
+              Inject a scraped datum
+            </Button>
+          </div>
+          {refusal && (
+            <Notice tone="bad" data-testid="refusal">
+              {refusal}
+            </Notice>
+          )}
+        </div>
       </details>
     </section>
   );

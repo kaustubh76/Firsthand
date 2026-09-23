@@ -237,22 +237,35 @@ export function createGateway(
   const facilitatorUrl = config.X402_FACILITATOR_URL ?? MONAD_FACILITATOR_URL;
   // Asked once, in the background: a facilitator that does not list `exact` for this chain should
   // be visible in `/healthz`, not a surprise on a judge's first paid query.
+  // Asked lazily and cached, not at boot: a serverless instance is frozen the moment it answers,
+  // so a background probe started at startup never lands — `/healthz` reported `null` forever.
+  const PROBE_TTL_MS = 5 * 60_000;
   let facilitatorProbe: FacilitatorProbe | null = null;
-  if (monadFacilitator) {
+  let probedAt = 0;
+  let probing: Promise<FacilitatorProbe | null> | null = null;
+  const probeFacilitator = async (): Promise<FacilitatorProbe | null> => {
     const client = monadFacilitator;
-    void client
+    if (!client) return null;
+    if (facilitatorProbe && Date.now() - probedAt < PROBE_TTL_MS) return facilitatorProbe;
+    probing ??= client
       .probe(networkId.caip2)
       .then((probe) => {
         facilitatorProbe = probe;
+        probedAt = Date.now();
         logger.info("x402 facilitator probed", {
           url: facilitatorUrl,
           reachable: probe.reachable,
           supportsExact: probe.supportsExact,
           ...(probe.detail ? { detail: probe.detail } : {}),
         });
+        return probe;
       })
-      .catch(() => undefined);
-  }
+      .catch(() => null)
+      .finally(() => {
+        probing = null;
+      });
+    return probing;
+  };
   const objects =
     config.BLOB_STORE === "vercel" || config.CATALOG === "vercel"
       ? objectStoreClient(config)
@@ -483,7 +496,9 @@ export function createGateway(
       x402: {
         mode: config.X402_MODE,
         network: networkId.caip2,
-        facilitator: facilitatorProbe,
+        // Asked here, where an operator is looking — not in a background task a frozen function
+        // would never finish.
+        facilitator: await probeFacilitator(),
         lastVerifiedBy: verifyChain?.lastVerifiedBy ?? null,
       },
       settlement: settlement.kind,
@@ -561,6 +576,9 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
           fallback: verifyChain ? "local" : null,
           lastVerifiedBy:
             verifyChain?.lastVerifiedBy ?? (config.X402_MODE === "local" ? "local" : null),
+          // Discovery is on the PWA's critical path, so it reports the last probe rather than
+          // waiting for a new one; `/healthz` is where an operator asks the live question.
+          supportsExact: facilitatorProbe?.supportsExact ?? null,
           endpoints: { supported: "/x402/supported", verify: "POST /x402/verify" },
         },
         // The honest half: a facilitator's `/settle` would move the USDC and leave no receipt.

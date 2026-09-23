@@ -1,5 +1,6 @@
 export * from "./authority/index.js";
 export * from "./bytes.js";
+export * from "./caip.js";
 export * from "./constants.js";
 export * from "./epoch/index.js";
 export * from "./errors.js";

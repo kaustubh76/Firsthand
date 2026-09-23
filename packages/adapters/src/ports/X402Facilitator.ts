@@ -2,8 +2,10 @@ import type { Address, Bytes32, Hex } from "@firsthand/core";
 import { z } from "zod";
 
 /**
- * x402 facilitator client (README §8 claim 4). Shapes follow the x402 v1 "exact" scheme over
- * EIP-3009 `transferWithAuthorization`; Monad runs a native facilitator.
+ * x402 facilitator client (README §8 claim 4). The canonical in-memory shape is the v1 "exact"
+ * scheme over EIP-3009 `transferWithAuthorization`; x402 v2 — which Monad's facilitator requires —
+ * is a *wire projection* of the same fields (`x402/wire.ts`), so nothing that reads
+ * `maxAmountRequired` had to move when v2 landed.
  */
 export const PaymentRequirementsSchema = z.object({
   scheme: z.literal("exact"),
@@ -21,7 +23,8 @@ export const PaymentRequirementsSchema = z.object({
 export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
 
 export const PaymentPayloadSchema = z.object({
-  x402Version: z.literal(1),
+  /** 1 or 2: the payload body is identical between versions — only the envelope and names changed. */
+  x402Version: z.union([z.literal(1), z.literal(2)]),
   scheme: z.literal("exact"),
   network: z.string().min(1),
   payload: z.object({
@@ -42,7 +45,11 @@ export interface VerifyResponse {
   readonly isValid: boolean;
   readonly invalidReason?: string;
   readonly payer?: Address;
+  /** Which verifier answered — reported in discovery and `/healthz`, never inferred. */
+  readonly verifiedBy?: VerifiedBy;
 }
+
+export type VerifiedBy = "monad" | "local" | "memory";
 
 export interface SettleResponse {
   readonly success: boolean;
@@ -55,7 +62,19 @@ export interface SettleResponse {
 export interface SupportedKind {
   readonly scheme: string;
   readonly network: string;
+  /** x402 protocol version the facilitator speaks for this kind (v2 facilitators report it). */
+  readonly x402Version?: number;
+  readonly extra?: Readonly<Record<string, unknown>>;
 }
+
+/**
+ * Header names. x402 v2 dropped the `X-` prefix; FIRSTHAND reads both so a buyer built against
+ * either version can pay, and writes both so a v2-only client can too.
+ */
+export const PAYMENT_HEADER = "payment-signature";
+export const LEGACY_PAYMENT_HEADER = "x-payment";
+export const PAYMENT_REQUIRED_HEADER = "payment-required";
+export const PAYMENT_RESPONSE_HEADER = "payment-response";
 
 export interface X402Facilitator {
   supported(): Promise<readonly SupportedKind[]>;

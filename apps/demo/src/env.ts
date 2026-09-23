@@ -70,6 +70,10 @@ export async function startGateway(
       DEPLOYMENTS_FILE: env.deploymentsFile,
       MONAD_RPC_URL: env.rpcUrl,
       SETTLEMENT_MODE: "onchain",
+      // Real payment verification, not the double: Monad's facilitator where it knows the chain,
+      // FIRSTHAND's own verifier on a local one (ADR-0014).
+      X402_MODE: chainId === 10143 ? "monad" : "local",
+      X402_NETWORK: `eip155:${chainId}`,
       RELAYER_PRIVATE_KEY: env.relayerKey,
       // Keyless browsers (the capture PWA's e2e rides this helper) write through the relay; both
       // chains the demo knows carry the MockUSDC faucet double, so its mint relays too.

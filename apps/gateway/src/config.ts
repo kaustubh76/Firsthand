@@ -65,9 +65,24 @@ export const GatewayConfigSchema = z.object({
    */
   ERC8004_FEEDBACK: z.coerce.boolean().default(false),
 
-  X402_MODE: z.enum(["memory", "monad"]).default("memory"),
+  /**
+   * Who verifies a payment (ADR-0014). `monad` asks Monad's native facilitator and falls back to
+   * the local verifier when it is unreachable or declines the *kind* of payment; `local` verifies
+   * here — signature, window, replay, balance — with no external dependency; `memory` is the
+   * offline double that checks everything except the signature and must never face the public.
+   */
+  X402_MODE: z.enum(["memory", "local", "monad"]).default("memory"),
+  /** Defaults to Monad's native facilitator when X402_MODE=monad. */
   X402_FACILITATOR_URL: z.string().url().optional(),
   X402_FACILITATOR_API_KEY: z.string().optional(),
+  /** Whether a facilitator that cannot answer may hand over to the local verifier. */
+  X402_VERIFY_FALLBACK: z.coerce.boolean().default(true),
+  /**
+   * Extra `invalidReason` substrings that mean "not my kind of payment" rather than "bad payment".
+   * The facilitator's vocabulary is specified nowhere, so it is tunable without a code change.
+   */
+  X402_FALLBACK_REASONS: z.string().optional(),
+  /** Either spelling: `eip155:10143` (x402 v2) or `monad-testnet` (v1). */
   X402_NETWORK: z.string().default("monad-testnet"),
   USDC_ADDRESS: address.default("0x0000000000000000000000000000000000000dc0"),
   USDC_NAME: z.string().default("USD Coin"),

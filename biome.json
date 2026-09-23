@@ -123,7 +123,8 @@
         "apps/demo/src/**",
         "apps/capture/e2e/**",
         "integrations/buyer-agent/src/buy.ts",
-        "apps/mcp/src/index.ts"
+        "apps/mcp/src/index.ts",
+        "packages/adapters/test/testnet/**"
       ],
       "linter": {
         "rules": {

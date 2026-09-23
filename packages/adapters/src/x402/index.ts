@@ -7,12 +7,18 @@ export type {
   PaymentPayload,
   PaymentRequirements,
   SettleResponse,
+  SupportedKind,
+  VerifiedBy,
   VerifyResponse,
   X402Facilitator,
 } from "../ports/X402Facilitator.js";
 export {
   decodePaymentHeader,
   encodePaymentHeader,
+  LEGACY_PAYMENT_HEADER,
+  PAYMENT_HEADER,
+  PAYMENT_REQUIRED_HEADER,
+  PAYMENT_RESPONSE_HEADER,
   PaymentPayloadSchema,
   PaymentRequirementsSchema,
 } from "../ports/X402Facilitator.js";
@@ -23,3 +29,11 @@ export {
   transferWithAuthorizationTypes,
   USDC_DOMAIN_DEFAULTS,
 } from "./typedData.js";
+export type { FacilitatorEnvelope, PaymentRequirementsV2 } from "./wire.js";
+export {
+  facilitatorBody,
+  fromRequirementsV2,
+  PaymentRequirementsV2Schema,
+  selectRequirements,
+  toRequirementsV2,
+} from "./wire.js";

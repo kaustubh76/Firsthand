@@ -17,7 +17,11 @@ describe("gateway", () => {
   it("answers health and the discovery document", async () => {
     const health = await app.request("/healthz");
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ ok: true, x402: "memory" });
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      // The verifier is named, with the network in the spelling a v2 facilitator uses.
+      x402: { mode: "memory", network: "eip155:10143", lastVerifiedBy: null },
+    });
     const wk = await app.request("/.well-known/firsthand.json");
     expect(await wk.json()).toMatchObject({
       protocol: "firsthand",
@@ -274,6 +278,69 @@ describe("gateway", () => {
     expect((await gw.app.request("/bug")).status).toBe(500);
   });
 
+  it("verifies x402 payments for anyone, and refuses to settle a stranger's", async () => {
+    // FIRSTHAND needed a real `exact`-scheme verifier for its own gate; it offers the same one to
+    // other Monad teams. Free and read-only — and no /settle, which would spend our relayer's gas.
+    const gw = createGateway(loadConfig({ X402_NETWORK: "eip155:10143" }), { logger: noopLogger });
+    const supported = (await (await gw.app.request("/x402/supported")).json()) as {
+      x402Version: number;
+      kinds: { scheme: string; network: string }[];
+      settle: boolean;
+    };
+    expect(supported).toMatchObject({ x402Version: 2, settle: false });
+    expect(supported.kinds).toEqual([
+      { scheme: "exact", network: "eip155:10143", x402Version: 2 },
+      { scheme: "exact", network: "monad-testnet", x402Version: 1 },
+    ]);
+    expect((await gw.app.request("/x402/settle", { method: "POST" })).status).toBe(404);
+
+    const verify = (body: unknown) =>
+      gw.app.request("/x402/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "10.9.9.9" },
+        body: JSON.stringify(body),
+      });
+    const requirements = {
+      scheme: "exact",
+      network: "eip155:10143",
+      amount: "1000",
+      asset: `0x${"dc".repeat(20)}`,
+      payTo: `0x${"aa".repeat(20)}`,
+      maxTimeoutSeconds: 300,
+      extra: { chainId: "10143", name: "USD Coin", version: "2" },
+    };
+    const payload = {
+      signature: `0x${"11".repeat(65)}`,
+      authorization: {
+        from: `0x${"0b".repeat(20)}`,
+        to: `0x${"aa".repeat(20)}`,
+        value: "1000",
+        validAfter: "0",
+        validBefore: "99999999999",
+        nonce: `0x${"cd".repeat(32)}`,
+      },
+    };
+    // Monad's envelope (`payload`/`accepted`/`resource`) and the specification's both parse.
+    const monadShape = await verify({ x402Version: 2, payload, accepted: requirements });
+    expect(monadShape.status).toBe(200);
+    expect(await monadShape.json()).toMatchObject({
+      isValid: false,
+      // A garbage signature is refused by the real check — the memory double would have passed it.
+      invalidReason: "invalid_exact_evm_payload_signature",
+      verifiedBy: "local",
+    });
+    const specShape = await verify({
+      x402Version: 2,
+      paymentPayload: { x402Version: 2, scheme: "exact", network: "eip155:10143", payload },
+      paymentRequirements: {
+        ...requirements,
+        resource: { url: "https://gw.test/x", description: "", mimeType: "application/json" },
+      },
+    });
+    expect(await specShape.json()).toMatchObject({ isValid: false, verifiedBy: "local" });
+    expect((await verify({ nonsense: true })).status).toBe(400);
+  });
+
   it("bounds ?fromBlock= on the audit routes and rejects garbage", async () => {
     // Memory mode has no chain head, so the value passes through unclamped; the format is still checked.
     const gw = createGateway(loadConfig({}), { logger: noopLogger });
@@ -371,10 +438,12 @@ describe("gateway", () => {
     expect(await (await gw.app.request("/healthz")).json()).toMatchObject({ blobs: "vercel" });
   });
 
-  it("refuses to boot in monad mode without a facilitator URL", () => {
-    expect(() => createGateway(loadConfig({ X402_MODE: "monad" }), { logger: noopLogger })).toThrow(
-      /X402_FACILITATOR_URL/,
-    );
+  it("defaults monad mode to Monad's own facilitator, and accepts an explicit one", () => {
+    // X402_FACILITATOR_URL used to be mandatory; the endpoint is published now
+    // (https://x402-facilitator.molandak.org, probed 2026-09-23), so the default is the real one
+    // and discovery always says which URL is in use.
+    const gw = createGateway(loadConfig({ X402_MODE: "monad" }), { logger: noopLogger });
+    expect(gw).toBeTruthy();
     expect(() =>
       createGateway(
         loadConfig({

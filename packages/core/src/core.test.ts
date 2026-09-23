@@ -23,6 +23,14 @@ import {
   ZERO_HASH,
 } from "./bytes.js";
 import {
+  caip2,
+  chainIdOfCaip2,
+  MONAD_MAINNET_CAIP2,
+  MONAD_TESTNET_CAIP2,
+  normalizeNetwork,
+  sameNetwork,
+} from "./caip.js";
+import {
   ChainError,
   ConfigError,
   CryptoError,
@@ -224,5 +232,44 @@ describe("schemas", () => {
     };
     expect(LineageManifestSchema.parse(manifest).assets).toHaveLength(1);
     expect(LineageManifestSchema.safeParse({ ...manifest, version: 2 }).success).toBe(false);
+  });
+});
+
+describe("CAIP-2 network ids (x402 v2)", () => {
+  it("round-trips chain ids and rejects what is not an eip155 identifier", () => {
+    expect(caip2(10143n)).toBe("eip155:10143");
+    expect(MONAD_TESTNET_CAIP2).toBe("eip155:10143");
+    expect(MONAD_MAINNET_CAIP2).toBe("eip155:143");
+    expect(chainIdOfCaip2("eip155:10143")).toBe(10143n);
+    expect(chainIdOfCaip2(" eip155:143 ")).toBe(143n);
+    expect(chainIdOfCaip2("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")).toBeNull();
+    expect(chainIdOfCaip2("monad-testnet")).toBeNull();
+  });
+
+  it("accepts every spelling FIRSTHAND has used and hands back both", () => {
+    // A deployed environment still says `monad-testnet`; Monad's facilitator only knows CAIP-2.
+    for (const spelling of ["eip155:10143", "monad-testnet", "MONAD-TESTNET", "10143"]) {
+      expect(normalizeNetwork(spelling)).toEqual({
+        caip2: "eip155:10143",
+        legacy: "monad-testnet",
+        chainId: 10143n,
+      });
+    }
+    expect(normalizeNetwork("anvil").chainId).toBe(31337n);
+    // A chain with no legacy name keeps the CAIP-2 form in both slots.
+    expect(normalizeNetwork("eip155:8453")).toEqual({
+      caip2: "eip155:8453",
+      legacy: "eip155:8453",
+      chainId: 8453n,
+    });
+    expect(() => normalizeNetwork("base-sepolia")).toThrow(/unknown x402 network/);
+  });
+
+  it("compares networks across spellings, and falls back to string equality for foreign ones", () => {
+    expect(sameNetwork("monad-testnet", "eip155:10143")).toBe(true);
+    expect(sameNetwork("eip155:143", "monad")).toBe(true);
+    expect(sameNetwork("monad-testnet", "eip155:143")).toBe(false);
+    expect(sameNetwork("solana:abc", "solana:abc")).toBe(true);
+    expect(sameNetwork("solana:abc", "solana:def")).toBe(false);
   });
 });

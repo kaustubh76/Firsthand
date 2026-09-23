@@ -1044,6 +1044,50 @@ describe("query and publish error paths", () => {
       message: "gateway refused: FH_GRANT_RESCINDED withdrawn",
       context: { code: "FH_GRANT_RESCINDED", status: 403 },
     });
+    // A v2 gateway: the price is offered in both spellings and the buyer must pick the one it can
+    // pay, send both header names, and stamp the payload with the offered version (ADR-0014).
+    const seen: { headers?: HeadersInit; body?: unknown }[] = [];
+    const v2Offer = responder((init) => {
+      seen.push({ ...(init?.headers ? { headers: init.headers } : {}) });
+      if (!init?.headers) {
+        return new Response(
+          JSON.stringify({
+            x402Version: 2,
+            accepts: [
+              { ...requirements, network: "monad-testnet" },
+              {
+                scheme: "exact",
+                network: "eip155:10143",
+                amount: "1",
+                asset: requirements.asset,
+                payTo: requirements.payTo,
+                maxTimeoutSeconds: 1,
+                resource: {
+                  url: requirements.resource,
+                  description: "",
+                  mimeType: "application/json",
+                },
+                extra: requirements.extra,
+              },
+            ],
+          }),
+          { status: 402 },
+        );
+      }
+      return new Response(JSON.stringify({ code: "FH_GRANT_NOT_LIVE", detail: "stop here" }), {
+        status: 403,
+      });
+    });
+    await expect(query(req, { signer: account, fetch: v2Offer })).rejects.toMatchObject({
+      code: "FH_GRANT_NOT_LIVE",
+    });
+    const paidHeaders = seen[1]?.headers as Record<string, string>;
+    expect(Object.keys(paidHeaders)).toEqual(["payment-signature", "x-payment"]);
+    const sentPayload = JSON.parse(atob(paidHeaders["payment-signature"] as string)) as {
+      x402Version: number;
+    };
+    expect(sentPayload.x402Version).toBe(2);
+
     const limited = responder(
       () =>
         new Response(JSON.stringify({ code: "FH_RATE_LIMITED", detail: "rate limit exceeded" }), {

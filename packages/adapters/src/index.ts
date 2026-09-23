@@ -75,12 +75,17 @@ export type {
   PaymentRequirements,
   SettleResponse,
   SupportedKind,
+  VerifiedBy,
   VerifyResponse,
   X402Facilitator,
 } from "./ports/X402Facilitator.js";
 export {
   decodePaymentHeader,
   encodePaymentHeader,
+  LEGACY_PAYMENT_HEADER,
+  PAYMENT_HEADER,
+  PAYMENT_REQUIRED_HEADER,
+  PAYMENT_RESPONSE_HEADER,
   PaymentPayloadSchema,
   PaymentRequirementsSchema,
 } from "./ports/X402Facilitator.js";
@@ -103,8 +108,18 @@ export {
   type SendFailureKind,
   sendWithNonceRetry,
 } from "./tx/send.js";
-export type { MonadFacilitatorClientOptions } from "./x402/MonadFacilitatorClient.js";
-export { MonadFacilitatorClient } from "./x402/MonadFacilitatorClient.js";
+export type { FallbackFacilitatorOptions } from "./x402/FallbackFacilitator.js";
+export { CAPABILITY_REASONS, FallbackFacilitator } from "./x402/FallbackFacilitator.js";
+export type { LocalFacilitatorOptions } from "./x402/LocalFacilitator.js";
+export { LocalFacilitator } from "./x402/LocalFacilitator.js";
+export type {
+  FacilitatorProbe,
+  MonadFacilitatorClientOptions,
+} from "./x402/MonadFacilitatorClient.js";
+export {
+  MONAD_FACILITATOR_URL,
+  MonadFacilitatorClient,
+} from "./x402/MonadFacilitatorClient.js";
 export type { AssetDomain, BuildPaymentOptions, TypedDataSigner } from "./x402/typedData.js";
 export {
   assetDomainFrom,
@@ -112,3 +127,12 @@ export {
   transferWithAuthorizationTypes,
   USDC_DOMAIN_DEFAULTS,
 } from "./x402/typedData.js";
+export type { FacilitatorEnvelope, PaymentRequirementsV2 } from "./x402/wire.js";
+export {
+  FacilitatorSupportedSchema,
+  facilitatorBody,
+  fromRequirementsV2,
+  PaymentRequirementsV2Schema,
+  selectRequirements,
+  toRequirementsV2,
+} from "./x402/wire.js";

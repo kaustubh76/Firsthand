@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:testnet": "echo 'no testnet tests yet'",
+    "test:testnet": "vitest run --config vitest.testnet.config.ts",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {

@@ -203,13 +203,27 @@ describe("gateway serving path (memory mode)", () => {
     const offer = await s.gw.app.request(url);
     expect(offer.status).toBe(402);
     const body = (await offer.json()) as {
-      accepts: { maxAmountRequired: string; payTo: string; extra: { chainId: string } }[];
+      x402Version: number;
+      accepts: Record<string, unknown>[];
     };
+    // The price is offered in both protocol versions' spelling, so a v1 buyer and an off-the-shelf
+    // x402 v2 agent can each read it (ADR-0014).
+    expect(body.x402Version).toBe(2);
     expect(body.accepts[0]).toMatchObject({
       maxAmountRequired: "1000",
+      network: "monad-testnet",
       payTo: `0x${"aa".repeat(20)}`,
       extra: { chainId: "10143" },
     });
+    expect(body.accepts[1]).toMatchObject({
+      amount: "1000",
+      network: "eip155:10143",
+      resource: { url: expect.stringContaining("/v1/query/") },
+    });
+    // …and v2's header carries the same thing for a client that reads headers, not bodies.
+    const required = offer.headers.get("payment-required");
+    expect(required).toBeTruthy();
+    expect(JSON.parse(atob(required as string))).toMatchObject({ x402Version: 2 });
 
     const { result, plaintext } = await s.buyer.queryAndOpen(
       { gatewayUrl: "http://gw", grantId: s.grantId, passportId: s.r.passportId },

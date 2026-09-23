@@ -1,0 +1,111 @@
+{
+  "facilitator": "https://x402-facilitator.molandak.org",
+  "gateway": "https://firsthand-gateway.vercel.app",
+  "at": "2026-09-23T08:13:11.211Z",
+  "kinds": [
+    {
+      "scheme": "upto",
+      "network": "eip155:143",
+      "x402Version": 2,
+      "extra": {
+        "facilitatorAddress": "0x7f6a2850669202519f0fe8aa912451238820db86"
+      }
+    },
+    {
+      "scheme": "exact",
+      "network": "eip155:10143",
+      "x402Version": 2,
+      "extra": {}
+    },
+    {
+      "scheme": "exact",
+      "network": "eip155:143",
+      "x402Version": 2,
+      "extra": {}
+    },
+    {
+      "scheme": "upto",
+      "network": "eip155:10143",
+      "x402Version": 2,
+      "extra": {
+        "facilitatorAddress": "0x7f6a2850669202519f0fe8aa912451238820db86"
+      }
+    }
+  ],
+  "probe": {
+    "reachable": true,
+    "supportsExact": true,
+    "kinds": [
+      {
+        "scheme": "upto",
+        "network": "eip155:143",
+        "x402Version": 2,
+        "extra": {
+          "facilitatorAddress": "0x7f6a2850669202519f0fe8aa912451238820db86"
+        }
+      },
+      {
+        "scheme": "exact",
+        "network": "eip155:10143",
+        "x402Version": 2,
+        "extra": {}
+      },
+      {
+        "scheme": "exact",
+        "network": "eip155:143",
+        "x402Version": 2,
+        "extra": {}
+      },
+      {
+        "scheme": "upto",
+        "network": "eip155:10143",
+        "x402Version": 2,
+        "extra": {
+          "facilitatorAddress": "0x7f6a2850669202519f0fe8aa912451238820db86"
+        }
+      }
+    ],
+    "signers": [
+      "0x7f6a2850669202519f0FE8aa912451238820Db86"
+    ]
+  },
+  "envelopes": {
+    "spec": {
+      "status": 400,
+      "body": {
+        "isValid": false,
+        "invalidReason": "unsupported_scheme",
+        "invalidReasonDetails": "Unsupported scheme",
+        "payer": ""
+      }
+    },
+    "monad-doc": {
+      "status": 200,
+      "body": {
+        "isValid": true,
+        "payer": "0xf288ECAF15790EfcAc528946963A6Db8c3f8211d"
+      }
+    }
+  },
+  "envelope": "monad-doc",
+  "funding": {
+    "status": 201,
+    "body": "{\"hash\":\"0x3bad24e33050295c66c2c00f5b5532e1d0d8fb0e8b647c49eae2156a39070a03\",\"transport\":\"public\",\"submittedAt\":1790151193827}"
+  },
+  "verify": {
+    "status": 200,
+    "body": {
+      "isValid": true,
+      "payer": "0xf288ECAF15790EfcAc528946963A6Db8c3f8211d"
+    }
+  },
+  "forged": {
+    "status": 500,
+    "body": {
+      "isValid": false,
+      "invalidReason": "unexpected_error",
+      "invalidReasonDetails": "server returned an error response: error code 3: execution reverted, data: \"0x\"",
+      "payer": ""
+    }
+  }
+}

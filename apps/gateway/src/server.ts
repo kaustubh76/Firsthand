@@ -1,16 +1,21 @@
 import {
   type AnchorWriter,
   anvil,
+  CAPABILITY_REASONS,
   type ConsentLedger,
   createChainClients,
   type Erc8004Registry,
   type Erc8004Writer,
+  type FacilitatorProbe,
+  FallbackFacilitator,
   FEEDBACK_TAG1,
   FEEDBACK_TAG2_PAID,
   FsBlobStore,
   FsPassportCatalog,
+  fromRequirementsV2,
   type GrantReader,
   type LedgerScan,
+  LocalFacilitator,
   LogsConsentLedger,
   MemoryAnchorWriter,
   MemoryBlobStore,
@@ -19,6 +24,7 @@ import {
   MemoryGrantReader,
   MemoryPassportCatalog,
   MemorySettlement,
+  MONAD_FACILITATOR_URL,
   MonadFacilitatorClient,
   monadTestnet,
   ObjectBlobStore,
@@ -27,7 +33,10 @@ import {
   OnchainErc8004Registry,
   OnchainGrantReader,
   OnchainSettlement,
+  PaymentPayloadSchema,
   type PaymentRequirements,
+  PaymentRequirementsSchema,
+  PaymentRequirementsV2Schema,
   type Settlement,
   type X402Facilitator,
 } from "@firsthand/adapters";
@@ -54,6 +63,7 @@ import {
   ConfigError,
   DEFAULT_HALF_LIFE_SECONDS,
   type Eip712Domain,
+  normalizeNetwork,
   parseSidecar,
   ValidationError,
 } from "@firsthand/core";
@@ -65,6 +75,7 @@ import {
 } from "@firsthand/runtime";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import type { Chain, PublicClient, Transport } from "viem";
 import { decodeFunctionData, toFunctionSelector } from "viem";
 import type { GatewayConfig } from "./config.js";
 import { problemDetailsHandler } from "./middleware/problemDetails.js";
@@ -74,6 +85,13 @@ import { Relay } from "./services/Relay.js";
 import { createVercelBlobClient } from "./storage/vercelBlob.js";
 
 export { type GatewayConfig, loadConfig } from "./config.js";
+
+/** A `/x402/verify` caller that sends Monad's envelope keeps `resource` outside `accepted`. */
+const EMPTY_RESOURCE = {
+  url: "https://firsthand.invalid/x402/verify",
+  description: "verification only",
+  mimeType: "application/json",
+} as const;
 
 /** `mint(address,uint256)` on the MockUSDC faucet double — the only USDC entry point the relay may carry. */
 const MOCK_USDC_MINT = toFunctionSelector(
@@ -178,18 +196,63 @@ export function createGateway(
     overrides.logger ?? createLogger({ level: config.LOG_LEVEL, json: config.LOG_JSON });
   const shutdown = new ShutdownRegistry({ logger });
 
-  const facilitator: X402Facilitator =
-    config.X402_MODE === "memory"
-      ? new MemoryFacilitator({ network: config.X402_NETWORK })
-      : (() => {
-          if (!config.X402_FACILITATOR_URL)
-            throw new ConfigError("X402_FACILITATOR_URL is required when X402_MODE=monad");
-          return new MonadFacilitatorClient({
-            baseUrl: config.X402_FACILITATOR_URL,
-            ...(config.X402_FACILITATOR_API_KEY ? { apiKey: config.X402_FACILITATOR_API_KEY } : {}),
-            logger,
-          });
-        })();
+  // Who verifies a payment (ADR-0014). The local verifier is built either way: it is the fallback
+  // when Monad's facilitator cannot answer, and it is what `GET /x402/supported` + `POST /x402/verify`
+  // offer to other teams. Its chain reader is bound after the clients exist, below.
+  let chainReader: PublicClient<Transport, Chain> | null = null;
+  const localFacilitator = new LocalFacilitator({
+    network: config.X402_NETWORK,
+    publicClient: () => chainReader,
+  });
+  let monadFacilitator: MonadFacilitatorClient | null = null;
+  let verifyChain: FallbackFacilitator | null = null;
+  const facilitator: X402Facilitator = (() => {
+    if (config.X402_MODE === "memory")
+      return new MemoryFacilitator({ network: config.X402_NETWORK });
+    if (config.X402_MODE === "local") return localFacilitator;
+    monadFacilitator = new MonadFacilitatorClient({
+      ...(config.X402_FACILITATOR_URL ? { baseUrl: config.X402_FACILITATOR_URL } : {}),
+      ...(config.X402_FACILITATOR_API_KEY ? { apiKey: config.X402_FACILITATOR_API_KEY } : {}),
+      logger,
+    });
+    if (!config.X402_VERIFY_FALLBACK) return monadFacilitator;
+    verifyChain = new FallbackFacilitator({
+      primary: monadFacilitator,
+      fallback: localFacilitator,
+      logger,
+      ...(config.X402_FALLBACK_REASONS
+        ? {
+            capabilityReasons: [
+              ...CAPABILITY_REASONS,
+              ...config.X402_FALLBACK_REASONS.split(",")
+                .map((r) => r.trim())
+                .filter(Boolean),
+            ],
+          }
+        : {}),
+    });
+    return verifyChain;
+  })();
+  const networkId = normalizeNetwork(config.X402_NETWORK);
+  const facilitatorUrl = config.X402_FACILITATOR_URL ?? MONAD_FACILITATOR_URL;
+  // Asked once, in the background: a facilitator that does not list `exact` for this chain should
+  // be visible in `/healthz`, not a surprise on a judge's first paid query.
+  let facilitatorProbe: FacilitatorProbe | null = null;
+  if (monadFacilitator) {
+    const client = monadFacilitator;
+    void client
+      .probe(networkId.caip2)
+      .then((probe) => {
+        facilitatorProbe = probe;
+        logger.info("x402 facilitator probed", {
+          url: facilitatorUrl,
+          reachable: probe.reachable,
+          supportsExact: probe.supportsExact,
+          ...(probe.detail ? { detail: probe.detail } : {}),
+        });
+      })
+      .catch(() => undefined);
+  }
   const objects =
     config.BLOB_STORE === "vercel" || config.CATALOG === "vercel"
       ? objectStoreClient(config)
@@ -239,6 +302,8 @@ export function createGateway(
     payTo = d.RoyaltyRouter.toLowerCase() as Address;
     usdc = d.USDC.toLowerCase() as Address;
     chainHead = () => clients.publicClient.getBlockNumber({ cacheTime: 0 });
+    // The local x402 verifier can now check replay (`authorizationState`) and the payer's balance.
+    chainReader = clients.publicClient;
     // Block timestamps date anchors for the freshness signal; a block's time never changes, so
     // a small cache saves the RPC a call per listing.
     const blockTimes = new Map<bigint, bigint>();
@@ -415,7 +480,12 @@ export function createGateway(
   app.get("/healthz", async (c) =>
     c.json({
       ok: true,
-      x402: config.X402_MODE,
+      x402: {
+        mode: config.X402_MODE,
+        network: networkId.caip2,
+        facilitator: facilitatorProbe,
+        lastVerifiedBy: verifyChain?.lastVerifiedBy ?? null,
+      },
       settlement: settlement.kind,
       blobs: config.BLOB_STORE,
       relayer: await floatOf(),
@@ -457,6 +527,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
   <li><code>GET /v1/passports/:id</code> · <code>/v1/blobs/:id</code> · <code>/v1/grants/:id/wrap</code> · <code>/v1/anchors/:root</code></li>
   <li><code>GET /v1/principals/:id/timeline</code> — the Consent Ledger: when consent began and ended</li>
   <li><code>POST /v1/passports</code> · <code>/v1/blobs</code> · <code>/v1/grants/:id/wrap</code> — verified ingest</li>
+  <li><code>GET /x402/supported</code> · <code>POST /x402/verify</code> — this gateway verifies x402 <code>exact</code> payments (EIP-3009) for anyone, free; it does not settle other parties' payments</li>
   <li><code>POST /v1/relay</code> — ${relay ? "enabled" : "disabled"}: submits signature-authorised calls for clients holding no key</li>
 </ul>
 <p>Source and a 15-second end-to-end demo:
@@ -472,13 +543,31 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       verbs: ["deposit", "query", "rescind"],
       domain: { chainId: domain.chainId.toString(), verifyingContract: domain.verifyingContract },
       x402: {
-        network: config.X402_NETWORK,
+        // x402 v2 is what Monad's facilitator speaks; v1's spelling is kept beside it so a buyer
+        // built against either version can read this document (ADR-0014).
+        version: 2,
+        network: networkId.legacy,
+        networkCaip2: networkId.caip2,
         asset: usdc,
         payTo,
         extra: {
           chainId: config.CHAIN_ID.toString(),
           name: config.USDC_NAME,
           version: config.USDC_VERSION,
+        },
+        verification: {
+          mode: config.X402_MODE,
+          facilitator: monadFacilitator ? facilitatorUrl : null,
+          fallback: verifyChain ? "local" : null,
+          lastVerifiedBy:
+            verifyChain?.lastVerifiedBy ?? (config.X402_MODE === "local" ? "local" : null),
+          endpoints: { supported: "/x402/supported", verify: "POST /x402/verify" },
+        },
+        // The honest half: a facilitator's `/settle` would move the USDC and leave no receipt.
+        settlement: {
+          via: "RoyaltyRouter.settle",
+          byFacilitator: false,
+          note: "receipts, royalty splits and the per-grant rate limit are written on chain by RoyaltyRouter.settle; the facilitator verifies a payment, it does not settle one",
         },
       },
       // A browser has no DEPLOYMENTS_FILE; this document is its substitute, so it carries every
@@ -555,13 +644,15 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     const sidecar = await serving.sidecar(parseId(passportId, "passportId"));
     return {
       scheme: "exact",
-      network: config.X402_NETWORK,
+      network: networkId.legacy,
       maxAmountRequired: sidecar.terms.price.toString(),
       resource: `${config.PUBLIC_URL}/v1/query/${grantId}/${passportId}`,
       description: "FIRSTHAND per-query access under a live grant",
       mimeType: "application/json",
       payTo,
-      maxTimeoutSeconds: 60,
+      // 300 s, matching Monad's own sample: the facilitator judges the window against its node's
+      // clock, not ours, and a minute leaves no room for skew.
+      maxTimeoutSeconds: 300,
       asset: usdc,
       extra: {
         chainId: config.CHAIN_ID.toString(),
@@ -791,6 +882,56 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
   // ── relay ───────────────────────────────────────────────────────────────────────────────────
   // For clients that hold no key (the capture PWA). Authorisation is inside the calldata — a P-256
   // signature under the contract's own EIP-712 domain — so relaying cannot change what a call means.
+
+  // ── x402 verification, offered ──────────────────────────────────────────────────────────────
+  // FIRSTHAND needed a real "exact"-scheme verifier for its own gate; there is no reason to keep
+  // it private. `/verify` is free and read-only. There is deliberately no `/settle`: settling
+  // means spending this gateway's relayer gas, and a stranger's payment is not ours to pay for.
+
+  app.get("/x402/supported", async (c) =>
+    c.json({
+      x402Version: 2,
+      kinds: await localFacilitator.supported(),
+      settle: false,
+      note: "FIRSTHAND verifies x402 `exact` payments (EIP-3009) for anyone; it does not settle other parties' payments — its own settle writes a receipt through RoyaltyRouter (ADR-0014)",
+    }),
+  );
+
+  app.post(
+    "/x402/verify",
+    rateLimit(limiter, (_h, ip) => ip),
+    async (c) => {
+      const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!body) throw new ValidationError("x402 verify: a JSON body is required");
+      // Both published envelopes, and v1's, so any client's shape is understood.
+      const rawPayload = body["paymentPayload"] ?? body["payload"];
+      const rawRequirements = body["paymentRequirements"] ?? body["accepted"];
+      const resource = body["resource"];
+      const payload = PaymentPayloadSchema.safeParse(
+        rawPayload && typeof rawPayload === "object" && "payload" in rawPayload
+          ? rawPayload
+          : { x402Version: 2, scheme: "exact", network: config.X402_NETWORK, payload: rawPayload },
+      );
+      if (!payload.success) throw new ValidationError("x402 verify: unreadable payment payload");
+      const v2 = PaymentRequirementsV2Schema.safeParse(
+        rawRequirements && typeof rawRequirements === "object" && !("resource" in rawRequirements)
+          ? { ...(rawRequirements as object), resource: resource ?? EMPTY_RESOURCE }
+          : rawRequirements,
+      );
+      const requirements = v2.success
+        ? fromRequirementsV2(v2.data)
+        : PaymentRequirementsSchema.safeParse(rawRequirements);
+      const resolved =
+        v2.success || (requirements as { success?: boolean }).success === true
+          ? v2.success
+            ? (requirements as ReturnType<typeof fromRequirementsV2>)
+            : (requirements as { data: PaymentRequirements }).data
+          : null;
+      if (!resolved) throw new ValidationError("x402 verify: unreadable payment requirements");
+      const verdict = await localFacilitator.verify(payload.data, resolved);
+      return c.json(jsonSafe(verdict));
+    },
+  );
 
   app.get("/v1/relay/capabilities", (c) =>
     relay

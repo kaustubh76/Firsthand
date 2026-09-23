@@ -8,6 +8,7 @@ import {
   MemoryBlobStore,
   monadTestnet,
 } from "@firsthand/adapters/client";
+import { buildPaymentPayload } from "@firsthand/adapters/x402";
 import {
   type Address,
   AttestationClass,
@@ -20,7 +21,7 @@ import {
 import { FirsthandClient, importLocker, parseBundle } from "@firsthand/sdk";
 import { clientOptionsFromDeployment } from "@firsthand/sdk/deployment";
 import { chromium } from "playwright";
-import { generatePrivateKey } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   approvalLink,
   awaitBalance,
@@ -119,11 +120,34 @@ async function main() {
     chainId?: string;
     rpcUrl?: string;
     contracts: Record<string, Address>;
-    x402: { asset: Address };
+    x402: {
+      asset: Address;
+      payTo: Address;
+      version?: number;
+      networkCaip2?: string;
+      verification?: { mode: string; facilitator: string | null };
+      settlement?: { via: string; byFacilitator: boolean };
+    };
   };
   if (disco.relay?.enabled !== true)
     throw new Error("gateway has no relay — the PWA would be offline");
   ok(`discovery: chain ${disco.chainId}, relay enabled`);
+  // Who verifies a payment, and who settles it — the two halves of README §8 claim 4 (ADR-0014).
+  if (disco.x402.version !== 2)
+    throw new Error(`gateway does not advertise x402 v2: ${JSON.stringify(disco.x402)}`);
+  if (
+    disco.x402.settlement?.byFacilitator !== false ||
+    disco.x402.settlement.via !== "RoyaltyRouter.settle"
+  ) {
+    throw new Error(
+      `settlement should stay in the router: ${JSON.stringify(disco.x402.settlement)}`,
+    );
+  }
+  ok(
+    `x402 v2 · ${disco.x402.networkCaip2} · verified by ${disco.x402.verification?.mode}${
+      disco.x402.verification?.facilitator ? ` (${disco.x402.verification.facilitator})` : ""
+    } · settled by ${disco.x402.settlement.via}`,
+  );
 
   let appUrl = process.env["E2E_APP_URL"];
   if (!appUrl) {
@@ -543,6 +567,70 @@ async function main() {
         throw new Error("no paid-query feedback credited to the agent");
       ok(
         `reputation: agent #${outsiderAgent} has ${rep?.paidQueriesHere} paid query credited by this gateway`,
+      );
+    }
+
+    step("x402: this gateway verifies payments for anyone, and really checks the signature");
+    {
+      const supported = (await (await fetch(`${gatewayUrl}/x402/supported`)).json()) as {
+        x402Version: number;
+        kinds: { scheme: string; network: string }[];
+        settle: boolean;
+      };
+      if (supported.x402Version !== 2 || !supported.kinds.some((k) => k.scheme === "exact")) {
+        throw new Error(`/x402/supported: ${JSON.stringify(supported)}`);
+      }
+      if (supported.settle !== false)
+        throw new Error("the gateway must not offer to settle a stranger's payment");
+      const stranger = privateKeyToAccount(generatePrivateKey());
+      const requirements = {
+        scheme: "exact" as const,
+        network: `eip155:${disco.chainId}`,
+        maxAmountRequired: "1000",
+        resource: `${gatewayUrl}/v1/query/interop/probe`,
+        description: "verification only",
+        mimeType: "application/json",
+        payTo: disco.x402.payTo,
+        maxTimeoutSeconds: 300,
+        asset: disco.x402.asset,
+        extra: { chainId: String(disco.chainId), name: "USD Coin", version: "2" },
+      };
+      const good = await buildPaymentPayload(stranger, requirements, { x402Version: 2 });
+      const askGateway = async (payload: typeof good) =>
+        (await (
+          await fetch(`${gatewayUrl}/x402/verify`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              x402Version: 2,
+              paymentPayload: payload,
+              paymentRequirements: {
+                ...requirements,
+                amount: requirements.maxAmountRequired,
+                resource: {
+                  url: requirements.resource,
+                  description: "",
+                  mimeType: "application/json",
+                },
+              },
+            }),
+          })
+        ).json()) as { isValid: boolean; invalidReason?: string; verifiedBy?: string };
+      const forged = {
+        ...good,
+        payload: { ...good.payload, signature: `0x${"11".repeat(65)}` as const },
+      };
+      const refusal = await askGateway(forged);
+      if (refusal.isValid || !`${refusal.invalidReason}`.includes("signature")) {
+        throw new Error(`a forged signature was not refused: ${JSON.stringify(refusal)}`);
+      }
+      // The same authorization, honestly signed: refused only for the funds this stranger lacks.
+      const honest = await askGateway(good);
+      if (honest.isValid !== false || honest.invalidReason !== "insufficient_funds") {
+        throw new Error(`unexpected verdict for an unfunded payer: ${JSON.stringify(honest)}`);
+      }
+      ok(
+        `/x402/verify refuses a forged signature (${refusal.invalidReason}) and reads the chain for a real one (${honest.invalidReason}) — verified by ${refusal.verifiedBy}`,
       );
     }
 

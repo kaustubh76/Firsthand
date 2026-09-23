@@ -1,8 +1,10 @@
 import {
   buildPaymentPayload,
   encodePaymentHeader,
+  LEGACY_PAYMENT_HEADER,
+  PAYMENT_HEADER,
   type PaymentRequirements,
-  PaymentRequirementsSchema,
+  selectRequirements,
   type TypedDataSigner,
 } from "@firsthand/adapters/x402";
 import {
@@ -123,16 +125,23 @@ export async function query(request: QueryRequest, deps: QueryDeps): Promise<Que
   const first = await doFetch(url);
   if (first.status === 404) throw new NotFoundError(`gateway does not host ${request.passportId}`);
   if (first.status !== 402) throw await refusal(first, request.passportId);
-  const offer = (await first.json()) as { accepts?: unknown[] };
-  const requirements = PaymentRequirementsSchema.safeParse(offer.accepts?.[0]);
-  if (!requirements.success)
+  const offer = (await first.json()) as { accepts?: unknown[]; x402Version?: number };
+  // A gateway may offer the same price in both versions' spelling; take the one this buyer can pay
+  // rather than trusting the order (ADR-0014).
+  const requirements = selectRequirements(offer.accepts);
+  if (requirements === null)
     throw new PaymentError("FH_PAYMENT_INVALID", "402 carried no usable payment requirements");
-  if (deps.approve && !(await deps.approve(requirements.data))) {
+  if (deps.approve && !(await deps.approve(requirements))) {
     throw new PaymentError("FH_PAYMENT_REQUIRED", "payment declined by the buyer");
   }
 
-  const payment = await buildPaymentPayload(deps.signer, requirements.data);
-  const paid = await doFetch(url, { headers: { "x-payment": encodePaymentHeader(payment) } });
+  const x402Version = offer.x402Version === 2 ? 2 : 1;
+  const payment = await buildPaymentPayload(deps.signer, requirements, { x402Version });
+  const header = encodePaymentHeader(payment);
+  // Both header names: v2 renamed `X-PAYMENT`, and a gateway may know only one of them.
+  const paid = await doFetch(url, {
+    headers: { [PAYMENT_HEADER]: header, [LEGACY_PAYMENT_HEADER]: header },
+  });
   if (!paid.ok) throw await refusal(paid, request.passportId);
   const served = ServedQuerySchema.parse(await paid.json());
   const sidecar = parseSidecar(served.sidecar);
@@ -152,7 +161,7 @@ export async function query(request: QueryRequest, deps: QueryDeps): Promise<Que
       blockNumber: served.receipt.blockNumber === null ? null : BigInt(served.receipt.blockNumber),
     },
     paid: {
-      requirements: requirements.data,
+      requirements,
       nonce: payment.payload.authorization.nonce as Bytes32,
     },
   };

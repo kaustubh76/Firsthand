@@ -65,6 +65,11 @@ export interface BuildPaymentOptions {
   readonly nonce?: Bytes32;
   readonly now?: () => number;
   readonly randomNonce?: () => Bytes32;
+  /**
+   * Which x402 version to stamp on the payload. The signed authorization is identical either way —
+   * only the envelope differs — so this is the one field a v2 buyer changes.
+   */
+  readonly x402Version?: 1 | 2;
 }
 
 /** Signs an x402 exact payment for `requirements` from `signer`. */
@@ -100,7 +105,7 @@ export async function buildPaymentPayload(
     message,
   });
   return {
-    x402Version: 1,
+    x402Version: options.x402Version ?? 1,
     scheme: "exact",
     network: requirements.network,
     payload: {

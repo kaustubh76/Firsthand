@@ -21,6 +21,11 @@ const defaults: Record<string, string> = {
   RELAY_FAUCET_MINT: "true",
   // ERC-8004 reference registries are live on Monad testnet: paid queries feed buyer reputation.
   ERC8004_FEEDBACK: "true",
+  // Monad's native x402 facilitator verifies every payment (README §8 claim 4, ADR-0014); if it is
+  // unreachable or declines the kind of payment, the gateway's own verifier answers instead — it
+  // never degrades to accepting an unverified signature.
+  X402_MODE: "monad",
+  X402_NETWORK: "eip155:10143",
   // A judge's own history: ?fromBlock= may reach back 12 000 blocks (~80 min at 0.4 s) — four
   // event walks of 120 windows each, four in flight at 20 starts/s ≈ 25 s — and the scan stops at
   // its budget with `scan.partial` rather than hitting the function's 60 s; the browser's journal

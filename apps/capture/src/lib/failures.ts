@@ -39,6 +39,29 @@ const REVERTS: Record<string, string> = {
 
 const REVERT_RE = /would revert: ([A-Z][A-Za-z0-9]*)|refused: ([A-Z][A-Za-z0-9]*)/;
 
+/**
+ * x402 refusal reasons, as an x402 facilitator words them (Monad's included — it answers
+ * `unexpected_error` for a signature that fails its on-chain simulation). A judge should read what
+ * went wrong with the payment, not a facilitator's internal vocabulary.
+ */
+const X402_REASONS: [RegExp, string][] = [
+  [/signature/i, "the payment signature did not verify — the buyer signed different terms"],
+  [/insufficient_funds/i, "the buyer does not hold enough USDC to pay this price"],
+  [/already_used|already used/i, "that payment authorization was already spent"],
+  [/valid_before|expired/i, "the payment authorization expired before it was used"],
+  [/valid_after/i, "the payment authorization is not valid yet"],
+  [/recipient_mismatch/i, "the payment was signed to a different recipient"],
+  [/value_mismatch/i, "the payment amount does not match the price"],
+  [
+    /unsupported_(scheme|network|asset)/i,
+    "the payment names a scheme, network or asset this venue does not take",
+  ],
+  [
+    /unexpected_error/i,
+    "the facilitator could not verify this payment — most often a signature that does not match the terms",
+  ],
+];
+
 export function failureOf(error: unknown): Failure {
   const e = error as { code?: unknown; message?: unknown; context?: { reason?: unknown } };
   const message = typeof e?.message === "string" ? e.message : String(error);
@@ -56,6 +79,10 @@ export function explainFailure(error: unknown): string {
     return `The venue's relayer is out of gas, so nothing can be written on chain until its operator tops it up. (${f.message})`;
   }
   if (f.code === "FH_RATE_LIMITED") return `${f.message}.`;
+  if (f.code === "FH_PAYMENT_INVALID") {
+    const reason = X402_REASONS.find(([re]) => re.test(f.message));
+    if (reason) return `${reason[1]}. (${f.message})`;
+  }
   if (f.reason && REVERTS[f.reason]) return `${REVERTS[f.reason]}. (${f.message})`;
   if (f.code === "FH_TRANSPORT")
     return `The gateway could not be reached — retry in a moment. (${f.message})`;

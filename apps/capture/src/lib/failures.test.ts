@@ -35,6 +35,19 @@ describe("failures — the sentence a judge reads", () => {
     expect(explainFailure("a string")).toBe("a string");
   });
 
+  it("says what went wrong with a payment, in the buyer's terms", () => {
+    const rejected = (detail: string) =>
+      explainFailure(
+        Object.assign(new Error(`payment rejected: ${detail}`), { code: "FH_PAYMENT_INVALID" }),
+      );
+    expect(rejected("invalid_exact_evm_payload_signature")).toMatch(/signature did not verify/);
+    expect(rejected("insufficient_funds")).toMatch(/does not hold enough USDC/);
+    // Monad's facilitator words a bad signature as `unexpected_error`; a judge should not have to
+    // know that.
+    expect(rejected("unexpected_error")).toMatch(/could not verify this payment/);
+    expect(rejected("something new")).toBe("payment rejected: something new");
+  });
+
   it("fans a reported failure out to the shell", () => {
     const seen: string[] = [];
     const off = onFailure((f) => seen.push(`${f.code}:${f.reason}`));

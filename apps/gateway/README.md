@@ -19,6 +19,14 @@ pnpm --filter firsthand-gateway dev     # memory mode: no network, in-process gr
 # chain mode: DEPLOYMENTS_FILE=…/31337.json SETTLEMENT_MODE=onchain RELAYER_PRIVATE_KEY=0x…
 pnpm --filter firsthand-gateway test:anvil   # Phase 3 gate against anvil --odyssey + MockUSDC
 ```
+x402: the gateway speaks **v2** (CAIP-2 networks, `amount`, `PAYMENT-SIGNATURE`) and keeps v1's
+spelling beside it in `accepts`, so either generation of buyer can pay. `X402_MODE=monad` verifies
+every payment with Monad's native facilitator and falls back to `local` — FIRSTHAND's own EIP-3009
+verifier — when it is unreachable or declines the kind of payment; `X402_MODE=local` needs no third
+party. Settlement is always `RoyaltyRouter.settle`, never the facilitator, because that is what
+writes the receipt and splits the royalty (ADR-0014). The same verifier is offered to others at
+`GET /x402/supported` and `POST /x402/verify`; there is no `/settle`.
+
 Errors are RFC 9457 problem+json with FIRSTHAND codes (`FH_GRANT_RESCINDED` 403, `FH_RATE_LIMITED`
 429 with `retry-after`, `FH_PAYMENT_INVALID` 402, `FH_NOT_FOUND` 404, `FH_INSUFFICIENT_FUNDS` 503
 when the relayer float is empty, `FH_CHAIN` 502 with the decoded revert reason in `detail`); rate

@@ -479,3 +479,58 @@ a contract, a package or the browser tier — the e2e ran unchanged after every 
 
 Not done here: the hosted redeploy (the relayer float still needs the faucet before a full live run).
 
+
+### Update — the x402 facilitator, for real (23 Sep 2026)
+
+README §8 claim 4 — *"Native x402 facilitator + ERC-8004 → the buyer side exists"* — was the last
+integration the spec claimed and the repo had not built. Four "Still not built" paragraphs above
+record the reason as *"the blocker is an endpoint, not code."* Both halves were wrong.
+
+**The endpoint is live**, and nothing here could have reached it. `GET
+https://x402-facilitator.molandak.org/supported` (no auth) lists `exact` on `eip155:10143` and
+`eip155:143` — but Monad's facilitator *"only supports x402 version 2 and above"*, and FIRSTHAND
+spoke v1 in every field that v2 renamed: `x402Version: 1`, `maxAmountRequired`, `monad-testnet`,
+`X-PAYMENT`. The integration was a wire-format migration, not a configuration change.
+
+x402 v2 is now a **projection** of the same canonical requirements (`x402/wire.ts`), so nothing that
+reads `maxAmountRequired` moved; CAIP-2 ids live in core; the 402 offers the price in both
+spellings plus the v2 `PAYMENT-REQUIRED` header, and a payment is read from either header name. An
+off-the-shelf x402 v2 agent can now pay FIRSTHAND, and every buyer built against v1 still can.
+
+**Measured, not asserted** (`packages/adapters/test/testnet/x402-facilitator.interop.test.ts`, run
+by `pnpm --filter @firsthand/adapters test:testnet`, deliberately outside `check:all` — no gate
+here should depend on a third party's uptime). Three findings the documentation could not have
+given:
+
+- Monad's facilitator **verified a FIRSTHAND payment for FIRSTHAND's own MockUSDC**:
+  `{"isValid": true, "payer": "0xf288…"}`. The faucet double uses USDC's exact EIP-712 domain, and
+  there is no asset allow-list. That is §8 claim 4, earned.
+- The x402 **specification's request envelope is refused** (`unsupported_scheme`); the one in
+  Monad's own guide is accepted. The client defaults to the measured shape and the test asks both
+  every run, so the day that changes, a test says so instead of a judge's query.
+- It answers **verdicts with failure statuses** — `insufficient_funds` as 400, a forged signature as
+  500 ("execution reverted": it verifies by simulating the transfer on chain). A client reading
+  status codes as outages would retry three times to reach the same "no".
+
+Two things were wrong at home, and this exposed them. `MemoryFacilitator` **never checked a
+signature** — its own docstring said "that is the real facilitator's job" — so the gate in front of
+every paid query was decorative, backed only by `RoyaltyRouter.settle` reverting later.
+`LocalFacilitator` now verifies the EIP-3009 signature, the validity window, replay
+(`authorizationState`) and balance, which is also the fallback ADR-0006's table had been carrying
+an em dash for. And `FallbackFacilitator` consults it **only** when the facilitator is unreachable
+or declines the *kind* of payment — never on a verdict about the payment itself, because falling
+back on "invalid signature" would be a bypass wearing resilience's clothes.
+
+**Settlement stays in the RoyaltyRouter.** Monad's facilitator would settle and pay the gas itself,
+but its settle is a bare `transferWithAuthorization`: the USDC would move and there would be no
+receipt, no royalty split and no rate-limit counter. Receipts are the product, so the gateway
+verifies with the facilitator and settles on chain, and `/.well-known/firsthand.json` names both
+halves (`x402.verification`, `x402.settlement`) instead of leaving a reader to assume (ADR-0014).
+
+FIRSTHAND also offers what it had to build: `GET /x402/supported` and `POST /x402/verify` verify
+x402 `exact` payments for anyone, free — and there is deliberately no `/settle`, because settling
+spends this gateway's relayer float. The browser tier proves that surface on every run: a forged
+signature is refused, an honest one from an unfunded stranger comes back `insufficient_funds`.
+
+**Still not built:** Envio handlers, the docs site, BTX (not on testnet), and the Cleanverse/CVI
+"Silver" tier, which the spec mentions (§7.2, §13) and nothing implements.

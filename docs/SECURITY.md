@@ -174,6 +174,19 @@ Three more, found by auditing the spec against the code rather than promised any
   Vercel rejects larger bodies before the code runs) and the audit routes scan at most
   `LEDGER_MAX_SCAN_BLOCKS` per request inside a `LEDGER_SCAN_BUDGET_MS` wall-clock budget, so one
   caller cannot turn a request into unbounded RPC work; the response says what the scan covered.
+- **What Monad's x402 facilitator sees, and what it cannot do:** the same signed EIP-3009
+  authorization the buyer already sent in a public HTTP header — payer, recipient (the
+  RoyaltyRouter), amount, validity window, nonce — plus the public payment requirements. No key, no
+  plaintext, no passport, nothing about the seller beyond the address that is already on chain.
+  Anyone who intercepts that authorization can at most submit it to the token themselves, which
+  moves the buyer's USDC to the router as dust rather than to an attacker (ADR-0011), and consumes
+  the nonce. The facilitator only ever *verifies* here: it is never asked to settle, so it never
+  holds or moves FIRSTHAND funds (ADR-0014). If it answers that a payment is bad, that verdict is
+  final — the local verifier is consulted only when the facilitator declines the *kind* of payment
+  or cannot be reached, never to get a second opinion on a refusal.
+- **What FIRSTHAND's own `/x402/verify` does for strangers:** verifies a signature, reads two public
+  values from the chain, and answers. It writes nothing, spends no gas, and is rate-limited per IP;
+  there is no `/settle`, because settling would spend this gateway's relayer float for someone else.
 - **What the relay will pay for:** four authority contracts (signature in calldata), plus the
   faucet double's `mint` capped per call at `RELAY_FAUCET_MAX_UNITS` — the relay is a gas float
   for a demo, never a treasury. Errors name themselves: a decoded revert, a rate limit with

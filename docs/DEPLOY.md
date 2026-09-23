@@ -40,7 +40,9 @@ Deployment protection was switched off on both projects (`PATCH /v9/projects/:id
 
 Everything else — chain id, the deployment document, `RELAY_ENABLED`, `RELAY_FAUCET_MINT` (the
 MockUSDC faucet double's `mint` rides the relay, selector-scoped, so a keyless demo buyer can fund
-itself, capped at `RELAY_FAUCET_MAX_UNITS` = 1 USDC per call), `LEDGER_MAX_SCAN_BLOCKS` (12 000)
+itself, capped at `RELAY_FAUCET_MAX_UNITS` = 1 USDC per call), `X402_MODE=monad` (payments are
+verified by Monad's native facilitator at `x402-facilitator.molandak.org`, falling back to the
+gateway's own verifier — ADR-0014), `LEDGER_MAX_SCAN_BLOCKS` (12 000)
 with `LEDGER_SCAN_BUDGET_MS` (40 s — the walk is newest-first and answers `scan.partial` instead of
 timing out), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above ~4.5 MB before the function
 runs; measured 5 MB → 413; discovery publishes `limits.maxUploadBytes` and the PWA sizes captures

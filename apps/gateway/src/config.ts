@@ -5,7 +5,8 @@ const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "expected a 20-byte hex 
 const privateKey = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "expected a 32-byte hex private key");
 
 /**
- * Gateway configuration — every field documented in .env.example. Validated at boot by `loadEnv`.
+ * Gateway configuration. Every field is documented in `.env.example` (kept in step by
+ * `scripts/check-env-example.mjs`, which `check:all` runs). Validated at boot by `loadEnv`.
  * The gateway never holds user keys; RELAYER_PRIVATE_KEY only pays gas for settlements.
  */
 export const GatewayConfigSchema = z.object({

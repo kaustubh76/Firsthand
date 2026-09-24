@@ -112,9 +112,8 @@ describe("LocalFacilitator — the verifier FIRSTHAND owns", () => {
     };
     // The double waves it through — that is exactly the gap this class closes.
     expect(
-      (await new MemoryFacilitator({ network: "monad-testnet" }).verify(forged, requirements))
-        .isValid,
-    ).toBe(true);
+      await new MemoryFacilitator({ network: "monad-testnet" }).verify(forged, requirements),
+    ).toMatchObject({ isValid: true, verifiedBy: "memory" });
     expect(await local().verify(forged, requirements)).toMatchObject({
       isValid: false,
       invalidReason: "invalid_exact_evm_payload_signature",
@@ -203,6 +202,45 @@ describe("LocalFacilitator — the verifier FIRSTHAND owns", () => {
       { scheme: "exact", network: MONAD_TESTNET_CAIP2, x402Version: 2 },
       { scheme: "exact", network: "monad-testnet", x402Version: 1 },
     ]);
+  });
+});
+
+describe("MemoryFacilitator — a double that agrees with the real verifier about networks", () => {
+  const memory = new MemoryFacilitator({ network: "monad-testnet" });
+
+  it("accepts either spelling of the same chain", async () => {
+    // An x402 v2 buyer says eip155:10143 where a v1 gateway says monad-testnet. Two
+    // implementations of one port must not disagree about what a network is.
+    const payload = await signed();
+    for (const network of ["monad-testnet", "eip155:10143"]) {
+      expect(
+        await memory.verify({ ...payload, network }, { ...requirements, network }),
+      ).toMatchObject({ isValid: true, verifiedBy: "memory" });
+    }
+    expect(
+      await memory.verify({ ...payload, network: "eip155:10143" }, requirements),
+    ).toMatchObject({ isValid: true });
+    // A different chain is still a different chain.
+    expect(await memory.verify({ ...payload, network: "eip155:143" }, requirements)).toMatchObject({
+      isValid: false,
+      invalidReason: "unsupported_scheme_or_network",
+    });
+  });
+
+  it("names itself on every verdict, so a gateway can report which verifier answered", async () => {
+    const payload = await signed();
+    const wrongAmount = {
+      ...payload,
+      payload: {
+        ...payload.payload,
+        authorization: { ...payload.payload.authorization, value: "1" },
+      },
+    };
+    expect(await memory.verify(wrongAmount, requirements)).toMatchObject({
+      isValid: false,
+      invalidReason: "wrong_amount",
+      verifiedBy: "memory",
+    });
   });
 });
 

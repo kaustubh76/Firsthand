@@ -532,5 +532,25 @@ x402 `exact` payments for anyone, free — and there is deliberately no `/settle
 spends this gateway's relayer float. The browser tier proves that surface on every run: a forged
 signature is refused, an honest one from an unfunded stranger comes back `insufficient_funds`.
 
+**Closing the loop (24 Sep).** Three gaps in the integration itself, found by re-reading it whole
+rather than by a test: `MemoryFacilitator` compared networks by string where `LocalFacilitator` uses
+`sameNetwork`, so the double would have refused an x402 v2 buyer the real verifier accepts — two
+implementations of one port disagreeing about what a network *is*; `/x402/verify` resolved its
+request body through nested ternaries and three casts, which is the shape a bug hides in, and is now
+one named parser with a path per envelope; and every verdict now names its verifier, so `/healthz`
+reports `memory` / `local` / `monad` instead of inferring it. `pnpm demo` — the quickstart, not
+covered by `check:all` — was run on the local chain and completes the first recall with real EIP-3009
+verification in the loop.
+
+And the half of §8 claim 4 that was still unproven is proven, without spending a MON. A refusal by
+the facilitator was already observable; an *acceptance inside a served query* was not, because
+completing one costs relayer gas. It does not have to: the gateway verifies a payment before it
+looks at the grant and settles only after the grant checks out, so an honest payment against a grant
+that does not exist separates the two. Live, against the hosted gateway: the payment was accepted
+(`/healthz` → `x402.lastVerifiedBy: "monad"`, no payment error) and the query stopped at consent —
+`FH_GRANT_NOT_LIVE`, nothing settled, no gas. Recorded in
+`experiments/results/x402-facilitator.json` and re-run by
+`pnpm --filter @firsthand/adapters test:testnet`.
+
 **Still not built:** Envio handlers, the docs site, BTX (not on testnet), and the Cleanverse/CVI
 "Silver" tier, which the spec mentions (§7.2, §13) and nothing implements.

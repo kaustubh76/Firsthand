@@ -195,7 +195,13 @@ describe("MemoryFacilitator", () => {
   it("verifies scheme, payee, amount and nonce freshness; settles once", async () => {
     const f = new MemoryFacilitator();
     expect(await f.supported()).toEqual([{ scheme: "exact", network: "monad-testnet" }]);
-    expect(await f.verify(payload(1), requirements)).toEqual({ isValid: true, payer: addr(0xbb) });
+    expect(await f.verify(payload(1), requirements)).toEqual({
+      isValid: true,
+      payer: addr(0xbb),
+      // Every verdict names its verifier, so a gateway reports which one answered rather than
+      // guessing from its own configuration.
+      verifiedBy: "memory",
+    });
     expect((await f.verify(payload(1, { to: addr(0xcc) }), requirements)).invalidReason).toBe(
       "wrong_pay_to",
     );

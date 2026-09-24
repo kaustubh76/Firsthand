@@ -7,12 +7,13 @@ import { encodeFunctionData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import type { PaymentRequirements } from "../../src/ports/X402Facilitator.js";
+import { encodePaymentHeader, PAYMENT_HEADER } from "../../src/ports/X402Facilitator.js";
 import {
   MONAD_FACILITATOR_URL,
   MonadFacilitatorClient,
 } from "../../src/x402/MonadFacilitatorClient.js";
 import { buildPaymentPayload } from "../../src/x402/typedData.js";
-import { FACILITATOR_ENVELOPES, facilitatorBody } from "../../src/x402/wire.js";
+import { FACILITATOR_ENVELOPES, facilitatorBody, selectRequirements } from "../../src/x402/wire.js";
 
 /**
  * Interop with Monad's native x402 facilitator — README §8 claim 4, measured rather than asserted.
@@ -38,6 +39,10 @@ const NETWORK = "eip155:10143";
 /** A throwaway payer: it holds nothing but the MockUSDC this test mints to it. */
 const TEST_PAYER_KEY = `0x${"0b".repeat(32)}` as const;
 const GATEWAY = process.env["E2E_GATEWAY_URL"] ?? "https://firsthand-gateway.vercel.app";
+/** A passport the hosted gateway serves (from the 20 Sep live run); override with X402_PASSPORT. */
+const HOSTED_PASSPORT = "0xbdb2c60936b197f24dafd1e358e7cea6ceade66a0aaef9fc668a28c38cb08847";
+/** Deliberately not a grant: the query must stop at consent, long before anything is settled. */
+const UNKNOWN_GRANT = `0x${"11".repeat(32)}`;
 
 const results: Record<string, unknown> = {
   facilitator: MONAD_FACILITATOR_URL,
@@ -160,6 +165,49 @@ describe("Monad's x402 facilitator", () => {
     // payment" — `CAPABILITY_REASONS` deliberately does not include it, so a forgery can never
     // fall through to the local verifier and get a second opinion.
     expect(reasonOf(answer)).toBe("unexpected_error");
+  });
+
+  it("accepts a real payment inside the hosted serving path — without settling anything", async () => {
+    // The last unproven half of README §8 claim 4. A *refusal* by the facilitator was already
+    // observable; an acceptance inside a served query was not, because completing one costs relayer
+    // gas. It does not have to: the gateway verifies the payment before it looks at the grant, and
+    // settles only after the grant checks out (`Serving.serve`). So an honest payment against a
+    // grant that does not exist proves the facilitator accepted it — the refusal that comes back is
+    // about consent, not money — and nothing is ever settled.
+    const passportId = process.env["X402_PASSPORT"] ?? HOSTED_PASSPORT;
+    const hosted = await fetch(`${GATEWAY}/v1/passports/${passportId}`);
+    if (hosted.status !== 200) {
+      throw new Error(
+        `this test needs a passport the gateway hosts; ${passportId} answered ${hosted.status}. Pass another with X402_PASSPORT=0x…`,
+      );
+    }
+    const url = `${GATEWAY}/v1/query/${UNKNOWN_GRANT}/${passportId}`;
+
+    // Take the gateway's own terms, so the signature covers exactly what it will check.
+    const offer = (await (await fetch(url)).json()) as { accepts?: unknown[] };
+    const terms = selectRequirements(offer.accepts);
+    expect(terms, `no usable requirements in ${JSON.stringify(offer)}`).toBeTruthy();
+    const payer = privateKeyToAccount(TEST_PAYER_KEY);
+    const payment = await buildPaymentPayload(payer, terms as PaymentRequirements, {
+      x402Version: 2,
+    });
+    const res = await fetch(url, { headers: { [PAYMENT_HEADER]: encodePaymentHeader(payment) } });
+    const body = (await res.json()) as { code?: string; detail?: string };
+    results["servingPath"] = { status: res.status, body };
+
+    // FH_PAYMENT_INVALID here would mean the facilitator rejected the payment. Any grant-shaped
+    // refusal means it accepted it and the gateway moved on to consent.
+    expect(body.code, `payment was rejected: ${JSON.stringify(body)}`).not.toBe(
+      "FH_PAYMENT_INVALID",
+    );
+    expect(body.code).toMatch(/^FH_(GRANT_|NOT_FOUND)/);
+
+    // …and the gateway says who did the verifying.
+    const health = (await (await fetch(`${GATEWAY}/healthz`)).json()) as {
+      x402?: { lastVerifiedBy?: string | null };
+    };
+    results["lastVerifiedBy"] = health.x402?.lastVerifiedBy ?? null;
+    expect(health.x402?.lastVerifiedBy).toBe("monad");
   });
 
   it("writes what it measured", () => {

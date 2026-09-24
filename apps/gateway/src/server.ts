@@ -33,6 +33,7 @@ import {
   OnchainErc8004Registry,
   OnchainGrantReader,
   OnchainSettlement,
+  type PaymentPayload,
   PaymentPayloadSchema,
   type PaymentRequirements,
   PaymentRequirementsSchema,
@@ -86,8 +87,42 @@ import { createVercelBlobClient } from "./storage/vercelBlob.js";
 
 export { type GatewayConfig, loadConfig } from "./config.js";
 
-/** A `/x402/verify` caller that sends Monad's envelope keeps `resource` outside `accepted`. */
-const EMPTY_RESOURCE = {
+/**
+ * A `/x402/verify` body, in any of the three shapes a caller might send: the x402 specification's
+ * `{paymentPayload, paymentRequirements}`, Monad's `{payload, accepted, resource}`, and v1's. Each
+ * is handled once, explicitly, because this route is the one place a stranger's bytes reach the
+ * verifier.
+ */
+function parseVerifyRequest(
+  body: Record<string, unknown>,
+  fallbackNetwork: string,
+): { payload: PaymentPayload; requirements: PaymentRequirements } {
+  const rawPayload = body["paymentPayload"] ?? body["payload"];
+  const rawRequirements = body["paymentRequirements"] ?? body["accepted"];
+
+  // Monad's envelope sends the bare `{signature, authorization}`; the others wrap it with the
+  // scheme and network, which for the bare form can only be this gateway's own.
+  const envelope =
+    rawPayload && typeof rawPayload === "object" && "payload" in rawPayload
+      ? rawPayload
+      : { x402Version: 2, scheme: "exact", network: fallbackNetwork, payload: rawPayload };
+  const payload = PaymentPayloadSchema.safeParse(envelope);
+  if (!payload.success) throw new ValidationError("x402 verify: unreadable payment payload");
+
+  // Monad's envelope also lifts `resource` out of the requirements; v2 keeps it inside.
+  const withResource =
+    rawRequirements && typeof rawRequirements === "object" && !("resource" in rawRequirements)
+      ? { ...(rawRequirements as object), resource: body["resource"] ?? VERIFY_ONLY_RESOURCE }
+      : rawRequirements;
+  const v2 = PaymentRequirementsV2Schema.safeParse(withResource);
+  if (v2.success) return { payload: payload.data, requirements: fromRequirementsV2(v2.data) };
+  const v1 = PaymentRequirementsSchema.safeParse(rawRequirements);
+  if (v1.success) return { payload: payload.data, requirements: v1.data };
+  throw new ValidationError("x402 verify: unreadable payment requirements");
+}
+
+/** Stand-in for the `resource` a verify-only caller has no reason to name. */
+const VERIFY_ONLY_RESOURCE = {
   url: "https://firsthand.invalid/x402/verify",
   description: "verification only",
   mimeType: "application/json",
@@ -897,10 +932,6 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     );
   });
 
-  // ── relay ───────────────────────────────────────────────────────────────────────────────────
-  // For clients that hold no key (the capture PWA). Authorisation is inside the calldata — a P-256
-  // signature under the contract's own EIP-712 domain — so relaying cannot change what a call means.
-
   // ── x402 verification, offered ──────────────────────────────────────────────────────────────
   // FIRSTHAND needed a real "exact"-scheme verifier for its own gate; there is no reason to keep
   // it private. `/verify` is free and read-only. There is deliberately no `/settle`: settling
@@ -921,35 +952,14 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     async (c) => {
       const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
       if (!body) throw new ValidationError("x402 verify: a JSON body is required");
-      // Both published envelopes, and v1's, so any client's shape is understood.
-      const rawPayload = body["paymentPayload"] ?? body["payload"];
-      const rawRequirements = body["paymentRequirements"] ?? body["accepted"];
-      const resource = body["resource"];
-      const payload = PaymentPayloadSchema.safeParse(
-        rawPayload && typeof rawPayload === "object" && "payload" in rawPayload
-          ? rawPayload
-          : { x402Version: 2, scheme: "exact", network: config.X402_NETWORK, payload: rawPayload },
-      );
-      if (!payload.success) throw new ValidationError("x402 verify: unreadable payment payload");
-      const v2 = PaymentRequirementsV2Schema.safeParse(
-        rawRequirements && typeof rawRequirements === "object" && !("resource" in rawRequirements)
-          ? { ...(rawRequirements as object), resource: resource ?? EMPTY_RESOURCE }
-          : rawRequirements,
-      );
-      const requirements = v2.success
-        ? fromRequirementsV2(v2.data)
-        : PaymentRequirementsSchema.safeParse(rawRequirements);
-      const resolved =
-        v2.success || (requirements as { success?: boolean }).success === true
-          ? v2.success
-            ? (requirements as ReturnType<typeof fromRequirementsV2>)
-            : (requirements as { data: PaymentRequirements }).data
-          : null;
-      if (!resolved) throw new ValidationError("x402 verify: unreadable payment requirements");
-      const verdict = await localFacilitator.verify(payload.data, resolved);
-      return c.json(jsonSafe(verdict));
+      const { payload, requirements } = parseVerifyRequest(body, config.X402_NETWORK);
+      return c.json(jsonSafe(await localFacilitator.verify(payload, requirements)));
     },
   );
+
+  // ── relay ───────────────────────────────────────────────────────────────────────────────────
+  // For clients that hold no key (the capture PWA). Authorisation is inside the calldata — a P-256
+  // signature under the contract's own EIP-712 domain — so relaying cannot change what a call means.
 
   app.get("/v1/relay/capabilities", (c) =>
     relay

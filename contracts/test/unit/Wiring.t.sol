@@ -2,7 +2,6 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {NotImplemented} from "../../src/Errors.sol";
 import {PrincipalRegistry} from "../../src/PrincipalRegistry.sol";
 import {Rescissions} from "../../src/Rescissions.sol";
 import {PassportAnchorsBaseline} from "../../src/PassportAnchorsBaseline.sol";
@@ -17,8 +16,11 @@ import {EpochLib} from "../../src/libraries/EpochLib.sol";
 import {PassportLib} from "../../src/libraries/PassportLib.sol";
 import {BatchProof, GrantStatus, TermsInput, TransferAuthorization} from "../../src/types/Structs.sol";
 
-/// @dev Every stub deploys, wires its immutables, answers its views, and reverts NotImplemented where expected.
-contract StubsTest is Test {
+/// @dev Deployment wiring: every contract deploys, binds its immutables, and answers its views against a
+/// live neighbour rather than a mock. Named for stubs once, when each entry point still reverted
+/// `NotImplemented`; every phase has since landed and that error no longer exists, so this asserts the
+/// thing it always actually asserted — that the system wires up.
+contract WiringTest is Test {
     uint64 internal constant GENESIS = 1_700_000_000;
     PrincipalRegistry internal registry;
     Rescissions internal rescissions;

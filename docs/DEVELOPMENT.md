@@ -15,7 +15,7 @@
 | `pnpm coverage` | per-package coverage; core/crypto ≥ 95 %, contract libraries ≥ 95 % |
 | `pnpm vectors:gen` / `pnpm vectors:check` | regenerate / verify golden vectors |
 | `pnpm check:deps` | assert the dependency graph (ADR-0001) |
-| `pnpm check:all` | everything CI runs, in order — lint, dependency rules, build, typecheck, coverage, golden vectors, and `forge test` when Foundry is installed (skipped with a printed reason otherwise) |
+| `pnpm check:all` | lint, dependency rules, `.env.example` drift, build, typecheck, coverage, golden vectors, and the Solidity gate when Foundry is installed (skipped with a printed reason otherwise). Everything here also runs in CI, but **CI is stricter**: it adds `forge build --sizes`, runs `forge test` under `FOUNDRY_PROFILE=ci` (10 000 fuzz runs, not 256), gates `src/libraries/` coverage at 95 %, does a deploy dry-run, and runs the anvil round-trips and the experiments' on-chain arms. Passing this locally is necessary, not sufficient — see `.github/workflows/ci.yml` |
 | `pnpm --filter @firsthand/experiments s1 -- --n 10000` | run a scenario; `report` renders results |
 
 ## Start here

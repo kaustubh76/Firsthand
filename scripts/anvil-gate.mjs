@@ -8,13 +8,17 @@
  * RELAYER_PRIVATE_KEY were unset — a green gate that measured nothing, which is worse than a red
  * one. This script refuses to be that: it finds the chain and the deployment itself, fills in what
  * CI passes explicitly, and when it cannot, says which precondition failed and the command that
- * fixes it. Silence is never an outcome here.
+ * fixes it. Then it counts the tests that actually ran and fails if the answer is zero, because
+ * "turbo had nothing to do" and "the round trips pass" must never look the same from outside.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: the latter stays percent-encoded, so a checkout under a path
+// with a space resolves to a directory that does not exist.
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RPC = process.env["ANVIL_RPC_URL"] ?? "http://127.0.0.1:8545";
 /** anvil's well-known account #1 — a published test key for a throwaway chain, the same one CI uses. */
 const ANVIL_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
@@ -25,23 +29,42 @@ function die(what, fix) {
   process.exit(1);
 }
 
+/**
+ * Enrolment verifies a P-256 signature through the RIP-7212 precompile. Foundry before 1.7 hides it
+ * behind `--odyssey`; 1.7 removed the flag and ships it by default. Ask the installed binary rather
+ * than naming a flag — CI still pins v1.1.0, so a hard-coded message is wrong for somebody.
+ */
+function anvilFlags() {
+  const help = spawnSync("anvil", ["--help"], { encoding: "utf8" });
+  if (help.error) return null;
+  return help.stdout?.includes("--odyssey") ? "--odyssey --silent" : "--silent";
+}
+
 async function rpc(method, params = []) {
   const res = await fetch(RPC, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
-  return (await res.json()).result;
+  if (!res.ok) throw new Error(`${method}: HTTP ${res.status}`);
+  const body = await res.json();
+  // A JSON-RPC error is a node fault, not a verdict about the deployment — surface it as itself,
+  // or the caller below blames a stale document for what is really an unreachable chain.
+  if (body.error) throw new Error(`${method}: ${body.error.message ?? JSON.stringify(body.error)}`);
+  return body.result;
 }
+
+const flags = anvilFlags();
+const startCmd =
+  flags === null
+    ? "install Foundry (https://getfoundry.sh), then: anvil --silent --port 8545 &"
+    : `anvil ${flags} --port 8545 &`;
 
 let chainId;
 try {
   chainId = await rpc("eth_chainId");
-} catch {
-  die(
-    `no chain answering at ${RPC}`,
-    "anvil --silent --port 8545 &   # on foundry before 1.7, add --odyssey for the RIP-7212 precompile",
-  );
+} catch (err) {
+  die(`no chain answering at ${RPC} (${err.message})`, startCmd);
 }
 console.log(`anvil-gate: chain ${Number(chainId)} at ${RPC}`);
 
@@ -52,11 +75,19 @@ if (!existsSync(deployments)) {
   );
 }
 
-// A document left over from a previous anvil run points at addresses this chain has never heard of,
-// and the suites would fail deep inside a call rather than here. Ask the chain instead of trusting
-// the file.
+// A document left over from a previous anvil points at addresses this chain has never heard of, and
+// the suites would fail deep inside a call rather than here. Ask the chain instead of trusting the
+// file.
 const doc = JSON.parse(readFileSync(deployments, "utf8"));
-const code = await rpc("eth_getCode", [doc.PrincipalRegistry, "latest"]);
+if (typeof doc.PrincipalRegistry !== "string") {
+  die(`${deployments} has no PrincipalRegistry address — is it a deployment document?`, startCmd);
+}
+let code;
+try {
+  code = await rpc("eth_getCode", [doc.PrincipalRegistry, "latest"]);
+} catch (err) {
+  die(`the chain at ${RPC} stopped answering (${err.message})`, startCmd);
+}
 if (!code || code === "0x") {
   die(
     `${deployments} names PrincipalRegistry at ${doc.PrincipalRegistry}, but this chain has no code there — the document is from an earlier anvil`,
@@ -70,11 +101,37 @@ const env = {
   DEPLOYMENTS_FILE: deployments,
   RELAYER_PRIVATE_KEY: process.env["RELAYER_PRIVATE_KEY"] ?? ANVIL_KEY,
 };
-// --force, deliberately: these suites depend on the state of a chain turbo cannot hash, so a cache
-// hit would replay an old verdict — including, before this script existed, a cached *skip*.
-const r = spawnSync("pnpm", ["turbo", "run", "test:anvil", "--concurrency=1", "--force"], {
+// No --force: turbo.json already declares `"cache": false` for this task, because it depends on
+// chain state turbo cannot hash. --force would additionally invalidate the whole ^build closure and
+// rebuild the contracts inside a step named for the round trips.
+const child = spawn("pnpm", ["turbo", "run", "test:anvil", "--concurrency=1"], {
   cwd: root,
-  stdio: "inherit",
   env,
+  stdio: ["inherit", "pipe", "pipe"],
 });
-process.exit(r.status ?? 1);
+
+let transcript = "";
+for (const [stream, sink] of [
+  [child.stdout, process.stdout],
+  [child.stderr, process.stderr],
+]) {
+  stream.on("data", (chunk) => {
+    transcript += chunk.toString();
+    sink.write(chunk);
+  });
+}
+const status = await new Promise((resolve) => child.on("close", resolve));
+if (status !== 0) process.exit(status ?? 1);
+
+// The whole point of this script: turbo exiting 0 is not evidence. Count what vitest reported.
+// Strip the colour codes first — turbo writes `Tests \x1b[1m\x1b[32m11 passed`, so a regex over the
+// raw bytes finds nothing and this check would report zero on a perfectly good run.
+const plain = transcript.replace(/\u001b\[[0-9;]*m/g, "");
+const ran = [...plain.matchAll(/Tests\s+(\d+) passed/g)].reduce((n, m) => n + Number(m[1]), 0);
+if (ran === 0) {
+  die(
+    "turbo succeeded but no test reported running — the suites were skipped, or no package declares `test:anvil` any more",
+    "check that packages/sdk and apps/gateway still have a test:anvil script, and that test/anvil/** is not empty",
+  );
+}
+console.log(`\nanvil-gate: ${ran} tests ran against the chain at ${RPC}`);

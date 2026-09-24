@@ -5,7 +5,6 @@ import {
   decodeEventLog,
   hexToString,
   type PublicClient,
-  stringToHex,
   type Transport,
   type WalletClient,
 } from "viem";
@@ -236,5 +235,3 @@ export function decodeCard(raw: `0x${string}`): Bytes32 | null {
 export function cardMetadata(cardId: Bytes32): { key: string; value: `0x${string}` } {
   return { key: CARD_METADATA_KEY, value: cardId };
 }
-
-export { stringToHex as metadataText };

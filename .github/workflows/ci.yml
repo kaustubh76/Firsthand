@@ -30,6 +30,8 @@ jobs:
         run: pnpm lint
       - name: Dependency graph (privacy boundary)
         run: pnpm check:deps
+      - name: .env.example documents every key the apps read
+        run: pnpm check:env
       - name: Build
         run: pnpm build
       - name: Typecheck

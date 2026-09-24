@@ -43,7 +43,9 @@ export type {
   ConsentEvent,
   ConsentEventKind,
   ConsentLedger,
+  ConsentTimeline,
   LedgerScan,
+  LedgerScanReport,
   ReceiptView,
 } from "./ports/ConsentLedger.js";
 export type {
@@ -61,6 +63,7 @@ export type {
 } from "./ports/GrantReader.js";
 export type { ObjectStoreClient } from "./ports/ObjectStore.js";
 export type { PassportCatalog } from "./ports/PassportCatalog.js";
+export { LIST_LIMIT } from "./ports/PassportCatalog.js";
 export type { Settlement, SettleRequest, SettleResult } from "./ports/Settlement.js";
 export { splitSignature } from "./ports/Settlement.js";
 export type {

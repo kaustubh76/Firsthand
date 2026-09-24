@@ -49,7 +49,7 @@ and `demand.test.ts`.
 |---|---|---|
 | `AnchorWriter` (`anchor`, `isAnchored`, `isIncluded`, `anchorOf`) | supply | `OnchainAnchorWriter` (viem) |
 | `TxTransport` | supply | `PublicMempoolTransport`; `BtxTransport` (sign → seal → post, refuses `FH_BTX_UNAVAILABLE` until the node knows the method — BTX is not on Monad testnet 2026-09) |
-| `BlobStore` | supply | `FsBlobStore`, `IpfsBlobStore`, `ObjectBlobStore` (any `ObjectStore`), memory |
+| `BlobStore` | supply | `FsBlobStore`, `ObjectBlobStore` (any `ObjectStore`), memory; `IpfsBlobStore` is a typed shell whose three methods throw `NotImplementedError` and which no app can select (`BLOB_STORE` has no `ipfs` value) |
 | `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog`, `ObjectPassportCatalog`, memory |
 | `ObjectStore` (`put`, `get`, `list`) | gateway | Vercel Blob (`apps/gateway/src/storage/vercelBlob.ts`), memory — what lets the hosted gateway survive a cold start |
 | `Erc8004Registry` | demand | `OnchainErc8004Registry`, memory |

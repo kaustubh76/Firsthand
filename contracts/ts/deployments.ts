@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 /**
  * Deployment addresses written by `script/Deploy.s.sol` into `deployments/<chainId>.json`.
@@ -26,8 +24,6 @@ export interface Deployment {
   readonly revealWindowBlocks: number;
 }
 
-const DEPLOYMENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "deployments");
-
 const ADDRESS_KEYS = [
   "PrincipalRegistry",
   "Rescissions",
@@ -42,10 +38,6 @@ const ADDRESS_KEYS = [
 ] as const;
 
 const NUMBER_KEYS = ["chainId", "genesis", "epochLength", "revealWindowBlocks"] as const;
-
-export function deploymentPath(chainId: number | bigint): string {
-  return join(DEPLOYMENTS_DIR, `${chainId}.json`);
-}
 
 /**
  * Validates every field the apps rely on, not just the addresses: a truncated or hand-edited file
@@ -91,19 +83,4 @@ export function loadDeployment(path: string): Deployment {
     throw new Error(`deployment file ${path} is not valid JSON`, { cause });
   }
   return parseDeployment(raw, `deployment ${path}`);
-}
-
-/** Throws with a precise message when no deployment exists for `chainId`. */
-export function getDeployment(chainId: number | bigint): Deployment {
-  const path = deploymentPath(chainId);
-  try {
-    readFileSync(path, "utf8");
-  } catch (cause) {
-    throw new Error(`no deployment for chain ${chainId} (expected ${path})`, { cause });
-  }
-  const d = loadDeployment(path);
-  if (BigInt(d.chainId) !== BigInt(chainId)) {
-    throw new Error(`deployment ${path} is for chain ${d.chainId}, not ${chainId}`);
-  }
-  return d;
 }

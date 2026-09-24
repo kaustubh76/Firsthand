@@ -10,11 +10,15 @@ import { noopLogger } from "@firsthand/runtime";
 import { FirsthandClient } from "@firsthand/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "./config.js";
 import { createMcpServer } from "./server.js";
 
-async function connect(canBroadcast = true, delegation?: string) {
+async function connect(
+  canBroadcast = true,
+  delegation?: string,
+  extra: { gatewayUrl?: string; agentId?: bigint } = {},
+) {
   StaticPrfSource.resetWarning();
   const fh = new FirsthandClient({
     domain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
@@ -45,6 +49,7 @@ async function connect(canBroadcast = true, delegation?: string) {
     canBroadcast,
     canAnchor: false, // memory anchors: deposits stay local, the tool says so in its warning
     passportDomain: { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` as Address },
+    ...extra,
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -363,5 +368,76 @@ describe("config", () => {
       "monad_sendSealedTransaction",
     );
     expect(() => loadConfig({ BTX_RPC_URL: "not a url" })).toThrow();
+  });
+});
+
+describe("the buyer-side and portability tools say what they need", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  type Mcp = Awaited<ReturnType<typeof connect>>;
+  const call = async (client: Mcp, name: string, args: Record<string, unknown> = {}) =>
+    textOf((await client.callTool({ name, arguments: args })) as { content: unknown });
+
+  // Five of the seventeen tools had no test at all: the exit pair and the buyer-onboarding pair,
+  // which are two of the features the last passes were about, plus the reputation read. An operator
+  // meets these first as refusals when a key or URL is missing, so the refusal is the contract — it
+  // has to name the variable to set, not merely fail.
+  it("export_locker and import_locker need a gateway, and name it", async () => {
+    const client = await connect();
+    for (const name of ["firsthand_export_locker", "firsthand_import_locker"]) {
+      const r = await call(client, name, { path: "/tmp/does-not-matter.json" });
+      expect(r.error, name).toBe("FH_INTERNAL");
+      expect(r.message, name).toContain("GATEWAY_URL");
+    }
+  });
+
+  it("register_card and accept_terms need buyer keys, and name both", async () => {
+    const client = await connect();
+    const card = await call(client, "firsthand_register_card");
+    expect(card.message).toContain("BUYER_PRIVATE_KEY");
+    expect(card.message).toContain("GRANTEE_SEED_HEX");
+    const terms = await call(client, "firsthand_accept_terms", {
+      principalId: `0x${"33".repeat(32)}`,
+      ns: 0,
+      priceUnits: "1000",
+      payee: `0x${"44".repeat(20)}`,
+    });
+    expect(terms.message).toContain("BUYER_PRIVATE_KEY");
+  });
+
+  it("agent_reputation needs a gateway first, then an agent id", async () => {
+    const bare = await connect();
+    expect((await call(bare, "firsthand_agent_reputation")).message).toContain("GATEWAY_URL");
+
+    const withGateway = await connect(true, undefined, { gatewayUrl: "http://gw" });
+    expect((await call(withGateway, "firsthand_agent_reputation")).message).toContain(
+      "BUYER_AGENT_ID",
+    );
+  });
+
+  it("agent_reputation reads the gateway, and reports a refusal as one", async () => {
+    const client = await connect(true, undefined, { gatewayUrl: "http://gw", agentId: 1925n });
+    // BUYER_AGENT_ID is used when the caller names no agent…
+    vi.stubGlobal("fetch", async (url: string) => {
+      expect(String(url)).toBe("http://gw/v1/agents/1925");
+      return new Response(
+        JSON.stringify({ agentId: "1925", reputation: { paidQueriesHere: "2" } }),
+        {
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+    expect((await call(client, "firsthand_agent_reputation")).reputation.paidQueriesHere).toBe("2");
+
+    // …and an explicit agentId overrides it; a gateway that refuses is reported, not swallowed.
+    vi.stubGlobal("fetch", async (url: string) => {
+      expect(String(url)).toBe("http://gw/v1/agents/7");
+      return new Response("nope", { status: 404 });
+    });
+    expect((await call(client, "firsthand_agent_reputation", { agentId: "7" })).message).toContain(
+      "404",
+    );
   });
 });

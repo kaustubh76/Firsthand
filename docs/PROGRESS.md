@@ -609,6 +609,15 @@ itself and then going to look. The remedies are therefore gates, not fixes: the 
 anvil gate that counts what ran, `forge fmt` in the local gate, `check:env` in CI, and a coverage
 floor on the buyer-agent template, which had 531 lines, zero tests and a green suite.
 
+**CI has not run since 20 Sep, and not for a code reason.** Every workflow run since then was
+refused before its first step: *"The job was not started because recent account payments have failed
+or your spending limit needs to be increased."* That is a GitHub billing state on the account, not a
+failing gate — but it means two things worth saying out loud. The Actions tab shows four days of red
+to anyone who looks, and every sentence in this repo of the form "CI runs X" has been aspirational
+for those four days. The gates themselves are green locally, including the six that only CI runs;
+until billing is restored, `pnpm check:all`, `pnpm test:anvil` and the browser tier are the evidence,
+and they are the ones quoted above.
+
 **Known and still unfixed:** `forge fmt` is not stable across Foundry versions — CI pins v1.1.0 and
 a current toolchain rewraps 40 files — so the local gate reports the difference instead of enforcing
 it, and says why. Reformatting the whole contract tree three weeks before judging buys nothing.

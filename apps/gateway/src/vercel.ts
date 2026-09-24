@@ -40,7 +40,7 @@ const defaults: Record<string, string> = {
   // Vercel rejects request bodies above ~4.5 MB before the function runs (measured: 5 MB → 413);
   // publish a limit the PWA can honour instead of letting a photo fail at the edge.
   MAX_UPLOAD_BYTES: String(4 * 1024 * 1024),
-  // Per IP, per function instance. A judging room shares one NAT and runs the ~12-relay script
+  // Per IP, per function instance. A judging room shares one NAT and runs the ~16-relay script
   // more than once, so the burst is generous; the refill still bounds a stranger looping on the
   // relay (the faucet is capped per call as well, RELAY_FAUCET_MAX_UNITS).
   RATE_LIMIT_CAPACITY: "60",

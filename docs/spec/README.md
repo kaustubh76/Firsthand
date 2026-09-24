@@ -49,11 +49,13 @@ and `demand.test.ts`.
 |---|---|---|
 | `AnchorWriter` (`anchor`, `isAnchored`, `isIncluded`, `anchorOf`) | supply | `OnchainAnchorWriter` (viem) |
 | `TxTransport` | supply | `PublicMempoolTransport`; `BtxTransport` (sign → seal → post, refuses `FH_BTX_UNAVAILABLE` until the node knows the method — BTX is not on Monad testnet 2026-09) |
-| `BlobStore` | supply | memory / fs |
-| `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog` |
+| `BlobStore` | supply | `FsBlobStore`, `IpfsBlobStore`, `ObjectBlobStore` (any `ObjectStore`), memory |
+| `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog`, `ObjectPassportCatalog`, memory |
+| `ObjectStore` (`put`, `get`, `list`) | gateway | Vercel Blob (`apps/gateway/src/storage/vercelBlob.ts`), memory — what lets the hosted gateway survive a cold start |
+| `Erc8004Registry` | demand | `OnchainErc8004Registry`, memory |
 | `GrantReader` (`grantState`, `effectiveStatus`, `cardOf`, `termsOf`, `wrapRefOf`, `principalLiveness`, `currentEpoch`, `chainTime`) | demand | `OnchainGrantReader` |
 | `Settlement` (`settle(grantId, terms, payment) → receipt`) | demand | `OnchainSettlement` → `RoyaltyRouter.settle` |
-| `PaymentFacilitator` | demand | memory; Monad x402 facilitator in Phase 5 |
+| `X402Facilitator` (`verify`, `settle`, `supported`) | demand | `MonadFacilitatorClient` (Monad's native facilitator, x402 v2 — live); `LocalFacilitator` (own EIP-3009 verification, no third party); `FallbackFacilitator`; memory |
 | `ConsentLedger` (`receiptsForGrant`, `anchorsFor`, `consentTimeline`) | audit | `LogsConsentLedger` (viem `getLogs`, live today); `EnvioConsentLedger` indexed, Phase 5 (ADR-0013) |
 
 ## D. The verification predicate

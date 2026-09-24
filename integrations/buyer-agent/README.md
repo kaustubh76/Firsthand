@@ -11,6 +11,13 @@ BUYER_PRIVATE_KEY=0x…  \
 pnpm --filter @firsthand/buyer-agent buy -- --principal 0x<from the human's locker link> [--erc8004] [--label "My agent"]
 ```
 
+`--principal <id>` lists what that human has published and buys the first passport; `--passport <id>`
+skips the listing and buys exactly that one — which is what you want once you know which datum you
+are after, or when a gateway hosts more than one seller. One of the two is required. `--erc8004`
+registers the agent on the Identity Registry first (it pays its own gas, ~0.07 MON), so the venue
+can credit its paid queries; `--label` is the name that registration and the human's approval link
+carry.
+
 | Step (`src/lib.ts`) | What it uses | Gas? |
 | --- | --- | --- |
 | `discover` | `GET /.well-known/firsthand.json` — chain, contracts, relay, x402 asset, ERC-8004 registries, app URL | — |

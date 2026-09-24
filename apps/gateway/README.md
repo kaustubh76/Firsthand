@@ -7,6 +7,10 @@ Routes: `GET /healthz`, `GET /.well-known/firsthand.json` (discovery),
 `GET /v1/query/:grantId/:passportId` (402 priced from the sidecar's terms → `X-PAYMENT` → `verify()`
 → settle → `{sidecar, blob, wrappedDek, receipt}`), `GET /v1/passports/:id` (public sidecar),
 `GET /v1/blobs/:id` (ciphertext), `GET /v1/grants/:id/wrap`, `GET /v1/anchors/:root`;
+the Consent Ledger — `GET /v1/principals/:id/timeline` (deposits, grants, queries and rescissions as
+one ordered account), `GET /v1/principals/:id/passports`, `GET /v1/principals/:id/anchors`,
+`GET /v1/grants/:id/receipts`; `GET /v1/agents/:agentId` (ERC-8004 reputation),
+`GET /x402/supported` and `POST /x402/verify` (x402 v2 — ADR-0014);
 `POST /v1/relay` + `GET /v1/relay/capabilities` (opt-in: submits signature-authorised calls for
 clients holding no key — allow-listed targets, zero value, simulated first); ingest
 `POST /v1/passports` (accepted only if the signature verifies, the root is anchored to the same
@@ -17,7 +21,7 @@ owner and the terms preimage matches), `POST /v1/blobs` (content-addressed), `PO
 cp .env.example .env
 pnpm --filter firsthand-gateway dev     # memory mode: no network, in-process grants + settlement
 # chain mode: DEPLOYMENTS_FILE=…/31337.json SETTLEMENT_MODE=onchain RELAYER_PRIVATE_KEY=0x…
-pnpm --filter firsthand-gateway test:anvil   # Phase 3 gate against anvil --odyssey + MockUSDC
+pnpm test:anvil                         # Phase 3 gate against a local chain + MockUSDC
 ```
 x402: the gateway speaks **v2** (CAIP-2 networks, `amount`, `PAYMENT-SIGNATURE`) and keeps v1's
 spelling beside it in `accepts`, so either generation of buyer can pay. `X402_MODE=monad` verifies

@@ -39,7 +39,7 @@ pnpm demo
 `--recurse-submodules` matters: `contracts/lib/` is empty without it and the contracts will not
 build. If you already cloned, run `git submodule update --init --recursive`.
 
-**No keys, no faucet, no accounts.** `pnpm demo` spawns a local chain, deploys the ten contracts,
+**No keys, no faucet, no accounts.** `pnpm demo` spawns a local chain, deploys the nine contracts,
 and runs the whole loop with anvil's published test keys.
 
 ## What you should see
@@ -82,7 +82,8 @@ the relayer submits and pays. Transaction hashes print as explorer links.
 | see the whole system at once | [`docs/diagrams/firsthand-product.excalidraw`](docs/diagrams/firsthand-product.excalidraw) |
 | read the measurements | [`experiments/README.md`](experiments/README.md) — including the two hypotheses that failed |
 | run it as a service | [`apps/gateway/README.md`](apps/gateway/README.md) |
-| drive it from an agent | [`apps/mcp/README.md`](apps/mcp/README.md) — seven MCP tools |
+| see what `pnpm demo` does | [`apps/demo/README.md`](apps/demo/README.md) — the ten steps and what they spin up |
+| drive it from an agent | [`apps/mcp/README.md`](apps/mcp/README.md) — 17 MCP tools |
 | know what is not built | [`docs/PROGRESS.md`](docs/PROGRESS.md) |
 
 ## If something breaks

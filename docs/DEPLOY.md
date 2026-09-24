@@ -6,7 +6,7 @@
 | Gateway | <https://firsthand-gateway.vercel.app> | `firsthand-gateway` | `deploy/gateway` (one Node function) |
 
 Both are served from **committed, prebuilt deploy trees**. The builder never builds the monorepo
-(that needs Foundry and Node 26, which Vercel's builders lack): the gateway tree is a four-dependency
+(that needs Foundry and Node 26, which Vercel's builders lack): the gateway tree is a five-dependency
 npm project whose `api/index.js` bundles every `@firsthand/*` package; the capture tree is Vite output.
 
 ## Redeploy (one command)
@@ -42,9 +42,12 @@ Everything else — chain id, the deployment document, `RELAY_ENABLED`, `RELAY_F
 MockUSDC faucet double's `mint` rides the relay, selector-scoped, so a keyless demo buyer can fund
 itself, capped at `RELAY_FAUCET_MAX_UNITS` = 1 USDC per call), `X402_MODE=monad` (payments are
 verified by Monad's native facilitator at `x402-facilitator.molandak.org`, falling back to the
-gateway's own verifier — ADR-0014), `LEDGER_MAX_SCAN_BLOCKS` (12 000)
-with `LEDGER_SCAN_BUDGET_MS` (40 s — the walk is newest-first and answers `scan.partial` instead of
-timing out), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above ~4.5 MB before the function
+gateway's own verifier — ADR-0014), `X402_NETWORK` (`eip155:10143`),
+`LEDGER_MAX_SCAN_BLOCKS` (12 000) with `LEDGER_SCAN_BUDGET_MS` (40 s — the walk is newest-first and
+answers `scan.partial` instead of timing out) and `LEDGER_MIN_REQUEST_INTERVAL_MS` / `LEDGER_MAX_IN_FLIGHT`
+(80 ms, 3 — Monad's RPC allows 15 requests per second from Vercel's egress and answers `-32007` above it),
+`ERC8004_FEEDBACK` (the relayer files `firsthand/paid-query` feedback per settled query),
+`CAPTURE_URL` (what discovery points a human at), `MAX_UPLOAD_BYTES` (4 MiB — Vercel rejects bodies above ~4.5 MB before the function
 runs; measured 5 MB → 413; discovery publishes `limits.maxUploadBytes` and the PWA sizes captures
 under it), the vercel stores, on-chain settlement, rate limits (60 burst / 0.5 per s per IP; the
 relay has its own bucket), `PUBLIC_URL` — is defaulted in `apps/gateway/src/vercel.ts` and yields
@@ -56,9 +59,15 @@ to an explicit environment variable. Secrets on the public surface: exactly two,
 
 ```bash
 GW=https://firsthand-gateway.vercel.app
-curl -s $GW/healthz                       # {"ok":true,"settlement":"onchain","blobs":"vercel"}
-curl -s $GW/.well-known/firsthand.json    # relay.enabled true, contracts of deployments/10143.json
-curl -s $GW/v1/relay/capabilities         # 200, relayer 0x0DbD…, the four allow-listed contracts
+curl -s $GW/healthz                       # ok, settlement onchain, blobs vercel, plus:
+                                          #   x402  {mode monad, network eip155:10143, lastVerifiedBy,
+                                          #          facilitator {reachable, supportsExact, kinds, signers}}
+                                          #   relayer {address, balanceMon, low}  ← refill when low is true
+curl -s $GW/.well-known/firsthand.json    # relay.enabled true, contracts of deployments/10143.json,
+                                          #   endpoints incl. timeline / receipts / principalAnchors
+curl -s $GW/x402/supported                # the schemes this gateway accepts, in x402 v2 spelling
+curl -s $GW/v1/relay/capabilities         # 200, relayer 0x0DbD…, five allow entries: the four
+                                          #   contracts plus the selector-scoped MockUSDC mint
 
 # The browser proof against the live links — the whole judge script, real transactions on Monad testnet:
 E2E_GATEWAY_URL=$GW E2E_APP_URL=https://firsthand-capture.vercel.app pnpm --filter firsthand-capture e2e

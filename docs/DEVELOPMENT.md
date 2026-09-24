@@ -107,7 +107,7 @@ automine afterwards (and asserting it did); do not run it concurrently with the 
 `LOG_LEVEL=debug` prints one line per trial.
 
 To drive the gateway by hand: `DEPLOYMENTS_FILE=$PWD/deployments/31337.json SETTLEMENT_MODE=onchain
-RELAYER_PRIVATE_KEY=… pnpm --filter @firsthand/gateway dev`, then `firsthand_query` from the MCP
+RELAYER_PRIVATE_KEY=… pnpm --filter firsthand-gateway dev`, then `firsthand_query` from the MCP
 server with `BUYER_PRIVATE_KEY` / `GRANTEE_SEED_HEX` set (`apps/mcp/.env.example`).
 
 ### Monad testnet runbook (README §16 Phase 1 gate on the real precompile)

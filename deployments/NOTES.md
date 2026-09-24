@@ -68,7 +68,7 @@ now sixteen relayed transactions with the outside buyer's handshake, its settlem
 ERC-8004 feedback — ≈ 0.3 MON of relayer gas at 102 gwei (measured 20 Sep; the earlier 0.08 figure
 was the shorter script at a quieter fee).
 
-**x402 (23 Sep).** The hosted gateway verifies every paid query with Monad's native facilitator
+**x402 (24 Sep).** The hosted gateway verifies every paid query with Monad's native facilitator
 (`https://x402-facilitator.molandak.org`, x402 v2, no auth; `/healthz` → `x402.facilitator
 {reachable: true, supportsExact: true, signers: ["0x7f6a2850669202519f0FE8aa912451238820Db86"]}`).
 Measured live: the facilitator returns `{"isValid": true}` for a FIRSTHAND payment against this

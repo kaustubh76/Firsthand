@@ -38,9 +38,9 @@ the relayer).
 
 | Role | Address | Funding |
 |---|---|---|
-| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`, and funds the browser tier's outside buyer (0.15 MON, swept back); **0.23 MON on 2026-09-21, refill (≥ 5 MON) before judging** |
+| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`, and funds the browser tier's outside buyer (0.15 MON, swept back); **7.04 MON on 2026-09-24** (funded from the hosted relayer, tx `0x15ffad85…`) |
 | Buyer | `0xE73b48c4d667aAe87cEf56624F5EDB7ba9A1CcD5` | **none** — it only signs; the relayer submits |
-| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float; refill from the faucet — **0.23 MON on 2026-09-21 (`/healthz` says `low`), refill (≥ 5 MON) before judging: one full live script ≈ 0.3 MON at 102 gwei** |
+| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float; refill from the faucet — **7.54 MON on 2026-09-24, `/healthz` says `low: false`**; one full live script ≈ 0.3 MON at 102 gwei |
 
 The hosted relayer is deliberately a separate key with a small float: the public relay spends its
 gas on request, so a stranger looping on it can only ever drain that float, never the deployer.
@@ -67,6 +67,26 @@ redeploys (Vercel Blob). Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`). 
 now sixteen relayed transactions with the outside buyer's handshake, its settlement and the
 ERC-8004 feedback — ≈ 0.3 MON of relayer gas at 102 gwei (measured 20 Sep; the earlier 0.08 figure
 was the shorter script at a quieter fee).
+
+**Live browser tier, end to end (24 Sep).** First full run against the hosted links since 20 Sep —
+ERC-8004, the robustness pass, exit/delegation, x402 and the wiring audit had all landed in between.
+`E2E_GATEWAY_URL=https://firsthand-gateway.vercel.app E2E_APP_URL=https://firsthand-capture.vercel.app
+pnpm --filter firsthand-capture e2e`. Every beat passed: enrol + attest through the hosted relay,
+note/photo/ChatGPT-import deposits anchored and published, `FH_REFUSED_ORIGIN` on unprovable origin,
+the in-browser buyer's paid x402 query, rescission then `FH_GRANT_RESCINDED` (403), the Consent
+Ledger and Lineage Manifest (2 assets, verified after a reload), a tampered proof failing in the
+Verify tab, the outside buyer registering ERC-8004 agent #1926 with its card bound and paying,
+`/x402/verify` refusing a forged signature, the locker exiting to a second gateway and the same
+grant still opening it there, the `fhd1.` delegation depositing without a passkey and refusing to
+rescind (`FH_DELEGATION_SCOPE`), and every screen fitting 390 px.
+
+**It found one real regression**, which is why it was run: the paid query credited nothing to agent
+#1926. Monad's RPC refused `getMetadata(agentId, "firsthand.card")` mid-burst with "requests limited
+to 15/sec" and the gateway logged a warning instead of retrying — see `docs/PROGRESS.md`. Fixed
+(`38bed4f`), redeployed, re-run: `/v1/agents/1926` → `paidQueriesHere: 1`. The only remaining
+failure was a transient `net::ERR_TIMED_OUT` on the last viewport check, the known live-network
+flake. **Cost: 0.64 MON on the hosted relayer and 0.19 MON on the deployer across the two runs**, at
+102 gwei — consistent with the ≈0.3 MON per script measured on 20 Sep.
 
 **x402 (24 Sep).** The hosted gateway verifies every paid query with Monad's native facilitator
 (`https://x402-facilitator.molandak.org`, x402 v2, no auth; `/healthz` → `x402.facilitator

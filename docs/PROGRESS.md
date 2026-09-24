@@ -1,7 +1,7 @@
 # FIRSTHAND — progress report
 
 **Monad Metropolis 2026 · Track 04 (Trust, Identity & AI Infrastructure) · solo build**
-Repo: <https://github.com/kaustubh76/Firsthand> · as of 17 Sep 2026
+Repo: <https://github.com/kaustubh76/Firsthand> · as of 24 Sep 2026
 **Live on Monad testnet (chainId 10143)** — addresses and costs in `deployments/NOTES.md`
 **Try it:** <https://firsthand-capture.vercel.app> (passkey → capture → anchored on Monad) ·
 gateway <https://firsthand-gateway.vercel.app>
@@ -22,8 +22,8 @@ the same answer on-chain and off.
 ## Where the build is
 
 The roadmap is verification-gated: a phase only closes when its experiment passes on a live chain.
-**Phases 0–4 of 6 are done and pushed** (54 commits), roughly two and a half weeks ahead of the
-project's own calendar.
+**Phases 0–5 of 6 are done and pushed** (135 commits), and Phase 6's two track integrations are
+live and measured, roughly two and a half weeks ahead of the project's own calendar.
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -33,13 +33,13 @@ project's own calendar.
 | 3 · Grants, payment, verify | `GrantManager`, x402 settlement, `RoyaltyRouter`, `ReceiptLedger`, `FirsthandLens` | **done** — S2 end-to-end paid query |
 | 4 · Rescind | BTX transport, commit-reveal fallback, race harness, freeze/thaw hysteresis | **done** — S3 run, H2 data collected |
 | 5 · Surfaces | quickstart + `pnpm demo`, MCP and capture PWA on the live deployment, gateway relay, Consent Ledger | **done** except Envio and the docs site |
-| 6 · Traction & freeze | two external integration PRs, testnet deploy, demo, videos | next |
+| 6 · Traction & freeze | two external integration PRs, testnet deploy, demo, videos | **both track integrations live and measured** (ERC-8004 · Monad's x402 facilitator, ADR-0014); testnet deployed; external *PRs* and videos still open |
 
-Shipped so far: 7 immutable contracts (no proxies, no admin keys) with **121 Foundry tests, 100 %
-line coverage** on `src/`, 10 000-run fuzz and invariant suites; a TypeScript monorepo of 10
-packages with **309 tests** and coverage gates; an MCP server with all seven tools; a self-hostable
-gateway that holds no key material; a capture PWA; ChatGPT/Claude importers; and an experiments
-harness whose raw traces are committed as JSON.
+Shipped so far: nine immutable contracts (no proxies, no admin keys) with **122 Foundry tests,
+100 % line coverage** on `src/`, 10 000-run fuzz and invariant suites; a TypeScript monorepo of
+eight packages plus four apps and the buyer-agent template, with **464 tests** and coverage gates;
+an MCP server with **17 tools**; a self-hostable gateway that holds no key material; a capture PWA;
+ChatGPT/Claude importers; and an experiments harness whose raw traces are committed as JSON.
 
 Every phase gate runs against a live chain in CI (`anvil --odyssey`, which ships the RIP-7212 P-256
 precompile), not just against mocks — **and all four now also pass against the real deployment on
@@ -114,8 +114,11 @@ forged anchors were refused by the contract itself.
    so I can tell whether the layout is actually hitting the page discount, or only partly?
 3. **Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
    so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?
-4. **Native x402 facilitator.** The client is built against the standard `exact` scheme; I'd like a
-   testnet facilitator URL to run interop against, plus testnet USDC with EIP-3009.
+4. ~~**Native x402 facilitator.** I'd like a testnet facilitator URL to run interop against.~~
+   **Answered 23–24 Sep** — `https://x402-facilitator.molandak.org`, x402 v2, no auth. Interop runs
+   every `pnpm --filter @firsthand/adapters test:testnet`; findings and the envelope disagreement
+   are below and in ADR-0014. One question remains: the x402 *specification's* request envelope is
+   refused (`unsupported_scheme`) and the one in Monad's own guide is accepted — which is canonical?
 5. **Integration partners (this is the big one).** Phase 6 needs two external integrations. The
    natural fits: an AI agent or data-buying team that wants provenance-checked training data with a
    receipt trail; a marketplace that wants per-asset lineage; or anyone building on ERC-8004 who
@@ -136,7 +139,7 @@ it gives accountability, not prevention, and the README says so in those words.
 - `Readme.md` — the frozen spec (mechanism, contracts, threat model, honest limitations)
 - `docs/diagrams/firsthand-product.excalidraw` — the whole system on one canvas
 - `experiments/README.md` + `experiments/results/*.json` — the measurements above, raw
-- `docs/adr/` — twelve decision records, including why each claim is or is not supported
+- `docs/adr/` — fourteen decision records, including why each claim is or is not supported
 - `docs/SECURITY.md` — derivation tree, rotation, threat model
 
 — Kaushtubh
@@ -146,10 +149,12 @@ it gives accountability, not prevention, and the README says so in those words.
 ## Short version (for a DM or a Discord mentor channel)
 
 > **FIRSTHAND** (Metropolis Track 04, solo): passkey-signed data passports + per-query x402 payment
-> + withdrawable consent. **Live on Monad testnet** — all ten contracts deployed and all four phase
+> + withdrawable consent. **Live on Monad testnet** — nine contracts deployed and all four phase
 > gates passing against the real chain, P-256 enrolment running on the native RIP-7212 precompile.
-> Phases 0–4 of 6 done: 121 Foundry tests at 100 % line coverage, gateway, MCP server, SDK, capture
-> PWA, and an experiments harness whose raw traces are committed.
+> Phases 0–5 of 6 done: 122 Foundry tests at 100 % line coverage, gateway, MCP server, SDK, capture
+> PWA, and an experiments harness whose raw traces are committed. Both track integrations are live:
+> paid queries verified by Monad's native x402 facilitator, and each one credited to the buyer's
+> ERC-8004 reputation.
 >
 > The headline result: I shipped two storage layouts specifically to test whether clustering pays on
 > Monad. On a vanilla EVM the clustered one is **1.9 % worse**; on Monad testnet it is **4.2 %
@@ -554,3 +559,56 @@ that does not exist separates the two. Live, against the hosted gateway: the pay
 
 **Still not built:** Envio handlers, the docs site, BTX (not on testnet), and the Cleanverse/CVI
 "Silver" tier, which the spec mentions (§7.2, §13) and nothing implements.
+
+---
+
+## The wiring audit, and what it disproved (24 Sep)
+
+Four passes landed in eight days, each green on `pnpm check:all`. This one added nothing. It asked
+whether every surface the code and the docs *declare* is actually reachable, whether every field a
+consumer *reads* is actually published, and whether every command a judge might type still works.
+It found nine defects, and most of them were claims this file had already made.
+
+**What was claimed here and was not true:**
+
+- *"the committed deploy trees are the bytes Vercel ships"* (above). They were not. The live app was
+  serving `/assets/index-CNKxmuim.js` while the committed `index.html` named `index-etI-5Hnx.js` and
+  the committed assets 404'd. Two internally consistent trees that were not the same bytes (`4627636`).
+- *"redeploy with `pnpm deploy:hosted`"*. It could not run at all on the Node version this repo
+  requires: `.npmrc engine-strict=true` turned a transitive dependency of the Vercel CLI into a hard
+  `npm error notsup`. The documented redeploy path had been broken since 21 Sep (`f025807`).
+- *"all four phase gates pass"*. `pnpm test:anvil` exited 0 having run **zero** tests whenever three
+  environment variables were unset, because every suite is `describe.skipIf(!enabled)`. That is how
+  it sat green while the x402 pass rewired the exact path it covers. It now finds the chain itself
+  and fails if nothing ran: 12 tests where 0 ran before (`28fdc04`).
+- *"`check:all` runs the Solidity gate"*. `forge fmt --check` ran only in CI, because `turbo.json`'s
+  `lint` task is invoked by nothing. A contributor could pass `check:all` and fail the build.
+- *"every gateway field is documented in `.env.example`"* — asserted by `config.ts` itself, while 13
+  of 46 keys were missing, including one that spends relayer gas on every paid query. Now enforced
+  by `scripts/check-env-example.mjs` rather than asserted.
+- *"the settings sheet shows the `/healthz` readout"*. When `/healthz` began reporting `x402` as an
+  object, the app kept typing it as a string and silently dropped the verifier — a publisher and its
+  only consumer disagreeing about a type, failing quietly, in the field the previous pass had just
+  added (`ca953ba`).
+- *"an off-the-shelf x402 v2 agent can now pay FIRSTHAND"*. Half true: the `PAYMENT-RESPONSE` header
+  such an agent reads was exported and never implemented (`b143d92`).
+
+**And what the live run found.** The hosted browser tier had not been run end to end since 20 Sep,
+four passes earlier. Run against the live links on 24 Sep it passed every beat except the last:
+**a paid query credited nothing to the buyer's ERC-8004 agent.** The gateway's own log named it —
+`getMetadata(agentId, "firsthand.card")` refused with "requests limited to 15/sec". The feedback
+path fires four chain reads in the same second as the query that triggers them; Monad's public RPC
+allows fifteen per second from a hosted function's shared egress and returns the refusal as a
+JSON-RPC error inside an HTTP 200, which viem does not retry. The buyer had paid, the data was
+served, the receipt was on chain, and the reputation said zero. Fixed, redeployed, and re-run
+against the live links: agent #1926 shows `paidQueriesHere: 1` (`38bed4f`).
+
+**The pattern, stated plainly, because it is the useful part:** every one of these was a claim that
+nothing checked. None was found by a test — they were found by reading what the repo asserts about
+itself and then going to look. The remedies are therefore gates, not fixes: the env drift gate, the
+anvil gate that counts what ran, `forge fmt` in the local gate, `check:env` in CI, and a coverage
+floor on the buyer-agent template, which had 531 lines, zero tests and a green suite.
+
+**Known and still unfixed:** `forge fmt` is not stable across Foundry versions — CI pins v1.1.0 and
+a current toolchain rewraps 40 files — so the local gate reports the difference instead of enforcing
+it, and says why. Reformatting the whole contract tree three weeks before judging buys nothing.

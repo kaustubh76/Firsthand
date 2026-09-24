@@ -33,6 +33,7 @@ import {
   OnchainErc8004Registry,
   OnchainGrantReader,
   OnchainSettlement,
+  PAYMENT_RESPONSE_HEADER,
   type PaymentPayload,
   PaymentPayloadSchema,
   type PaymentRequirements,
@@ -119,6 +120,14 @@ function parseVerifyRequest(
   const v1 = PaymentRequirementsSchema.safeParse(rawRequirements);
   if (v1.success) return { payload: payload.data, requirements: v1.data };
   throw new ValidationError("x402 verify: unreadable payment requirements");
+}
+
+/** base64 JSON, the encoding x402 uses for its headers (no `Buffer`: this also runs on the edge). */
+function encodeBase64Json(body: unknown): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(body));
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
 }
 
 /** Stand-in for the `resource` a verify-only caller has no reason to name. */
@@ -663,6 +672,12 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         blob: "/v1/blobs/:id",
         wrap: "/v1/grants/:grantId/wrap",
         anchors: "/v1/anchors/:root",
+        // The audit surface — the Consent Ledger a judge is pointed at — named here too, so a
+        // client that reads only this document can find it.
+        timeline: "/v1/principals/:principalId/timeline?fromBlock=",
+        principalAnchors: "/v1/principals/:principalId/anchors?ns=&fromBlock=",
+        receipts: "/v1/grants/:grantId/receipts?fromBlock=",
+        health: "/healthz",
         ingest: {
           passport: "POST /v1/passports",
           blob: "POST /v1/blobs",
@@ -737,6 +752,19 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         requirements: c.get("x402Requirements"),
         ...(agentRaw === undefined ? {} : { agentId: BigInt(agentRaw) }),
       });
+      // x402 v2 carries the settlement back in a header, so a standard client learns what happened
+      // without parsing a body it does not know. Ours is `RoyaltyRouter.settle` — the receipt is
+      // the settlement (ADR-0014) — so that is what the transaction names.
+      c.header(
+        PAYMENT_RESPONSE_HEADER,
+        encodeBase64Json({
+          success: true,
+          transaction: result.receipt.txHash,
+          network: networkId.caip2,
+          payer: c.get("x402Payload").payload.authorization.from,
+          receiptId: result.receipt.receiptId,
+        }),
+      );
       return c.json(result);
     },
   );

@@ -61,8 +61,14 @@ async function scenario(erc8004?: MemoryErc8004Registry) {
     },
   );
   if (!gw.memory) throw new Error("memory mode expected");
-  const fetchApp = ((input: string | URL | Request, init?: RequestInit) =>
-    gw.app.request(String(input).replace("http://gw", ""), init)) as unknown as typeof fetch;
+  // The buyer's own fetch, with the last `payment-response` header kept: x402 v2 returns the
+  // settlement in that header, and the SDK does not surface response headers to its caller.
+  let lastPaymentResponse: string | null = null;
+  const fetchApp = (async (input: string | URL | Request, init?: RequestInit) => {
+    const res = await gw.app.request(String(input).replace("http://gw", ""), init);
+    lastPaymentResponse = res.headers.get("payment-response") ?? lastPaymentResponse;
+    return res;
+  }) as unknown as typeof fetch;
 
   // Principal: locker anchored into the gateway's memory anchors, then published.
   const locker = await Locker.open(prfSource(1), {
@@ -144,6 +150,7 @@ async function scenario(erc8004?: MemoryErc8004Registry) {
     grantId,
     plan,
     fetchApp,
+    paymentResponse: () => lastPaymentResponse,
     plaintext,
     sidecar: sidecarFor(locker, batcher, r, terms),
   };
@@ -231,6 +238,16 @@ describe("gateway serving path (memory mode)", () => {
     );
     expect(new TextDecoder().decode(plaintext)).toBe("served plaintext");
     expect(result.receipt.receiptId).toMatch(/^0x/);
+    // x402 v2 hands the settlement back in a header, so a standard client learns what happened
+    // without parsing a body it does not know (ADR-0014).
+    const settlement = s.paymentResponse();
+    expect(settlement, "no payment-response header on a served query").toBeTruthy();
+    expect(JSON.parse(atob(settlement as string))).toMatchObject({
+      success: true,
+      network: "eip155:10143",
+      receiptId: result.receipt.receiptId,
+      payer: expect.stringMatching(/^0x[0-9a-f]{40}$/),
+    });
     expect((await s.gw.memory?.ledger.receiptsForGrant(s.grantId))?.length).toBe(1);
 
     // Second query within the rate limit (2) succeeds; the third is refused on-chain-equivalently.

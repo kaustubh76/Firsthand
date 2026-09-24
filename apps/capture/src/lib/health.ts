@@ -5,9 +5,23 @@ export interface GatewayHealth {
   readonly ok: boolean;
   readonly relayer: { address: string; balanceMon: number; low: boolean } | null;
   /** How the gateway is wired, for the settings sheet: payment scheme, settlement, blob store. */
-  readonly x402?: string | undefined;
+  readonly x402?: X402Health | undefined;
   readonly settlement?: string | undefined;
   readonly blobs?: string | undefined;
+}
+
+/**
+ * Who verifies a payment here. `/healthz` reported this as a bare string until the gateway learned
+ * to fall back between verifiers; it has been an object since, and this type is what keeps the two
+ * ends honest — `settings.test.ts` pins the rendering so a shape change fails a test rather than
+ * quietly vanishing from the sheet.
+ */
+export interface X402Health {
+  /** `memory` (offline double), `local` (this gateway verifies), `monad` (Monad's facilitator). */
+  readonly mode: string;
+  readonly network?: string | undefined;
+  /** The verifier that answered the last payment, when one has been served. */
+  readonly lastVerifiedBy?: string | undefined;
 }
 
 const HEALTH_TIMEOUT_MS = 6_000;
@@ -22,19 +36,32 @@ export async function fetchHealth(config: AppConfig): Promise<GatewayHealth | nu
     const body = (await res.json()) as {
       ok?: boolean;
       relayer?: { address?: string; balanceMon?: number; low?: boolean } | null;
-      x402?: string;
+      x402?: { mode?: unknown; network?: unknown; lastVerifiedBy?: unknown } | string;
       settlement?: string;
       blobs?: string;
     };
     const r = body.relayer;
     const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+    // Older gateways answered with a bare mode string; read both rather than dropping one.
+    const x402 =
+      typeof body.x402 === "string"
+        ? { mode: body.x402 }
+        : body.x402 && typeof body.x402.mode === "string"
+          ? {
+              mode: body.x402.mode,
+              ...(str(body.x402.network) ? { network: str(body.x402.network) } : {}),
+              ...(str(body.x402.lastVerifiedBy)
+                ? { lastVerifiedBy: str(body.x402.lastVerifiedBy) }
+                : {}),
+            }
+          : undefined;
     return {
       ok: body.ok === true,
       relayer:
         r && typeof r.address === "string" && typeof r.balanceMon === "number"
           ? { address: r.address, balanceMon: r.balanceMon, low: r.low === true }
           : null,
-      x402: str(body.x402),
+      ...(x402 ? { x402 } : {}),
       settlement: str(body.settlement),
       blobs: str(body.blobs),
     };

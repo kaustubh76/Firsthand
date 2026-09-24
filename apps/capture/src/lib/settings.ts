@@ -35,7 +35,14 @@ export function describeUploadCap(maxUploadBytes: number | null): string {
 export function describeSettlement(h: GatewayHealth | null): string {
   if (!h) return "unknown";
   const parts = [
-    h.x402 ? `x402 ${h.x402}` : null,
+    // Who checks a payment, and — once one has been served — who actually answered.
+    h.x402
+      ? `x402 ${h.x402.mode}${
+          h.x402.lastVerifiedBy && h.x402.lastVerifiedBy !== h.x402.mode
+            ? ` (verified by ${h.x402.lastVerifiedBy})`
+            : ""
+        }`
+      : null,
     h.settlement ? `settlement ${h.settlement}` : null,
     h.blobs ? `blobs ${h.blobs}` : null,
   ].filter((p): p is string => p !== null);

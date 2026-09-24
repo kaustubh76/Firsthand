@@ -26,10 +26,21 @@ describe("settings", () => {
       describeSettlement({
         ok: true,
         relayer: null,
-        x402: "monad",
+        x402: { mode: "monad" },
         settlement: "onchain",
         blobs: "vercel",
       }),
     ).toBe("x402 monad · settlement onchain · blobs vercel");
+    // `/healthz` serves x402 as an object; typing it as a string here silently dropped the verifier
+    // from the sheet for two days. Pinned so a shape change fails a test instead.
+    expect(
+      describeSettlement({
+        ok: true,
+        relayer: null,
+        x402: { mode: "monad", network: "eip155:10143", lastVerifiedBy: "local" },
+        settlement: "onchain",
+        blobs: "vercel",
+      }),
+    ).toBe("x402 monad (verified by local) · settlement onchain · blobs vercel");
   });
 });

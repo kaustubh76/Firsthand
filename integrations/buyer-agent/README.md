@@ -32,6 +32,19 @@ carry.
 | `complianceFile` | `manifestFromQueries` + `verifyManifest` — the buyer's Lineage Manifest, checked against the chain | — |
 | `reputation` | `GET /v1/agents/:id` — paid queries the venue credited to the agent on the ERC-8004 Reputation Registry | — |
 
+## Tests
+
+`pnpm --filter @firsthand/buyer-agent test` covers everything that needs no chain: the HTTP surface
+above and `resilientFetch`, which is why this template survives a serverless host — it repeats a read
+through a dropped keep-alive socket, waits out the gateway's `503 + retry-after` when its chain RPC
+is rate-limiting, and refuses to repeat a write that may already have been sent.
+
+The chain-bound half (`openBuyer`, `prepare`, `registerAgent`, `awaitGrant`, `buy`, `complianceFile`)
+is covered by the browser tier instead: `apps/capture/e2e/capture.e2e.ts` imports these exact
+functions for its outside buyer and drives them against the live links on Monad testnet, so the
+template cannot drift from what is proven. `src/buy.ts` is the CLI wrapper and is excluded from the
+coverage gate for the same reason `@firsthand/importers` excludes its own.
+
 What a partner changes: the key management (`BUYER_PRIVATE_KEY` → your signer), how the approval
 link reaches the human (chat, email, a marketplace inbox), and what you do with the plaintext. The
 manifest is the file your compliance team keeps.

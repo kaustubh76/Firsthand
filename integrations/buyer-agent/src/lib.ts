@@ -3,8 +3,6 @@ import {
   buildAgentURI,
   cardMetadata,
   createChainClients,
-  FEEDBACK_TAG1,
-  FEEDBACK_TAG2_PAID,
   HttpRelayTransport,
   monadTestnet,
   OnchainAnchorWriter,
@@ -405,5 +403,3 @@ export async function reputation(
   };
   return { owner: body.owner, ...body.reputation };
 }
-
-export const FEEDBACK_TAGS = { tag1: FEEDBACK_TAG1, tag2: FEEDBACK_TAG2_PAID } as const;

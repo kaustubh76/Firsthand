@@ -29,7 +29,7 @@
     "abi:export": "node scripts/export-abi.mjs",
     "forge:gate": "node scripts/forge-gate.mjs",
     "check:all": "pnpm lint && pnpm check:deps && pnpm check:env && pnpm build && pnpm typecheck && pnpm coverage && pnpm vectors:check && pnpm forge:gate",
-    "test:anvil": "turbo run test:anvil --concurrency=1",
+    "test:anvil": "node scripts/anvil-gate.mjs",
     "demo": "pnpm --filter firsthand-demo dev",
     "deploy:hosted": "node scripts/deploy-hosted.mjs",
     "deploy:gateway": "node scripts/deploy-hosted.mjs gateway",

@@ -1,7 +1,7 @@
 {
   "facilitator": "https://x402-facilitator.molandak.org",
   "gateway": "https://firsthand-gateway.vercel.app",
-  "at": "2026-09-24T07:18:14.118Z",
+  "at": "2026-09-24T10:33:32.728Z",
   "kinds": [
     {
       "scheme": "batch-settlement",
@@ -110,7 +110,7 @@
   "envelope": "monad-doc",
   "funding": {
     "status": 201,
-    "body": "{\"hash\":\"0xbccf69be591a99bd549866b69a3920834ccc878f6a341646bcda462a4744ee5f\",\"transport\":\"public\",\"submittedAt\":1790234296932}"
+    "body": "{\"hash\":\"0x139aea9c8044b76661efca708dadac512ef2443ef155ab15ef9804b56d3d945f\",\"transport\":\"public\",\"submittedAt\":1790246018020}"
   },
   "verify": {
     "status": 200,

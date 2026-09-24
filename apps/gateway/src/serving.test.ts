@@ -30,7 +30,7 @@ import {
   sidecarFor,
 } from "@firsthand/sdk";
 import { privateKeyToAccount } from "viem/accounts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "./config.js";
 import { createGateway } from "./server.js";
 
@@ -431,6 +431,78 @@ describe("gateway serving path (memory mode)", () => {
       identityRegistry: `0x${"80".repeat(20)}`,
       feedbackBy: reg.client,
     });
+  });
+
+  it("ERC-8004: a rate-limited RPC delays the feedback, it does not lose it", async () => {
+    // Measured on the live gateway 2026-09-24: a real paid query credited the agent nothing because
+    // `getMetadata(agentId, "firsthand.card")` — one of four chain reads fired in the same second as
+    // the query — came back "requests limited to 15/sec". Monad returns that as a JSON-RPC error
+    // inside an HTTP 200, so viem does not retry it, and the catch turned a dropped credit into a
+    // log line. Feedback runs off the response path, so it can afford to wait the window out.
+    const reg = new MemoryErc8004Registry({
+      identityRegistry: `0x${"80".repeat(20)}`,
+      reputationRegistry: `0x${"81".repeat(20)}`,
+    });
+    // The read Monad actually refused, refusing once.
+    let refusals = 0;
+    const realVerify = reg.verifyCardBinding.bind(reg);
+    reg.verifyCardBinding = async (...args) => {
+      if (refusals++ === 0) throw new Error("HTTP request failed: requests limited to 15/sec");
+      return realVerify(...args);
+    };
+    const s = await scenario(reg);
+    const agentId = reg.mint(
+      s.buyer.owner,
+      buildAgentURI({
+        name: "Outside agent",
+        description: "",
+        owner: s.buyer.owner,
+        cardId: s.buyer.cardId,
+        encryptionPubKey: s.buyer.encryptionPubKey,
+      }),
+      s.buyer.cardId,
+    );
+
+    // …and the write refused once too, which is safe to repeat: a rate limit is a refusal before
+    // the transaction reaches a mempool.
+    reg.failNext(new Error("requests limited to 15/sec"));
+
+    await s.buyer.queryAndOpen(
+      { gatewayUrl: "http://gw", grantId: s.grantId, passportId: s.r.passportId, agentId },
+      s.gw.domain,
+    );
+    await vi.waitFor(() => expect(reg.feedback).toHaveLength(1), { timeout: 10_000 });
+    expect(reg.feedback[0]).toMatchObject({ agentId, tag1: "firsthand", tag2: "paid-query" });
+    expect(refusals).toBeGreaterThan(1); // it really did retry the read
+  });
+
+  it("ERC-8004: a write that timed out is NOT retried — crediting twice is worse than crediting late", async () => {
+    // The asymmetry is deliberate. A rate limit is refused before broadcast; a timeout may be a
+    // transaction that landed and whose reply was lost, and an agent credited twice for one paid
+    // query is a lie about its reputation. So the send retries the first and never the second.
+    const reg = new MemoryErc8004Registry({
+      identityRegistry: `0x${"80".repeat(20)}`,
+      reputationRegistry: `0x${"81".repeat(20)}`,
+    });
+    const s = await scenario(reg);
+    const agentId = reg.mint(
+      s.buyer.owner,
+      buildAgentURI({
+        name: "Outside agent",
+        description: "",
+        owner: s.buyer.owner,
+        cardId: s.buyer.cardId,
+        encryptionPubKey: s.buyer.encryptionPubKey,
+      }),
+      s.buyer.cardId,
+    );
+    reg.failNext(new Error("socket hang up: request timed out"));
+    await s.buyer.queryAndOpen(
+      { gatewayUrl: "http://gw", grantId: s.grantId, passportId: s.r.passportId, agentId },
+      s.gw.domain,
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    expect(reg.feedback).toHaveLength(0);
   });
 
   it("exit: a locker bundle re-hosts on another conformant gateway, and the buyer's query works there", async () => {

@@ -9,7 +9,12 @@ import type {
   PaymentRequirements,
   Settlement,
 } from "@firsthand/adapters";
-import { FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "@firsthand/adapters";
+import {
+  classifySendError,
+  FEEDBACK_TAG1,
+  FEEDBACK_TAG2_PAID,
+  messagesOf,
+} from "@firsthand/adapters";
 import {
   type AttestationClass,
   type Bytes32,
@@ -31,7 +36,7 @@ import {
   verifyPassportSignature,
   verifyPredicate,
 } from "@firsthand/core";
-import type { Logger } from "@firsthand/runtime";
+import { type Logger, withRetry } from "@firsthand/runtime";
 
 /**
  * The serving path (README §11/§12): verified ingest, then every served query is gated by `verify()`
@@ -316,30 +321,69 @@ export class Serving {
   async #feedback(agentId: bigint, grantId: Bytes32, receiptId: Bytes32): Promise<void> {
     const rep = this.#d.reputation;
     if (!rep) return;
+    const retrying = (label: string, retryOn: (error: unknown) => boolean) => ({
+      retries: 4,
+      baseMs: 400,
+      maxMs: 4_000,
+      retryOn,
+      onRetry: (error: unknown, attempt: number, delayMs: number) =>
+        this.#d.logger.info(`reputation ${label}: rpc busy, retrying`, {
+          agentId: agentId.toString(),
+          attempt,
+          delayMs,
+          detail: messagesOf(error)[0],
+        }),
+    });
     try {
-      const g = await this.#d.grants.grantState(grantId);
-      const card = g ? await this.#d.grants.cardOf(g.granteeCard) : null;
-      if (!g || !card) return;
-      const bound = await rep.registry.verifyCardBinding(agentId, g.granteeCard, card.owner);
-      if (!bound) {
+      // Four chain reads, and they land in the same second as the query that triggered them.
+      // Monad's public RPC allows 15 requests per second from a hosted function's shared egress and
+      // answers the rest with a JSON-RPC error — which viem does not retry, because it is a 200 at
+      // the HTTP layer. Measured 2026-09-24: a live paid query credited nothing because
+      // `getMetadata(agentId, "firsthand.card")` was refused mid-burst and this catch logged a
+      // warning nobody reads. Reads are free to repeat, and this runs off the response path, so it
+      // waits the window out.
+      const bound = await withRetry(
+        async () => {
+          const g = await this.#d.grants.grantState(grantId);
+          const card = g ? await this.#d.grants.cardOf(g.granteeCard) : null;
+          if (!g || !card) return null;
+          const ok = await rep.registry.verifyCardBinding(agentId, g.granteeCard, card.owner);
+          return { ok, cardId: g.granteeCard };
+        },
+        retrying("binding", (error) => classifySendError(error).kind === "rpc"),
+      );
+      if (bound === null) return;
+      if (!bound.ok) {
         this.#d.logger.warn("agent is not bound to the grant's card; no feedback", {
           agentId: agentId.toString(),
           grantId,
         });
         return;
       }
-      const txHash = await rep.registry.giveFeedback({
-        agentId,
-        value: 1n,
-        tag1: FEEDBACK_TAG1,
-        tag2: FEEDBACK_TAG2_PAID,
-        endpoint: rep.publicUrl,
-        feedbackURI: `${rep.publicUrl}/v1/grants/${grantId}/receipts`,
-        feedbackHash: receiptId,
-      });
+      // The send retries only on rate limiting, never on a timeout. A rate-limited call is refused
+      // by the RPC before the transaction reaches a mempool, so repeating it cannot file twice; a
+      // timeout could have been a broadcast whose reply was lost, and crediting an agent twice is a
+      // worse lie than crediting it late.
+      const txHash = await withRetry(
+        () =>
+          rep.registry.giveFeedback({
+            agentId,
+            value: 1n,
+            tag1: FEEDBACK_TAG1,
+            tag2: FEEDBACK_TAG2_PAID,
+            endpoint: rep.publicUrl,
+            feedbackURI: `${rep.publicUrl}/v1/grants/${grantId}/receipts`,
+            feedbackHash: receiptId,
+          }),
+        retrying("feedback", isRateLimited),
+      );
       this.#d.logger.info("reputation feedback", { agentId: agentId.toString(), grantId, txHash });
     } catch (error) {
-      this.#d.logger.warn("reputation feedback failed", { agentId: agentId.toString(), error });
+      this.#d.logger.warn("reputation feedback failed", {
+        agentId: agentId.toString(),
+        grantId,
+        error,
+      });
     }
   }
 
@@ -414,4 +458,16 @@ function refusal(reason: VerifyFailure, grantId: Bytes32, passportId: Bytes32) {
         context,
       });
   }
+}
+
+/**
+ * Monad's public RPC answers a request over its per-second window with a JSON-RPC error carrying
+ * "requests limited to 15/sec", not an HTTP 429 — so viem sees a 200 and does not retry. This is
+ * narrower than `classifySendError(...).kind === "rpc"` on purpose: it excludes timeouts, which
+ * may have been broadcast, so it is the only class of failure a *write* may safely repeat.
+ */
+function isRateLimited(error: unknown): boolean {
+  return /rate limit|too many requests|requests limited|request limit|\b429\b/i.test(
+    messagesOf(error).join(" | "),
+  );
 }

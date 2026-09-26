@@ -348,6 +348,17 @@ async function main() {
       throw new Error(`verify: ${await verdictBox.textContent()}`);
     }
     ok("seller's manifest verifies in the Verify tab");
+    // The two questions, side by side. The manifest proves the sale, and always will — history does
+    // not change when consent ends. `FirsthandLens.verify` answers the present tense, on chain, and
+    // by now this grant has been withdrawn, so the chain refuses it. A compliance file that only
+    // said "verifies" would be telling a buyer half of what they need.
+    const consent = page.getByTestId("lens-consent");
+    await consent.waitFor({ timeout: 60_000 });
+    const consentLine = ((await consent.textContent()) ?? "").replace(/\s+/g, " ").trim();
+    if (!/FirsthandLens says 0 of 1 grant\(s\) would still be served/.test(consentLine)) {
+      throw new Error(`lens line reads: ${consentLine}`);
+    }
+    ok(`the chain, asked now: ${consentLine}`);
     const tampered = JSON.parse(sellerFile) as { assets: { proof: { index: number } }[] };
     if (tampered.assets[0])
       tampered.assets[0].proof.index = (tampered.assets[0].proof.index + 1) % 8;

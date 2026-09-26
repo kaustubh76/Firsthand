@@ -1,4 +1,4 @@
-import type { ConsentEvent, OnchainGrantReader } from "@firsthand/adapters/client";
+import type { ConsentEvent } from "@firsthand/adapters/client";
 import { type Bytes32, GrantStatus } from "@firsthand/core";
 import type { GrantEntry } from "./journal.js";
 
@@ -42,16 +42,24 @@ export function grantView(
   return { status, tone };
 }
 
-/** Effective status per grant from the chain; a failed read is "unknown", never an exception. */
+/**
+ * Effective status per grant from the chain; a failed read is "unknown", never an exception.
+ *
+ * The reader is a function rather than an object so the caller can choose which contract answers:
+ * `FirsthandLens.grantStatus` — the read-only view the Lens exists to offer a dashboard — where
+ * discovery names the Lens, and `GrantManager.effectiveStatus` where it does not. Both compute the
+ * same lazy precedence (RESCINDED > EXPIRED > FROZEN > ACTIVE); the Lens is simply the address
+ * published for being asked.
+ */
 export async function fetchGrantStatuses(
-  reader: Pick<OnchainGrantReader, "effectiveStatus">,
+  statusOf: (grantId: Bytes32) => Promise<GrantStatus>,
   ids: readonly Bytes32[],
 ): Promise<Map<Bytes32, GrantChainStatus>> {
   const out = new Map<Bytes32, GrantChainStatus>();
   await Promise.all(
     ids.map(async (id) => {
       try {
-        out.set(id, grantStatusLabel(await reader.effectiveStatus(id)));
+        out.set(id, grantStatusLabel(await statusOf(id)));
       } catch {
         out.set(id, "unknown");
       }

@@ -1,4 +1,4 @@
-import type { ConsentEvent } from "@firsthand/adapters/client";
+import type { ConsentEvent, OnchainLensReader } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
 import type { LockerSession } from "@firsthand/sdk/browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -117,7 +117,13 @@ export function LockerView({
       setStatuses(new Map());
       return;
     }
-    setStatuses(await fetchGrantStatuses(readerFor(config, client.publicClient), grantIds));
+    // Through the Lens where the gateway names it — the contract's own dashboard read (§7.3, §9) —
+    // and through GrantManager where it does not. Same precedence, published address.
+    const reader = readerFor(config, client.publicClient);
+    const statusOf = client.lens
+      ? (id: Bytes32) => (client.lens as OnchainLensReader).grantStatus(id)
+      : (id: Bytes32) => reader.effectiveStatus(id);
+    setStatuses(await fetchGrantStatuses(statusOf, grantIds));
   }, [config, client.publicClient, grantKey]);
   useEffect(() => {
     void refreshStatuses();

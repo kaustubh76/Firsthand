@@ -41,13 +41,11 @@ describe("grants", () => {
     expect(grantView(grant, [], "expired")).toEqual({ status: "expired", tone: "warn" });
   });
   it("fetchGrantStatuses never throws", async () => {
-    const reader = {
-      effectiveStatus: async (id: string) => {
-        if (id === "0xbad") throw new Error("rpc");
-        return GrantStatus.RESCINDED;
-      },
+    const statusOf = async (id: string) => {
+      if (id === "0xbad") throw new Error("rpc");
+      return GrantStatus.RESCINDED;
     };
-    const m = await fetchGrantStatuses(reader, ["0x01", "0xbad"]);
+    const m = await fetchGrantStatuses(statusOf, ["0x01", "0xbad"]);
     expect(m.get("0x01")).toBe("withdrawn");
     expect(m.get("0xbad")).toBe("unknown");
   });

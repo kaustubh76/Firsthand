@@ -9,6 +9,7 @@ import {
   MemoryTransport,
   monadTestnet,
   OnchainAnchorWriter,
+  OnchainLensReader,
   OnchainReceiptReader,
 } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
@@ -29,6 +30,12 @@ export interface CaptureClient {
    * verdict then says the payment check did not run rather than implying it passed.
    */
   readonly receipts: OnchainReceiptReader | null;
+  /**
+   * `FirsthandLens` — the chain's own answer to the verification question. Null offline and on a
+   * gateway too old to publish the address, in which case the app shows its local verdict alone
+   * rather than implying the chain agreed.
+   */
+  readonly lens: OnchainLensReader | null;
   /**
    * Waits for a relayed transaction to be mined. Relaying returns as soon as the gateway accepts the
    * transaction, so dependent calls — attest after enroll, anchor after attest — must wait, or they
@@ -73,6 +80,12 @@ export function createClient(config: AppConfig): CaptureClient {
     publicClient && config.receiptLedger !== `0x${"00".repeat(20)}`
       ? new OnchainReceiptReader({ publicClient, receiptLedger: config.receiptLedger })
       : null;
+  // The twin, asked directly. A browser auditing a manifest has the best reason of anyone to ask
+  // the chain rather than the gateway: the gateway's word is what is in question.
+  const lens =
+    publicClient && config.firsthandLens !== `0x${"00".repeat(20)}`
+      ? new OnchainLensReader({ publicClient, firsthandLens: config.firsthandLens })
+      : null;
   const client = new FirsthandClient({
     domain: { chainId: config.chainId, verifyingContract: config.passportAnchors },
     epochs: config.epochs,
@@ -97,6 +110,7 @@ export function createClient(config: AppConfig): CaptureClient {
     publicClient: (publicClient as PublicClient | null) ?? null,
     anchors,
     receipts,
+    lens,
     waitForTx: publicClient
       ? async (hash) => {
           // 90 s, not viem's 180 s: a relayed transaction that has not landed by then was dropped

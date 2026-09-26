@@ -15,6 +15,7 @@ import {
   fromRequirementsV2,
   type GrantReader,
   IpfsBlobStore,
+  LENS_REASONS,
   type LedgerScan,
   LocalFacilitator,
   LogsConsentLedger,
@@ -33,6 +34,7 @@ import {
   OnchainAnchorWriter,
   OnchainErc8004Registry,
   OnchainGrantReader,
+  OnchainLensReader,
   OnchainSettlement,
   PAYMENT_RESPONSE_HEADER,
   type PaymentPayload,
@@ -45,7 +47,6 @@ import {
 } from "@firsthand/adapters";
 import {
   EpochLibAbi,
-  FirsthandLensAbi,
   GrantManagerAbi,
   MerkleLibAbi,
   MockUSDCAbi,
@@ -63,13 +64,11 @@ import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/con
 import {
   type Address,
   type AttestationClass,
-  type Bytes32,
   Bytes32Schema,
   ConfigError,
   DEFAULT_HALF_LIFE_SECONDS,
   type Eip712Domain,
   normalizeNetwork,
-  type PassportSidecar,
   parseSidecar,
   ValidationError,
 } from "@firsthand/core";
@@ -238,59 +237,11 @@ function objectStoreClient(config: GatewayConfig) {
 }
 
 /**
- * `VerifyFailure` as the chain numbers it (`contracts/src/types/Structs.sol`), ordinal by ordinal.
- * Solidity enums cross the ABI as integers, so this is the only place the two spellings meet — and
- * `serving.test.ts` asserts it still matches `Object.keys(VerifyFailure)`, because a reason that
- * decodes to the wrong name would make the twin look like it disagreed when it did not.
+ * The ordinal map lives with the reader now, in `@firsthand/adapters` — the gateway is no longer
+ * its only caller. Re-exported because `serving.test.ts` asserts it against `Object.keys(
+ * VerifyFailure)` and the anvil round-trip imports it from here.
  */
-export const LENS_REASONS = [
-  "NONE",
-  "SIG_INVALID",
-  "MERKLE_INVALID",
-  "ROOT_UNKNOWN",
-  "TERMS_MISMATCH",
-  "EPOCH_OUT_OF_GRANT",
-  "GRANT_NOT_LIVE",
-  "GRANT_RESCINDED",
-  "GRANT_EXPIRED",
-  "GRANT_FROZEN",
-  "SCOPE_MISMATCH",
-] as const;
-
-/** The ABI wants `bytes32[8]`; a sidecar that carries any other depth is not a FIRSTHAND proof. */
-function siblings8(
-  siblings: readonly `0x${string}`[],
-): readonly [
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-  `0x${string}`,
-] {
-  if (siblings.length !== 8) {
-    throw new ValidationError("a batch proof has exactly 8 siblings (Merkle depth 8, ADR-0004)", {
-      context: { got: siblings.length },
-    });
-  }
-  return siblings as unknown as readonly [
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-    `0x${string}`,
-  ];
-}
-
-type LensVerify = (
-  sidecar: PassportSidecar,
-  grantId: Bytes32,
-) => Promise<{ ok: boolean; reason: string }>;
+export { LENS_REASONS };
 
 /** Assembles adapters from config. Memory mode needs no network — used by tests and `pnpm dev`. */
 export function createGateway(
@@ -412,7 +363,7 @@ export function createGateway(
   let relayerFloat: (() => Promise<{ address: Address; balanceWei: bigint }>) | null = null;
   let erc8004: (Erc8004Registry & Erc8004Writer) | null = overrides.erc8004 ?? null;
   /** The on-chain twin of `verifyPredicate`, when the gateway is bound to a chain that has a Lens. */
-  let lens: { address: Address; verify: LensVerify } | null = null;
+  let lens: OnchainLensReader | null = null;
   let relayerAddress: Address | null = overrides.relayerAddress ?? null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
@@ -454,25 +405,10 @@ export function createGateway(
     }
     // FirsthandLens: the same predicate, evaluated by the chain rather than by us. Read-only, so
     // it needs nothing but a public client — `GET /v1/verify/:passportId` puts the two side by side.
-    const lensAddress = d.FirsthandLens.toLowerCase() as Address;
-    lens = {
-      address: lensAddress,
-      verify: async (sidecar, grantId) => {
-        const [ok, reason] = await clients.publicClient.readContract({
-          address: lensAddress,
-          abi: FirsthandLensAbi,
-          functionName: "verify",
-          args: [
-            sidecar.signed.passport,
-            sidecar.signed.signature,
-            sidecar.batchRoot,
-            { index: sidecar.proof.index, siblings: siblings8(sidecar.proof.siblings) },
-            grantId,
-          ],
-        });
-        return { ok, reason: LENS_REASONS[Number(reason)] ?? `UNKNOWN_${reason}` };
-      },
-    };
+    lens = new OnchainLensReader({
+      publicClient: clients.publicClient,
+      firsthandLens: d.FirsthandLens.toLowerCase() as Address,
+    });
     // ERC-8004 reference registries, where the chain has them (Monad testnet/mainnet).
     const registries = new OnchainErc8004Registry({
       publicClient: clients.publicClient,
@@ -732,6 +668,9 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
             PassportAnchors: deployment.PassportAnchors,
             GrantManager: deployment.GrantManager,
             Rescissions: deployment.Rescissions,
+            // The one address discovery used to withhold, which left the Lens with no client-side
+            // reader: a browser cannot ask the chain what it cannot address.
+            FirsthandLens: deployment.FirsthandLens,
             ReceiptLedger: deployment.ReceiptLedger,
             RoyaltyRouter: deployment.RoyaltyRouter,
           }

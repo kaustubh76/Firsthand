@@ -18,6 +18,12 @@ export type { OnchainErc8004RegistryOptions } from "../erc8004/OnchainErc8004Reg
 export { cardMetadata, OnchainErc8004Registry } from "../erc8004/OnchainErc8004Registry.js";
 export type { OnchainGrantReaderOptions } from "../grants/OnchainGrantReader.js";
 export { OnchainGrantReader } from "../grants/OnchainGrantReader.js";
+export type {
+  LensSubject,
+  LensVerdict,
+  OnchainLensReaderOptions,
+} from "../lens/OnchainLensReader.js";
+export { LENS_REASONS, OnchainLensReader } from "../lens/OnchainLensReader.js";
 export * from "../memory/index.js";
 export type {
   AnchorLayout,

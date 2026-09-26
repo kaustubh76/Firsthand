@@ -14,6 +14,8 @@ export interface AppConfig {
   readonly rescissions: Address;
   readonly principalRegistry: Address;
   readonly receiptLedger: Address;
+  /** The chain's own copy of the verification predicate; zero when discovery does not name it. */
+  readonly firsthandLens: Address;
   readonly epochs: { genesis: bigint; length: bigint };
   readonly anchorsLayout: "baseline" | "paged";
   readonly relayEnabled: boolean;
@@ -85,6 +87,7 @@ function fallback(): AppConfig {
     rescissions: (env("VITE_RESCISSIONS") ?? ZERO) as Address,
     principalRegistry: (env("VITE_PRINCIPAL_REGISTRY") ?? ZERO) as Address,
     receiptLedger: ZERO,
+    firsthandLens: ZERO,
     epochs: {
       genesis: BigInt(env("VITE_EPOCH_GENESIS") ?? "0"),
       length: BigInt(env("VITE_EPOCH_LENGTH") ?? "604800"),
@@ -159,6 +162,7 @@ async function discoverOnce(doFetch: typeof fetch): Promise<AppConfig> {
       rescissions: c["Rescissions"] as Address,
       principalRegistry: c["PrincipalRegistry"] as Address,
       receiptLedger: (c["ReceiptLedger"] ?? ZERO) as Address,
+      firsthandLens: (c["FirsthandLens"] ?? ZERO) as Address,
       epochs: { genesis: BigInt(d.epochs.genesis), length: BigInt(d.epochs.length) },
       anchorsLayout: d.anchorsLayout ?? "baseline",
       relayEnabled: relay,

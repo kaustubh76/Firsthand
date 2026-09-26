@@ -29,6 +29,12 @@ export type { EnvioConsentLedgerOptions } from "./ledger/EnvioConsentLedger.js";
 export { EnvioConsentLedger } from "./ledger/EnvioConsentLedger.js";
 export type { LogsConsentLedgerOptions } from "./ledger/LogsConsentLedger.js";
 export { LogsConsentLedger } from "./ledger/LogsConsentLedger.js";
+export type {
+  LensSubject,
+  LensVerdict,
+  OnchainLensReaderOptions,
+} from "./lens/OnchainLensReader.js";
+export { LENS_REASONS, OnchainLensReader } from "./lens/OnchainLensReader.js";
 export * from "./memory/index.js";
 export type {
   AnchorLayout,

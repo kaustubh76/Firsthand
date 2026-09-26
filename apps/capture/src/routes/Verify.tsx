@@ -1,4 +1,4 @@
-import type { Bytes32, PassportSidecar } from "@firsthand/core";
+import { type Bytes32, LineageManifestSchema, type PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
@@ -6,6 +6,7 @@ import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { explainFailure } from "../lib/failures.js";
 import { blockTime, pluralise } from "../lib/format.js";
+import { askLens, describeLens, type LensReport } from "../lib/lens.js";
 import type { CaptureClient } from "../lib/locker.js";
 import {
   className,
@@ -40,6 +41,9 @@ export function Verify({
   const [agentId, setAgentId] = useState("");
   const [agent, setAgent] = useState<AgentInfo | null | "missing">(null);
   const [verdict, setVerdict] = useState<ManifestVerdict | null>(null);
+  // The chain's own answer, in the present tense — see `lib/lens.ts` for why it is a different
+  // question from the manifest's, and why both belong on screen.
+  const [lens, setLens] = useState<LensReport | null>(null);
   const [passportId, setPassportId] = useState("");
   const [sidecar, setSidecar] = useState<
     | { id: Bytes32; sidecar: PassportSidecar; anchored: boolean; block: bigint | null }
@@ -50,6 +54,7 @@ export function Verify({
   const verify = () =>
     actions.run("verify", async () => {
       setVerdict(null);
+      setLens(null);
       const parsed = JSON.parse(text) as unknown;
       // A manifest is checked against the chain, so without a chain there is nothing to check
       // against. This used to default the head to 0, which made every asset report NOT_FINAL and
@@ -61,13 +66,18 @@ export function Verify({
         );
       }
       const headBlock = await client.publicClient.getBlockNumber({ cacheTime: 0 });
-      setVerdict(
-        await verifyManifest(parsed, {
-          anchors: client.anchors,
-          headBlock,
-          ...(client.receipts ? { receipts: client.receipts } : {}),
-        }),
-      );
+      const checked = await verifyManifest(parsed, {
+        anchors: client.anchors,
+        headBlock,
+        ...(client.receipts ? { receipts: client.receipts } : {}),
+      });
+      setVerdict(checked);
+      // Whether the file verifies or not, the chain can still be asked whether consent stands; a
+      // failed read is reported as a failed read and never softens either verdict.
+      if (client.lens) {
+        const manifest = LineageManifestSchema.parse(parsed);
+        setLens(await askLens(client.lens, manifest).catch(() => null));
+      }
     });
 
   const lookup = (id: string = passportId) =>
@@ -214,6 +224,16 @@ export function Verify({
                 ? " · no asset in this file claims to have been paid for"
                 : ""}
             </p>
+            {/*
+              The Lens, beside the local verdict rather than folded into it. A manifest of a
+              rescinded grant still verifies — the sale happened — and the chain still refuses the
+              next query. Both statements are true and a compliance file needs both.
+            */}
+            {describeLens(lens) && (
+              <p className="muted" data-testid="lens-consent">
+                {describeLens(lens)}
+              </p>
+            )}
             <ul className="asset-list">
               {verdict.assets.map((a) => (
                 <li key={a.passportId}>
@@ -226,6 +246,15 @@ export function Verify({
                       <span className="error">{a.reason}</span>
                     </Pill>
                   )}
+                  {(() => {
+                    const row = lens?.rows.find((r) => r.passportId === a.passportId);
+                    if (!row) return null;
+                    return (
+                      <Pill tone={row.ok ? "ok" : "warn"}>
+                        chain: {row.ok ? "consent stands" : row.reason}
+                      </Pill>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

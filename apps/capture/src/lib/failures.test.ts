@@ -85,3 +85,17 @@ describe("health — the float and the epoch clock in the strip", () => {
     expect(describeRollover(90n)).toBe("epoch rolls over in 1 min");
   });
 });
+
+describe("the refusal a judge watches", () => {
+  it("explains FH_REFUSED_ORIGIN in a sentence, not a code", () => {
+    const sentence = explainFailure(
+      Object.assign(new Error("deposit key is not in the attested root"), {
+        code: "FH_REFUSED_ORIGIN",
+      }),
+    );
+    expect(sentence).toMatch(/never attested/);
+    expect(sentence).toMatch(/cannot be laundered/);
+    // The raw detail is kept, as every other explained failure keeps it.
+    expect(sentence).toContain("deposit key is not in the attested root");
+  });
+});

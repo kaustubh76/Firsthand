@@ -79,6 +79,11 @@ export function explainFailure(error: unknown): string {
     return `The venue's relayer is out of gas, so nothing can be written on chain until its operator tops it up. (${f.message})`;
   }
   if (f.code === "FH_RATE_LIMITED") return `${f.message}.`;
+  // §19's refusal beat is filmed. It printed the bare code, which is the right thing for a log and
+  // the wrong thing for the one moment the app has to explain itself to a room.
+  if (f.code === "FH_REFUSED_ORIGIN") {
+    return `Refused: this datum is signed by a key the locker has never attested, so it has no origin here — a scraped file cannot be laundered into a passport. (${f.message})`;
+  }
   if (f.code === "FH_PAYMENT_INVALID") {
     const reason = X402_REASONS.find(([re]) => re.test(f.message));
     if (reason) return `${reason[1]}. (${f.message})`;

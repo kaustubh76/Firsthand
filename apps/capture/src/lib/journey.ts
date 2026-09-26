@@ -24,6 +24,8 @@ export interface JourneyStep {
   readonly route: JourneyRoute | null;
   readonly target: string | null;
   readonly status: JourneyStatus;
+  /** Why a blocked beat is blocked, in words — a dashed pill that says nothing helps nobody. */
+  readonly blockedBy: string | null;
 }
 
 export interface JourneyInputs {
@@ -33,7 +35,7 @@ export interface JourneyInputs {
   readonly journal: Journal | null;
 }
 
-const BEATS: readonly Omit<JourneyStep, "status">[] = [
+const BEATS: readonly Omit<JourneyStep, "status" | "blockedBy">[] = [
   { id: "enrol", title: "Enrol", hint: "one passkey tap", route: null, target: null },
   {
     id: "activate",
@@ -96,11 +98,13 @@ export function deriveJourney(i: JourneyInputs): readonly JourneyStep[] {
   const done = doneBeats(i);
   // Offline, nothing reaches a chain: activation and everything that needs it are blocked. The
   // evidence is read from the build, so it stays reachable.
-  const blocked = new Set<JourneyStepId>();
+  const blocked = new Map<JourneyStepId, string>();
   if (!i.live)
     for (const id of ["activate", "deposit", "refusal", "recall", "ledger"] as const)
-      blocked.add(id);
-  if (!i.unlocked) for (const b of BEATS) if (b.id !== "enrol") blocked.add(b.id);
+      blocked.set(id, "needs a chain — this gateway is offline");
+  if (!i.unlocked)
+    for (const b of BEATS)
+      if (b.id !== "enrol") blocked.set(b.id, "unlock with your passkey first");
   let currentAssigned = false;
   return BEATS.map((b) => {
     let status: JourneyStatus;
@@ -110,7 +114,7 @@ export function deriveJourney(i: JourneyInputs): readonly JourneyStep[] {
       status = "current";
       currentAssigned = true;
     } else status = "todo";
-    return { ...b, status };
+    return { ...b, status, blockedBy: status === "blocked" ? (blocked.get(b.id) ?? null) : null };
   });
 }
 

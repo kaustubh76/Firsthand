@@ -47,3 +47,18 @@ describe("evidence reduction", () => {
     });
   });
 });
+
+describe("H2 says where it ran", () => {
+  it("names the local anvil venue rather than letting Monad be inferred", () => {
+    // This card sits between an H1 and an S2 card that both read "Monad testnet (10143)". Its arms
+    // ran on anvil, because Monad exposes no global mempool for a bot to watch.
+    expect(h2().chain).toMatch(/anvil/);
+    expect(h2().chain).not.toMatch(/Monad/);
+  });
+
+  it("carries the finding experiments/README.md draws, not just the failed claim", () => {
+    expect(h2().verdict).toMatch(/no targeted burst at zero idle cost/);
+    expect(h2().verdict).toMatch(/not "the race never starts"/);
+    expect(h2().verdict).toMatch(/priority fee.*not yet measured/);
+  });
+});

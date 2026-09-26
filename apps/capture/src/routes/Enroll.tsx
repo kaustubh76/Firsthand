@@ -1,6 +1,31 @@
 import { useState } from "react";
+import { JUDGES_URL } from "../lib/links.js";
 import { enrol, prfSupported } from "../lib/prf.js";
 import { Button, Icon, Notice } from "../ui/index.js";
+
+/**
+ * The protocol is three verbs (README §4), and the tabs are named after what you do rather than
+ * after them. Someone opening this cold was told how the passkey works and never what the thing
+ * is for, so the causal chain — deposit, query, rescind, and the refusal that proves the last one
+ * — had to be inferred from tab names.
+ */
+const VERBS: readonly { verb: string; where: string; what: string }[] = [
+  {
+    verb: "deposit",
+    where: "Capture",
+    what: "a note, a photo or a whole ChatGPT export becomes a Data Passport your passkey signed, anchored in a batch on Monad",
+  },
+  {
+    verb: "query",
+    where: "Recall",
+    what: "a buyer accepts your terms and pays per query over x402; the gateway checks the chain before it serves, and the receipt lands on chain",
+  },
+  {
+    verb: "rescind",
+    where: "Locker",
+    what: "you withdraw consent in one tap — publicly, or privately by commitment — and the same paid query is refused from that block on",
+  },
+];
 
 export function Enroll({ onEnrolled }: { onEnrolled: (credentialId: Uint8Array) => void }) {
   const supported = prfSupported();
@@ -54,6 +79,27 @@ export function Enroll({ onEnrolled }: { onEnrolled: (credentialId: Uint8Array) 
         </div>
         {problem && <Notice tone="bad">{problem}</Notice>}
       </div>
+      <ol className="hero-verbs" data-testid="verbs">
+        {VERBS.map((v, i) => (
+          <li key={v.verb}>
+            <span className="beat-num" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span>
+              <strong>{v.verb}</strong> <span className="hint">· {v.where} tab</span>
+              <br />
+              <span className="hint">{v.what}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="hint">
+        That last line is the point: consent you can end, dated by a chain, with the refusal
+        provable afterwards.{" "}
+        <a href={JUDGES_URL} target="_blank" rel="noreferrer">
+          the three-minute walkthrough
+        </a>
+      </p>
       <ul className="hero-facts">
         <li>
           <Icon name="check" />

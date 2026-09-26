@@ -1,5 +1,6 @@
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { type JourneyStep, journeyProgress } from "../lib/journey.js";
+import { JUDGES_URL } from "../lib/links.js";
 import { Button, Icon } from "../ui/index.js";
 import { useNavigation } from "./navigation.js";
 
@@ -24,6 +25,14 @@ export function JourneyRail({ steps }: { steps: readonly JourneyStep[] }) {
         <span>
           The script · {progress.done}/{progress.total}
         </span>
+        {/* A progress counter for a script nobody has been told about orients no one. */}
+        <span className="hint">
+          deposit · query · rescind, in seven beats — each one lit by what has actually happened on
+          chain, not by having clicked it.{" "}
+          <a href={JUDGES_URL} target="_blank" rel="noreferrer">
+            the walkthrough
+          </a>
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -43,7 +52,7 @@ export function JourneyRail({ steps }: { steps: readonly JourneyStep[] }) {
               </span>
               <span className="beat-text">
                 <span className="beat-title">{s.title}</span>
-                <span className="beat-hint">{s.hint}</span>
+                <span className="beat-hint">{s.blockedBy ?? s.hint}</span>
               </span>
             </>
           );

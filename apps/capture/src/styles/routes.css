@@ -36,6 +36,29 @@
   gap: var(--space-2);
   align-items: center;
 }
+/* The three verbs, before the passkey prompt: what the protocol is, not how the key works. */
+.hero-verbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.hero-verbs li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  background: var(--surface-2);
+}
+.hero-verbs strong {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+
 .hero-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
@@ -70,6 +93,29 @@
     align-items: center;
     padding: var(--space-6);
   }
+  /* The three verbs, before the passkey prompt: what the protocol is, not how the key works. */
+  .hero-verbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-2);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .hero-verbs li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: var(--space-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-1);
+    background: var(--surface-2, transparent);
+  }
+  .hero-verbs strong {
+    font-variant: small-caps;
+    letter-spacing: 0.02em;
+  }
+
   .hero-facts {
     grid-template-columns: 1fr;
   }

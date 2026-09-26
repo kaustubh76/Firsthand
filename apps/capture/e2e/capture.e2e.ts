@@ -196,6 +196,13 @@ async function main() {
     const statusText = (await status.textContent()) ?? "";
     if (!statusText.startsWith("live")) throw new Error(`status strip says: ${statusText}`);
     ok(`status: ${statusText}`);
+    // A judge opening this cold used to be told how the passkey works and never what the thing is
+    // for. The three verbs, and which tab each one lives on, are on the first screen.
+    const verbs = ((await page.getByTestId("verbs").textContent()) ?? "").replace(/\s+/g, " ");
+    for (const verb of ["deposit", "query", "rescind", "Capture", "Recall", "Locker"]) {
+      if (!verbs.includes(verb)) throw new Error(`the cold open does not name "${verb}": ${verbs}`);
+    }
+    ok("the cold open names deposit · query · rescind and where each one lives");
 
     step("enrol a passkey (virtual authenticator, PRF)");
     await page.getByRole("button", { name: "Create passkey" }).click();
@@ -272,6 +279,10 @@ async function main() {
     await refusal.waitFor({ timeout: 30_000 });
     const refusalText = (await refusal.textContent()) ?? "";
     if (!refusalText.startsWith("FH_REFUSED_ORIGIN")) throw new Error(`unexpected: ${refusalText}`);
+    // The beat that gets filmed: the code, and then a sentence. It used to be the code alone.
+    if (!/never attested/.test(refusalText)) {
+      throw new Error(`the refusal shows no explanation: ${refusalText}`);
+    }
     ok(refusalText);
 
     step("recall: agent → grant → paid query → withdraw → refused");

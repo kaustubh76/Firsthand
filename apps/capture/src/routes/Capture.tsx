@@ -13,7 +13,7 @@ import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { useToasts } from "../hooks/useToasts.js";
 import type { AppConfig } from "../lib/config.js";
 import { type LandingPhase, type LandOptions, land } from "../lib/deposits.js";
-import { reportFailure } from "../lib/failures.js";
+import { explainFailure, reportFailure } from "../lib/failures.js";
 import { formatBytes, pluralise } from "../lib/format.js";
 import { type DepositEntry, updateJournal } from "../lib/journal.js";
 import { canAnchor, type Liveness } from "../lib/liveness.js";
@@ -233,8 +233,10 @@ export function Capture({
         await session.acceptSigned(forged, NS.captures, plaintext);
         setRefusal("accepted — this should never happen");
       } catch (e) {
+        // The code first — it is the protocol's word and docs/JUDGES.md names it — then the
+        // sentence, because this is the beat that gets filmed.
         const err = e as Error & { code?: string };
-        setRefusal(`${err.code ?? "refused"}: ${err.message}`);
+        setRefusal(`${err.code ?? "refused"} — ${explainFailure(e)}`);
         updateJournal(session.locker.principalId, (j) => {
           j.refusalAt = Date.now();
         });

@@ -1,9 +1,9 @@
 import { h1, h2, h3, s2Cards, s4Card } from "../lib/evidence.js";
+import { JUDGES_URL, METHOD_URL, RESULTS_URL } from "../lib/links.js";
 import { Card, Icon, Pill, StatTile } from "../ui/index.js";
 
 const n = (v: number | null, digits = 0) =>
   v === null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: digits });
-const REPO = "https://github.com/kaustubh76/Firsthand";
 
 /**
  * Readme §19's last beat: the three claims with their measured numbers on screen, including the
@@ -26,13 +26,13 @@ export function Evidence() {
           same prominence.
         </p>
         <p className="evidence-links">
-          <a href={`${REPO}/tree/main/experiments/results`} target="_blank" rel="noreferrer">
+          <a href={RESULTS_URL} target="_blank" rel="noreferrer">
             <Icon name="external" /> results
           </a>
-          <a href={`${REPO}/blob/main/experiments/README.md`} target="_blank" rel="noreferrer">
+          <a href={METHOD_URL} target="_blank" rel="noreferrer">
             <Icon name="external" /> method and caveats
           </a>
-          <a href={`${REPO}/blob/main/docs/JUDGES.md`} target="_blank" rel="noreferrer">
+          <a href={JUDGES_URL} target="_blank" rel="noreferrer">
             <Icon name="external" /> the three-minute script
           </a>
         </p>
@@ -80,7 +80,7 @@ export function Evidence() {
       <Card
         icon="scissors"
         title={`H2 — rescission cannot be raced (S3, ${H2.trialsPerArm} trials per arm)`}
-        subtitle="The grantee's own bot watches the mempool and fires settlements to beat the rescission; success = ordered before the effective point on chain, blocks every 400 ms."
+        subtitle={`The grantee's own bot watches the mempool and fires settlements to beat the rescission; success = ordered before the effective point on chain. Venue: ${H2.chain} — Monad testnet exposes no global mempool, so this race cannot be run there and these arms were not.`}
         className="claim"
       >
         <div className="table-wrap">

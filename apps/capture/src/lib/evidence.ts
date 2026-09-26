@@ -26,6 +26,9 @@ const trials = (file: { trials: readonly unknown[] }) => file.trials as readonly
 /** The result files record the date, not the chain; the runs are identified in experiments/README.md. */
 export const CHAIN_BY_DATE: Readonly<Record<string, string>> = {
   "2026-09-13": "anvil (vanilla EVM)",
+  // S3. Monad testnet has no readable global mempool, so the race cannot be run there at all;
+  // the arms are anvil with the harness driving 400 ms blocks (experiments/README.md).
+  "2026-09-15": "local anvil (--odyssey), 400 ms blocks",
   "2026-09-16": "Monad testnet (10143)",
 };
 export const chainOf = (t: { startedAt: string }): string =>
@@ -89,7 +92,7 @@ export interface H2Row {
   readonly note: string;
 }
 
-export function h2(): { rows: H2Row[]; verdict: string; trialsPerArm: number } {
+export function h2(): { rows: H2Row[]; verdict: string; trialsPerArm: number; chain: string } {
   const arms: [string, string, string][] = [
     [
       "B2-public-mempool",
@@ -133,10 +136,14 @@ export function h2(): { rows: H2Row[]; verdict: string; trialsPerArm: number } {
     note: "not measurable — BTX is not deployed on Monad testnet (2026-09); the harness refuses to fake it",
   });
   const b2 = rows[0];
+  const venue = latest(trials(s3), "B2-public-mempool");
   return {
     rows,
+    // Named, because this card sits between two that say "Monad testnet (10143)" and its arms did
+    // not run there — Monad exposes no global mempool, so the race is not reproducible on it.
+    chain: venue ? chainOf(venue) : "unknown",
     trialsPerArm: m(latest(trials(s3), "B2-public-mempool"), "trials") ?? 0,
-    verdict: `The public-mempool race is real and cheap: the bot sees the pending rescission in ~${b2?.detection?.toFixed(0) ?? "?"} ms and wins ${((b2?.success ?? 0) * 100).toFixed(0)} % of trials. Commit-reveal removes the signal but not same-block fee competition — it dates the end of consent, it does not stop the last extraction. H2 as worded could not be measured without BTX.`,
+    verdict: `The public-mempool race is real and cheap: the bot sees the pending rescission in ~${b2?.detection?.toFixed(0) ?? "?"} ms and wins ${((b2?.success ?? 0) * 100).toFixed(0)} % of trials. Commit-reveal removes the signal but not same-block fee competition — it dates the end of consent, it does not stop the last extraction. H2 as worded could not be measured without BTX: the no-signal bound suggests the honest claim is "no targeted burst at zero idle cost", not "the race never starts". The obvious mitigation — the principal bidding a high priority fee so the rescission is ordered first in its block — is not yet measured.`,
   };
 }
 

@@ -47,7 +47,17 @@ export function LedgerCard({
         {e.blockNumber === null ? (
           <span>local record</span>
         ) : (
-          <span>block {e.blockNumber.toString()}</span>
+          <span>
+            {e.kind === "rescinded" ? "consent ended at block " : "block "}
+            {e.blockNumber.toString()}
+          </span>
+        )}
+        {/* The commit dated the end of consent; the reveal only recorded it, later. */}
+        {e.viaCommitReveal && (
+          <span>
+            commit-reveal
+            {e.recordedBlock === null ? "" : ` — revealed at block ${e.recordedBlock.toString()}`}
+          </span>
         )}
         {e.timestamp !== null && blockTime(e.timestamp) && <span>{blockTime(e.timestamp)}</span>}
         {e.grantId && (

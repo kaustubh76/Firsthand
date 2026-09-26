@@ -2,8 +2,18 @@ import type { ConsentEvent, ReceiptView } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
 import { readFetch } from "./fetch.js";
 
-/** Wire shape of the gateway's audit routes: bigints arrive as decimal strings. */
-type Wire<T> = { [K in keyof T]: T[K] extends bigint ? string : T[K] };
+/**
+ * Wire shape of the gateway's audit routes: bigints arrive as decimal strings. The optional arm
+ * matters — `recordedBlock` is `bigint | undefined`, which does not extend `bigint`, so without it
+ * the field would type as a bigint that is in fact a string.
+ */
+type Wire<T> = {
+  [K in keyof T]: [T[K]] extends [bigint]
+    ? string
+    : [T[K]] extends [bigint | undefined]
+      ? string | undefined
+      : T[K];
+};
 
 const base = (gatewayUrl: string) => gatewayUrl.replace(/\/+$/, "");
 const since = (fromBlock?: bigint) => (fromBlock === undefined ? "" : `?fromBlock=${fromBlock}`);
@@ -37,10 +47,13 @@ export async function fetchTimeline(
     scan?: { fromBlock: string; toBlock: string; partial: boolean; clamped: boolean };
   };
   return {
-    events: body.events.map((e) => ({
+    // `recordedBlock` is lifted out of the spread: a conditional spread over it would widen the
+    // field to `string | bigint | undefined` rather than narrowing it.
+    events: body.events.map(({ recordedBlock, ...e }) => ({
       ...e,
       blockNumber: BigInt(e.blockNumber),
       timestamp: BigInt(e.timestamp),
+      ...(recordedBlock === undefined ? {} : { recordedBlock: BigInt(recordedBlock) }),
     })),
     scan: body.scan
       ? {

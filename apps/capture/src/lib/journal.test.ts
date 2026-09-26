@@ -150,6 +150,61 @@ describe("ledger merge", () => {
     ]);
     expect(rows.filter((r) => r.txHash === tx(1))).toHaveLength(1);
   });
+
+  it("dates a journal-only rescission, as it already dated the grant", () => {
+    // The `granted` row has always carried the browser's clock; the `rescinded` row beside it
+    // passed `undefined` and rendered with neither block nor time — the one cell the Consent
+    // Ledger exists to show.
+    const p = `0x${"11".repeat(32)}` as const;
+    const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as const;
+    const rows = mergeLedger(p, [], {
+      deposits: [],
+      receipts: [],
+      grants: [
+        {
+          grantId: tx(0x99),
+          granteeCard: tx(0xca),
+          ns: 0,
+          termsHash: tx(0x7e),
+          txHash: tx(3),
+          at: 2_000_000_000_000,
+          rescindTx: tx(4),
+          rescindAt: 2_000_000_600_000,
+        },
+      ],
+    });
+    const rescinded = rows.find((r) => r.kind === "rescinded");
+    expect(rescinded?.timestamp).toBe(2_000_000_600n);
+    expect(rows.find((r) => r.kind === "granted")?.timestamp).toBe(2_000_000_000n);
+  });
+
+  it("keeps the commit's block as when consent ended, and names the reveal separately", () => {
+    const p = `0x${"11".repeat(32)}` as const;
+    const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as const;
+    const rows = mergeLedger(
+      p,
+      [
+        {
+          kind: "rescinded" as const,
+          principalId: p,
+          grantId: tx(0x99),
+          // What `LogsConsentLedger` reports: the effective block, which is the commit's.
+          blockNumber: 40n,
+          recordedBlock: 45n,
+          viaCommitReveal: true,
+          timestamp: 1_700_000_000n,
+          txHash: tx(4),
+        },
+      ],
+      { deposits: [], receipts: [], grants: [] },
+    );
+    expect(rows[0]).toMatchObject({
+      blockNumber: 40n,
+      recordedBlock: 45n,
+      viaCommitReveal: true,
+      source: "chain",
+    });
+  });
 });
 
 describe("agent binding", () => {

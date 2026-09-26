@@ -362,7 +362,10 @@ export function Recall({
       await waitForTx?.(sent.txHash, "Consent withdrawn");
       mutate((j) => {
         const g = j.grants.find((x) => x.grantId === grant);
-        if (g) g.rescindTx = sent.txHash;
+        if (g) {
+          g.rescindTx = sent.txHash;
+          g.rescindAt = Date.now();
+        }
       });
       say(
         "rescind",

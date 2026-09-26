@@ -40,6 +40,14 @@ export interface ConsentEvent {
   readonly granteeCard?: Bytes32;
   readonly ns?: number;
   readonly termsHash?: Bytes32;
+  /**
+   * `rescinded` only. `blockNumber` is when consent *ended*, which on the commit-reveal path is the
+   * commit's block — earlier than the transaction that recorded it. These two say so out loud: the
+   * block the reveal landed in, and which path was taken. A ledger that showed only the effective
+   * block would be right about the date and silent about why it predates its own transaction.
+   */
+  readonly recordedBlock?: bigint;
+  readonly viaCommitReveal?: boolean;
 }
 
 /**

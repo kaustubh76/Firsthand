@@ -128,7 +128,8 @@ describe("LogsConsentLedger — a scan the RPC will accept and a function will f
       if (event.name === "GrantRescinded")
         return [
           {
-            args: { grantId: b32(7), effectiveBlock: 480n },
+            // A commit-reveal rescission: consent ended at the commit (480), the reveal landed at 481.
+            args: { grantId: b32(7), effectiveBlock: 480n, viaCommitReveal: true },
             blockNumber: 481n,
             transactionHash: b32(14),
           },
@@ -143,8 +144,48 @@ describe("LogsConsentLedger — a scan the RPC will accept and a function will f
       ["rescinded", 480n, 4_800n],
     ]);
     expect(events[2]).toMatchObject({ granteeCard: b32(9), ns: 0, termsHash: b32(5) });
+    // The date that matters is the commit's; the reveal's own block is reported beside it, never
+    // instead of it, so a viewer can see that consent ended before the transaction that recorded it.
+    expect(events[3]).toMatchObject({
+      blockNumber: 480n,
+      recordedBlock: 481n,
+      viaCommitReveal: true,
+    });
     expect(scan).toEqual({ fromBlock: 400n, toBlock: 500n, partial: false });
     // The plain timeline is the same walk without the report.
     expect(await ledger(client).consentTimeline(b32(1), { fromBlock: 400n })).toHaveLength(4);
+  });
+
+  it("leaves a direct rescission with one block, because there is only one", async () => {
+    // The rescission scan is keyed off the grants this principal created, so the grant has to exist.
+    const { client } = fakeClient(500n, ({ event }) => {
+      if (event.name === "GrantCreated")
+        return [
+          {
+            args: {
+              grantId: b32(7),
+              principalId: b32(1),
+              granteeCard: b32(9),
+              ns: 0,
+              termsHash: b32(5),
+            },
+            blockNumber: 450n,
+            transactionHash: b32(13),
+          },
+        ];
+      if (event.name === "GrantRescinded")
+        return [
+          {
+            args: { grantId: b32(7), effectiveBlock: 470n, viaCommitReveal: false },
+            blockNumber: 470n,
+            transactionHash: b32(14),
+          },
+        ];
+      return [];
+    });
+    const { events } = await ledger(client).timeline(b32(1), { fromBlock: 400n });
+    const rescinded = events.find((e) => e.kind === "rescinded");
+    expect(rescinded).toMatchObject({ blockNumber: 470n, viaCommitReveal: false });
+    expect(rescinded).not.toHaveProperty("recordedBlock");
   });
 });

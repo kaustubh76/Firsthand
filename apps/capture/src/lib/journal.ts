@@ -26,6 +26,8 @@ export interface GrantEntry {
   readonly txHash: Bytes32;
   readonly at: number;
   rescindTx?: Bytes32;
+  /** When this browser withdrew — so a rescission older than the gateway's scan window still has a date. */
+  rescindAt?: number;
   /** The grantee's ERC-8004 agent id, when the request carried one and the binding verified. */
   agentId?: string;
   agentName?: string;

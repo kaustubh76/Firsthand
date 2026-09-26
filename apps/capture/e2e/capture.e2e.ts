@@ -816,6 +816,23 @@ async function main() {
       if (!/RESCINDED|403/.test(refused))
         throw new Error(`refused for the wrong reason: ${refused}`);
       ok(`the same buyer is refused: ${refused.slice(0, 100)}`);
+
+      // And the ledger dates it at the commit, not at the reveal — the claim the Consent Ledger
+      // exists to make, and the one the timeline used to drop on its way through the gateway.
+      const ledgerRow = page
+        .getByTestId("ledger")
+        .locator("li")
+        .filter({ hasText: "commit-reveal" })
+        .first();
+      await ledgerRow.waitFor({ timeout: 60_000 });
+      const dated = ((await ledgerRow.textContent()) ?? "").replace(/\s+/g, " ").trim();
+      const ended = /consent ended at block (\d+)/.exec(dated);
+      const revealed = /revealed at block (\d+)/.exec(dated);
+      if (!ended || !revealed) throw new Error(`ledger row reads: ${dated}`);
+      if (Number(ended[1]) >= Number(revealed[1])) {
+        throw new Error(`consent should end before the reveal that recorded it: ${dated}`);
+      }
+      ok(`ledger dates the end of consent at the commit: ${dated.slice(0, 120)}`);
     }
 
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");

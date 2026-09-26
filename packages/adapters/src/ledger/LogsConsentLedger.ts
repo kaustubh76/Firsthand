@@ -315,14 +315,14 @@ export class LogsConsentLedger implements ConsentLedger {
         };
       }),
       ...(rescinded?.items ?? []).map((l) => {
-        const a = l.args as { grantId: Bytes32; effectiveBlock: bigint };
-        return this.#event(
-          "rescinded",
-          principalId,
-          a.grantId,
-          BigInt(a.effectiveBlock),
-          l.transactionHash,
-        );
+        const a = l.args as { grantId: Bytes32; effectiveBlock: bigint; viaCommitReveal: boolean };
+        const effective = BigInt(a.effectiveBlock);
+        return {
+          ...this.#event("rescinded", principalId, a.grantId, effective, l.transactionHash),
+          // Equal on the direct path; on commit-reveal the reveal landed later than consent ended.
+          ...(l.blockNumber === effective ? {} : { recordedBlock: l.blockNumber }),
+          viaCommitReveal: a.viaCommitReveal === true,
+        };
       }),
     ];
     const blocks = await this.#timestamps(events.map((e) => e.blockNumber));

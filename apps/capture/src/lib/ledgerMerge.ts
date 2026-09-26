@@ -14,6 +14,12 @@ export interface LedgerRow {
   readonly granteeCard: Bytes32 | null;
   readonly ns: number | null;
   readonly source: "chain" | "local";
+  /**
+   * `rescinded` only: the block the transaction landed in, when consent ended earlier than that.
+   * They differ exactly on the commit-reveal path, where `blockNumber` is the commit's block.
+   */
+  readonly recordedBlock: bigint | null;
+  readonly viaCommitReveal: boolean;
 }
 
 /**
@@ -39,6 +45,8 @@ export function mergeLedger(
       granteeCard: e.granteeCard ?? null,
       ns: e.ns ?? null,
       source: "chain",
+      recordedBlock: e.recordedBlock ?? null,
+      viaCommitReveal: e.viaCommitReveal === true,
     });
   }
   // Grant details travel with a `granted` event; a rescission names only the grant, so both rows
@@ -70,6 +78,9 @@ export function mergeLedger(
         granteeCard: g?.granteeCard ?? null,
         ns: g?.ns ?? null,
         source: "local",
+        // A journal row knows only that this browser sent it, never which block it landed in.
+        recordedBlock: null,
+        viaCommitReveal: false,
       });
     }
   };
@@ -77,7 +88,7 @@ export function mergeLedger(
   local("attested", journal.attestTx, null, undefined);
   for (const g of journal.grants) {
     local("granted", g.txHash, g.grantId, g.at);
-    local("rescinded", g.rescindTx, g.grantId, undefined);
+    local("rescinded", g.rescindTx, g.grantId, g.rescindAt);
   }
   const order: Record<ConsentEventKind, number> = {
     enrolled: 0,

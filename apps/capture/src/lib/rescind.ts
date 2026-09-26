@@ -115,7 +115,10 @@ export async function revealRescind(
   await client.waitForTx?.(sent.txHash, "Consent withdrawn");
   updateJournal(session.locker.principalId, (j) => {
     const g = j.grants.find((x) => x.grantId === pending.grantId);
-    if (g) g.rescindTx = sent.txHash;
+    if (g) {
+      g.rescindTx = sent.txHash;
+      g.rescindAt = Date.now();
+    }
     j.pendingRescissions = (j.pendingRescissions ?? []).filter(
       (p) => p.grantId !== pending.grantId,
     );
@@ -140,7 +143,10 @@ export async function directRescind(
   await client.waitForTx?.(sent.txHash, "Consent withdrawn");
   updateJournal(session.locker.principalId, (j) => {
     const g = j.grants.find((x) => x.grantId === grantId);
-    if (g) g.rescindTx = sent.txHash;
+    if (g) {
+      g.rescindTx = sent.txHash;
+      g.rescindAt = Date.now();
+    }
   });
   return sent.txHash;
 }

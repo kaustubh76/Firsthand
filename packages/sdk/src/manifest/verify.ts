@@ -12,15 +12,27 @@ import {
 import { serialiseManifest } from "./export.js";
 
 /**
- * Offline verifier for a Lineage Manifest (H3). For every asset: signature, Merkle proof, anchored
- * root, and finality depth. Reports per-asset reasons rather than failing on the first.
+ * Offline verifier for a Lineage Manifest (H3). For every asset: signature, attestation preimage,
+ * anchored root, Merkle proof, the corpus the root belongs to, the receipt that paid for it, and
+ * finality. Reports per-asset reasons rather than failing on the first.
+ *
+ * "Offline" means *without trusting the gateway*, not without a network: roots, anchors and receipts
+ * are read from the chain, because the gateway's word is the thing being audited.
  */
 export type AssetFailure =
   | "SIG_INVALID"
   | "MERKLE_INVALID"
   | "ROOT_UNKNOWN"
   | "NOT_FINAL"
-  | "ATTESTATION_MISMATCH";
+  | "ATTESTATION_MISMATCH"
+  /** The anchored root belongs to a different principal or namespace than this manifest claims. */
+  | "SCOPE_MISMATCH"
+  /** The file's `anchorBlock` is not the block the chain anchored that root in. */
+  | "ANCHOR_MISMATCH"
+  /** The ledger has never recorded this receipt: nobody paid for this read. */
+  | "RECEIPT_UNKNOWN"
+  /** The receipt is real but does not say what the file says it says. */
+  | "RECEIPT_MISMATCH";
 
 export interface AssetVerdict {
   readonly passportId: Bytes32;
@@ -28,10 +40,30 @@ export interface AssetVerdict {
   readonly reason?: AssetFailure;
 }
 
+/**
+ * What a manifest proved about payment — and, as importantly, what it did not.
+ *
+ * Without this an auditor cannot tell a fully-paid corpus from one where nobody ever paid: both
+ * render the same green "verifies". `carried` counts assets with a receipt in the file, `verified`
+ * counts the ones the chain confirmed, and `checked` is false when no receipt reader was supplied,
+ * so an unchecked manifest can never be mistaken for a checked one.
+ */
+export interface ReceiptCoverage {
+  readonly carried: number;
+  readonly verified: number;
+  readonly checked: boolean;
+}
+
 export interface ManifestVerdict {
   readonly ok: boolean;
   readonly assets: readonly AssetVerdict[];
   readonly hashesPerAsset: number;
+  /** Payment coverage — see `ReceiptCoverage`. Absence is reported, never assumed away. */
+  readonly receipts: ReceiptCoverage;
+  /** The depth actually enforced: the greater of the manifest's and the auditor's. */
+  readonly finalityDepth: number;
+  /** Whether the anchored roots were checked against the manifest's principal and namespace. */
+  readonly scopeChecked: boolean;
   /** Wall time of the whole verification. */
   readonly ms: number;
   /** Time spent in per-asset ECDSA recovery (the dominant cost in pure JS, ~ms per asset). */
@@ -51,12 +83,42 @@ export type SignatureMode = "all" | "none" | number;
 
 export interface ManifestVerifyOptions {
   readonly signatures?: SignatureMode;
+  /**
+   * A depth the *auditor* requires, independent of the one the file declares. The manifest's own
+   * `finalityDepth` is a field of the artefact under audit, so on its own it lets a file talk its
+   * reader down to zero; the effective depth is the greater of the two.
+   */
+  readonly finalityDepth?: number;
+}
+
+/** What the chain stored when the query was paid for — `ReceiptLedger.receipt(receiptId)`. */
+export interface ChainReceipt {
+  readonly grantId: Bytes32;
+  readonly ns: number;
+  readonly blockNumber: bigint;
+}
+
+/**
+ * Just enough of `ReceiptLedger` to prove a receipt is real: one `eth_call` per asset, read from the
+ * chain rather than from the gateway whose serving is the thing in question. `ReceiptLedger`'s own
+ * docstring is the reason — "so the chain, not the gateway, is the source of truth".
+ */
+export interface ManifestReceiptReader {
+  /** Null when the ledger has never recorded this id. */
+  receipt(receiptId: Bytes32): Promise<ChainReceipt | null>;
 }
 
 export interface ManifestVerifyContext {
-  readonly anchors: Pick<AnchorWriter, "isAnchored" | "anchorBlock">;
+  /**
+   * `anchorOf` is optional only so a light reader can still check inclusion; supply it and the
+   * verifier additionally binds each root to the principal and namespace the manifest names.
+   */
+  readonly anchors: Pick<AnchorWriter, "isAnchored" | "anchorBlock"> &
+    Partial<Pick<AnchorWriter, "anchorOf">>;
   /** Current chain head, for finality-depth checks (README §13 "chain reorg"). */
   readonly headBlock: bigint;
+  /** Supply one and receipts are proved against the chain; omit it and the verdict says so. */
+  readonly receipts?: ManifestReceiptReader;
   readonly now?: () => number;
 }
 
@@ -79,7 +141,16 @@ export async function verifyManifest(
     chainId: manifest.domain.chainId,
     verifyingContract: manifest.domain.verifyingContract,
   };
-  const rootCache = new Map<Bytes32, { anchored: boolean; block: bigint | null }>();
+  const rootCache = new Map<
+    Bytes32,
+    { anchored: boolean; block: bigint | null; owner: { principalId: Bytes32; ns: number } | null }
+  >();
+  // A file cannot talk its auditor down: whichever depth is stricter wins.
+  const finalityDepth = Math.max(manifest.finalityDepth, options.finalityDepth ?? 0);
+  const scopeChecked = typeof ctx.anchors.anchorOf === "function";
+  const receiptsChecked = ctx.receipts !== undefined;
+  let carried = 0;
+  let verified = 0;
 
   const total = manifest.assets.length;
   const stride =
@@ -116,6 +187,7 @@ export async function verifyManifest(
       root = {
         anchored: await ctx.anchors.isAnchored(asset.batchRoot),
         block: await ctx.anchors.anchorBlock(asset.batchRoot),
+        owner: ctx.anchors.anchorOf ? await ctx.anchors.anchorOf(asset.batchRoot) : null,
       };
       rootCache.set(asset.batchRoot, root);
     }
@@ -127,9 +199,45 @@ export async function verifyManifest(
       fail("MERKLE_INVALID");
       continue;
     }
-    if (ctx.headBlock - root.block < BigInt(manifest.finalityDepth)) {
+    // The header claims a corpus; the chain says who actually anchored the root. Without this the
+    // "one file per corpus" on the cover is the author's word — the same check `verifyPredicate`
+    // and `FirsthandLens` make at serve time, under the same name.
+    if (
+      root.owner &&
+      (root.owner.principalId !== manifest.principalId || root.owner.ns !== manifest.ns)
+    ) {
+      fail("SCOPE_MISMATCH");
+      continue;
+    }
+    // The file carries an anchor block; until now nothing compared it with the chain's, so a
+    // manifest could claim any block and never be contradicted.
+    if (asset.anchorBlock !== root.block) {
+      fail("ANCHOR_MISMATCH");
+      continue;
+    }
+    if (ctx.headBlock - root.block < BigInt(finalityDepth)) {
       fail("NOT_FINAL");
       continue;
+    }
+    if (asset.receipt) {
+      carried++;
+      if (ctx.receipts) {
+        const onChain = await ctx.receipts.receipt(asset.receipt.receiptId);
+        if (onChain === null) {
+          // No receipt means the read was never paid for — README §7.3 calls that "adverse".
+          fail("RECEIPT_UNKNOWN");
+          continue;
+        }
+        if (
+          onChain.grantId !== asset.receipt.grantId ||
+          onChain.blockNumber !== asset.receipt.blockNumber ||
+          onChain.ns !== manifest.ns
+        ) {
+          fail("RECEIPT_MISMATCH");
+          continue;
+        }
+        verified++;
+      }
     }
     assets.push({ passportId: id, ok: true });
   }
@@ -138,6 +246,9 @@ export async function verifyManifest(
     ok: assets.every((a) => a.ok),
     assets,
     hashesPerAsset: MERKLE_DEPTH,
+    receipts: { carried, verified, checked: receiptsChecked },
+    finalityDepth,
+    scopeChecked,
     ms,
     signatureMs,
     merkleMs: ms - signatureMs,

@@ -4,6 +4,7 @@ import {
   MemoryBlobStore,
   OnchainAnchorWriter,
   OnchainGrantReader,
+  OnchainReceiptReader,
   PublicMempoolTransport,
 } from "@firsthand/adapters";
 import { loadDeployment } from "@firsthand/contracts/deployments";
@@ -252,6 +253,11 @@ async function main(): Promise<void> {
   const verdict = await verifyManifest(manifest, {
     anchors,
     headBlock: await relayer.publicClient.getBlockNumber({ cacheTime: 0 }),
+    // Receipts proved against the ledger, so step 7's "proof of payment" is a proof and not a label.
+    receipts: new OnchainReceiptReader({
+      publicClient: relayer.publicClient,
+      receiptLedger: d.ReceiptLedger as Address,
+    }),
   });
   if (!verdict.ok) throw new Error("demo: the manifest failed to verify");
   note("this one file answers per-asset diligence: proof of origin, licence and payment");

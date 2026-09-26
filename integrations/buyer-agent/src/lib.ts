@@ -8,6 +8,7 @@ import {
   OnchainAnchorWriter,
   OnchainErc8004Registry,
   OnchainGrantReader,
+  OnchainReceiptReader,
 } from "@firsthand/adapters/client";
 import {
   type Address,
@@ -383,9 +384,20 @@ export async function complianceFile(
     payer: buyer.address,
     finalityDepth: 0,
   });
+  // The buyer's own file, proving its own payments: the receipts come from ReceiptLedger, not from
+  // the gateway that served the queries — which is the point of auditing one.
+  const receiptLedger = (disco.contracts as Record<string, Address> | null)?.["ReceiptLedger"];
   const verdict = await verifyManifest(manifest, {
     anchors,
     headBlock: await buyer.reader.publicClient.getBlockNumber({ cacheTime: 0 }),
+    ...(receiptLedger
+      ? {
+          receipts: new OnchainReceiptReader({
+            publicClient: buyer.reader.publicClient,
+            receiptLedger,
+          }),
+        }
+      : {}),
   });
   return { manifest, verdict };
 }

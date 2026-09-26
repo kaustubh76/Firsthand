@@ -47,5 +47,10 @@ export type {
   TxRef,
   TxTransport,
 } from "../ports/TxTransport.js";
+export type {
+  ChainReceipt,
+  OnchainReceiptReaderOptions,
+} from "../receipts/OnchainReceiptReader.js";
+export { OnchainReceiptReader } from "../receipts/OnchainReceiptReader.js";
 export type { HttpRelayTransportOptions } from "../tx/HttpRelayTransport.js";
 export { HttpRelayTransport } from "../tx/HttpRelayTransport.js";

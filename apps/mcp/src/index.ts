@@ -10,6 +10,7 @@ import {
   MemoryTransport,
   monadTestnet,
   OnchainErc8004Registry,
+  OnchainReceiptReader,
   PublicMempoolTransport,
   type TxTransport,
 } from "@firsthand/adapters";
@@ -217,6 +218,15 @@ const server = createMcpServer({
     ? {
         publicClient: readerClients.publicClient as never,
         anchors: client.options.anchors,
+        // Receipts read from ReceiptLedger, not from the gateway that served the queries.
+        ...(deployment && readerClients
+          ? {
+              receipts: new OnchainReceiptReader({
+                publicClient: readerClients.publicClient,
+                receiptLedger: deployment.ReceiptLedger.toLowerCase() as Address,
+              }),
+            }
+          : {}),
         waitForTx: async (hash: `0x${string}`) => {
           await readerClients.publicClient.waitForTransactionReceipt({ hash });
         },

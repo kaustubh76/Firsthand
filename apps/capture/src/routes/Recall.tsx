@@ -296,7 +296,11 @@ export function Recall({
         finalityDepth: 0,
       });
       const headBlock = await publicClient.getBlockNumber({ cacheTime: 0 });
-      const verdict = await verifyManifest(file, { anchors: client.anchors, headBlock });
+      const verdict = await verifyManifest(file, {
+        anchors: client.anchors,
+        headBlock,
+        ...(client.receipts ? { receipts: client.receipts } : {}),
+      });
       setBuyerFile({
         text: serialiseManifest(file),
         ok: verdict.ok,

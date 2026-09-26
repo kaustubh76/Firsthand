@@ -9,6 +9,7 @@ import {
   MemoryTransport,
   monadTestnet,
   OnchainAnchorWriter,
+  OnchainReceiptReader,
 } from "@firsthand/adapters/client";
 import type { Bytes32 } from "@firsthand/core";
 import type { PrfSource } from "@firsthand/crypto";
@@ -23,6 +24,11 @@ export interface CaptureClient {
   readonly relay: HttpRelayTransport | null;
   readonly publicClient: PublicClient | null;
   readonly anchors: AnchorWriter;
+  /**
+   * Proves a Lineage Manifest's receipts against `ReceiptLedger` — null offline, and the manifest
+   * verdict then says the payment check did not run rather than implying it passed.
+   */
+  readonly receipts: OnchainReceiptReader | null;
   /**
    * Waits for a relayed transaction to be mined. Relaying returns as soon as the gateway accepts the
    * transaction, so dependent calls — attest after enroll, anchor after attest — must wait, or they
@@ -61,6 +67,12 @@ export function createClient(config: AppConfig): CaptureClient {
         transport,
       })
     : new MemoryAnchorWriter();
+  // Read from the chain, not from the gateway: a manifest is audited because the gateway's word is
+  // what is in question. Discovery publishes the address; `config.receiptLedger` already parses it.
+  const receipts =
+    publicClient && config.receiptLedger !== `0x${"00".repeat(20)}`
+      ? new OnchainReceiptReader({ publicClient, receiptLedger: config.receiptLedger })
+      : null;
   const client = new FirsthandClient({
     domain: { chainId: config.chainId, verifyingContract: config.passportAnchors },
     epochs: config.epochs,
@@ -84,6 +96,7 @@ export function createClient(config: AppConfig): CaptureClient {
     relay: live ? (transport as HttpRelayTransport) : null,
     publicClient: (publicClient as PublicClient | null) ?? null,
     anchors,
+    receipts,
     waitForTx: publicClient
       ? async (hash) => {
           // 90 s, not viem's 180 s: a relayed transaction that has not landed by then was dropped

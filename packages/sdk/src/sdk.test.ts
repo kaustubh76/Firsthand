@@ -4,6 +4,7 @@ import {
   MemoryAnchorWriter,
   MemoryBlobStore,
   MemoryFacilitator,
+  MemoryReceiptReader,
   MemoryTransport,
 } from "@firsthand/adapters";
 import { GrantManagerAbi, PrincipalRegistryAbi } from "@firsthand/contracts/abi";
@@ -381,6 +382,75 @@ describe("verify() and the Lineage Manifest", () => {
     const final = await verifyManifest(parsed, { anchors, headBlock: anchors.head });
     expect(final.ok).toBe(true);
     expect(final.ms).toBeGreaterThanOrEqual(0);
+
+    // Payment. Until this existed the manifest carried receipts and checked none of them, so a file
+    // where nobody had ever paid verified exactly as green as one where everybody had.
+    const ledger = new MemoryReceiptReader();
+    const unchecked = await verifyManifest(parsed, { anchors, headBlock: anchors.head });
+    // No reader: the verdict must say the check did not run, never imply it passed.
+    expect(unchecked.receipts).toEqual({ carried: 1, verified: 0, checked: false });
+    expect(unchecked.ok).toBe(true);
+
+    // A receipt the ledger has never recorded is a read nobody paid for (README §7.3 "adverse").
+    const unpaid = await verifyManifest(parsed, {
+      anchors,
+      headBlock: anchors.head,
+      receipts: ledger,
+    });
+    expect(unpaid.receipts).toEqual({ carried: 1, verified: 0, checked: true });
+    expect(unpaid.assets[0]?.reason).toBe("RECEIPT_UNKNOWN");
+    expect(unpaid.ok).toBe(false);
+
+    // Recorded, and the file agrees with the chain.
+    const carried = parsed.assets[0].receipt;
+    ledger.put(carried.receiptId, {
+      grantId: carried.grantId,
+      ns: 0,
+      blockNumber: BigInt(carried.blockNumber),
+    });
+    const paid = await verifyManifest(parsed, {
+      anchors,
+      headBlock: anchors.head,
+      receipts: ledger,
+    });
+    expect(paid.receipts).toEqual({ carried: 1, verified: 1, checked: true });
+    expect(paid.ok).toBe(true);
+
+    // Real receipt, invented details: the id exists but the file misreports what it says.
+    const lying = JSON.parse(text);
+    lying.assets[0].receipt.blockNumber = "4242";
+    const mismatched = await verifyManifest(lying, {
+      anchors,
+      headBlock: anchors.head,
+      receipts: ledger,
+    });
+    expect(mismatched.assets[0]?.reason).toBe("RECEIPT_MISMATCH");
+
+    // The auditor's own finality floor overrides the file's — a manifest cannot talk them down.
+    const shallow = await verifyManifest(
+      parsed,
+      {
+        anchors,
+        headBlock: anchors.head,
+        receipts: ledger,
+      },
+      { finalityDepth: 1_000_000 },
+    );
+    expect(shallow.finalityDepth).toBe(1_000_000);
+    expect(shallow.assets.every((a) => a.reason === "NOT_FINAL")).toBe(true);
+
+    // The header claims a corpus; the chain says who anchored the root. Both are now compared.
+    expect(paid.scopeChecked).toBe(true);
+    const foreign = JSON.parse(text);
+    foreign.principalId = `0x${"cd".repeat(32)}`;
+    const wrongOwner = await verifyManifest(foreign, { anchors, headBlock: anchors.head });
+    expect(wrongOwner.assets.every((a) => a.reason === "SCOPE_MISMATCH")).toBe(true);
+
+    // And a file that invents the block its root was anchored in.
+    const wrongBlock = JSON.parse(text);
+    wrongBlock.assets[0].anchorBlock = "999";
+    const anchorLie = await verifyManifest(wrongBlock, { anchors, headBlock: anchors.head });
+    expect(anchorLie.assets[0]?.reason).toBe("ANCHOR_MISMATCH");
 
     // Tampering is caught per asset.
     parsed.assets[1].signed.passport.h = `0x${"ff".repeat(32)}`;

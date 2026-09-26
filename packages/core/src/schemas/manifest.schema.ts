@@ -25,7 +25,10 @@ export const ManifestAssetSchema = z.object({
   signed: SignedPassportSchema,
   batchRoot: Bytes32Schema,
   proof: BatchProofSchema,
-  /** Anchor block for `batchRoot`; verifiers require `finalityDepth` confirmations past it. */
+  /**
+   * Anchor block for `batchRoot`. The verifier compares it with the block the chain reports for
+   * that root, so a manifest cannot claim an anchor it does not have.
+   */
   anchorBlock: Uint64Schema,
   /**
    * The attestation preimage (class, capture time, source tag) when the sidecar carried it — the

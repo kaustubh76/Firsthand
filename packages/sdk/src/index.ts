@@ -15,9 +15,12 @@ export { manifestFromQueries, manifestFromSidecars } from "./manifest/fromSideca
 export type {
   AssetFailure,
   AssetVerdict,
+  ChainReceipt,
+  ManifestReceiptReader,
   ManifestVerdict,
   ManifestVerifyContext,
   ManifestVerifyOptions,
+  ReceiptCoverage,
   SignatureMode,
 } from "./manifest/verify.js";
 export { verifyManifest } from "./manifest/verify.js";

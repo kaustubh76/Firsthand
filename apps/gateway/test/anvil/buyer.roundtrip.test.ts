@@ -6,6 +6,7 @@ import {
   monadTestnet,
   OnchainAnchorWriter,
   OnchainGrantReader,
+  OnchainReceiptReader,
   PublicMempoolTransport,
 } from "@firsthand/adapters";
 import {
@@ -36,6 +37,7 @@ import {
   sendEnroll,
   sendGrant,
   sendRescind,
+  serialiseManifest,
   verifyManifest,
 } from "@firsthand/sdk";
 import { type Chain, parseAbi } from "viem";
@@ -269,18 +271,40 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
             termsHash: accept.plan.termsHash,
             epoch,
             blockNumber: last.receipt.blockNumber ?? 0n,
-            txHash: last.receipt.txHash ?? ZERO_HASH,
+            txHash: last.receipt.txHash as Bytes32,
           },
         ],
       ]),
       finalityDepth: 0,
     });
     expect(manifest.assets[0]?.receipt?.receiptId).toBe(last.receipt.receiptId);
+    // Receipts proved against the real ReceiptLedger, not taken on the file's word: this is the
+    // step that makes "paid for" a fact rather than a field. Three paid queries happened above, so
+    // the ledger has the receipt and the manifest's copy of it has to agree.
+    const receiptReader = new OnchainReceiptReader({
+      publicClient: relayer.publicClient,
+      receiptLedger: d.ReceiptLedger.toLowerCase() as Address,
+    });
     const verdict = await verifyManifest(manifest, {
       anchors,
       headBlock: await relayer.publicClient.getBlockNumber({ cacheTime: 0 }),
+      receipts: receiptReader,
     });
     expect(verdict.ok).toBe(true);
+    expect(verdict.receipts).toEqual({ carried: 1, verified: 1, checked: true });
+    expect(verdict.scopeChecked).toBe(true);
+
+    // And the negative, on a real chain: a receipt id the ledger has never seen is a read nobody
+    // paid for, whatever the file says.
+    const forged = JSON.parse(serialiseManifest(manifest));
+    forged.assets[0].receipt.receiptId = `0x${"ee".repeat(32)}`;
+    const unpaid = await verifyManifest(forged, {
+      anchors,
+      headBlock: await relayer.publicClient.getBlockNumber({ cacheTime: 0 }),
+      receipts: receiptReader,
+    });
+    expect(unpaid.assets[0]?.reason).toBe("RECEIPT_UNKNOWN");
+    expect(unpaid.ok).toBe(false);
 
     // Fourth query: the on-chain rate limit (3 per epoch) refuses settlement — no receipt, no charge.
     await expect(

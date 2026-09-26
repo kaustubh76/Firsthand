@@ -29,6 +29,7 @@ import {
   exportLocker,
   importLocker,
   type LockerSession,
+  type ManifestReceiptReader,
   manifestFromQueries,
   type QueryResult,
   serialiseBundle,
@@ -74,6 +75,11 @@ export interface McpDeps {
   readonly publicClient?: PublicClient;
   /** Read-only anchors view for manifest verification; defaults to the session's writer. */
   readonly anchors?: Pick<AnchorWriter, "isAnchored" | "anchorBlock">;
+  /**
+   * Proves a manifest's receipts against `ReceiptLedger`. Absent on a chain without a deployment,
+   * and the verdict then reports that payment was not checked rather than implying it passed.
+   */
+  readonly receipts?: ManifestReceiptReader;
   /** Waits for a relayed transaction to land, so dependent calls do not simulate against thin air. */
   readonly waitForTx?: (hash: Bytes32) => Promise<void>;
   /** The transport every relayed call rides; the faucet mint goes through it when the gateway allows. */
@@ -866,7 +872,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
           finalityDepth: 0,
         });
         const headBlock = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
-        const verdict = await verifyManifest(manifest, { anchors: deps.anchors, headBlock });
+        const verdict = await verifyManifest(manifest, {
+          anchors: deps.anchors,
+          headBlock,
+          ...(deps.receipts ? { receipts: deps.receipts } : {}),
+        });
         return text({
           verifies: verdict.ok,
           assets: verdict.assets,

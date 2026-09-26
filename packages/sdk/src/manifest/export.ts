@@ -6,6 +6,7 @@ import {
   LineageManifestSchema,
   type LineageManifestWire,
   passportId,
+  ValidationError,
 } from "@firsthand/core";
 import type { AnchoredBatch } from "../batch/Batcher.js";
 
@@ -25,6 +26,16 @@ export interface ExportInput {
 }
 
 export function exportManifest(input: ExportInput): LineageManifest {
+  // One file per corpus (§1, §24): the header names a principal and a namespace, and every batch in
+  // it has to belong to them. `manifestFromSidecars` has always enforced this; this path did not,
+  // so a ns-3 batch could be exported under a `ns: 0` header and the header would be a fiction.
+  for (const batch of input.batches) {
+    if (batch.ns !== input.ns) {
+      throw new ValidationError("a manifest holds one namespace", {
+        context: { header: input.ns, batch: batch.ns, root: batch.root },
+      });
+    }
+  }
   const wire: LineageManifestWire = {
     version: 1,
     domain: {

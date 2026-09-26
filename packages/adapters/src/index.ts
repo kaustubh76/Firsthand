@@ -92,6 +92,11 @@ export {
   PaymentPayloadSchema,
   PaymentRequirementsSchema,
 } from "./ports/X402Facilitator.js";
+export type {
+  ChainReceipt,
+  OnchainReceiptReaderOptions,
+} from "./receipts/OnchainReceiptReader.js";
+export { OnchainReceiptReader } from "./receipts/OnchainReceiptReader.js";
 export type { OnchainSettlementOptions } from "./settlement/OnchainSettlement.js";
 export { OnchainSettlement, toSettlementError } from "./settlement/OnchainSettlement.js";
 export type { BtxTransportOptions } from "./tx/BtxTransport.js";

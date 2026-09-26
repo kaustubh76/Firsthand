@@ -51,10 +51,23 @@ export function Verify({
     actions.run("verify", async () => {
       setVerdict(null);
       const parsed = JSON.parse(text) as unknown;
-      const headBlock = client.publicClient
-        ? await client.publicClient.getBlockNumber({ cacheTime: 0 })
-        : 0n;
-      setVerdict(await verifyManifest(parsed, { anchors: client.anchors, headBlock }));
+      // A manifest is checked against the chain, so without a chain there is nothing to check
+      // against. This used to default the head to 0, which made every asset report NOT_FINAL and
+      // every root unknown — a wall of failures that said "this file is bad" when the truth was
+      // "this browser has no RPC".
+      if (!client.publicClient) {
+        throw new Error(
+          "verifying a manifest needs a chain to read: open this from a gateway that publishes an rpcUrl",
+        );
+      }
+      const headBlock = await client.publicClient.getBlockNumber({ cacheTime: 0 });
+      setVerdict(
+        await verifyManifest(parsed, {
+          anchors: client.anchors,
+          headBlock,
+          ...(client.receipts ? { receipts: client.receipts } : {}),
+        }),
+      );
     });
 
   const lookup = (id: string = passportId) =>
@@ -179,6 +192,27 @@ export function Verify({
                 · {verdict.ms.toFixed(0)} ms ({verdict.merkleMs.toFixed(0)} ms Merkle + anchoring,{" "}
                 {verdict.signatureMs.toFixed(0)} ms signatures)
               </span>
+            </p>
+            {/*
+              Payment, stated separately from the verdict. A manifest where nobody ever paid used to
+              render exactly as green as one where everybody had; saying "0 of 5 paid" is the whole
+              point of the file.
+            */}
+            <p className="muted" data-testid="receipt-coverage">
+              {verdict.receipts.checked ? (
+                <>
+                  payment: {verdict.receipts.verified} of {verdict.assets.length} asset(s) proved
+                  against ReceiptLedger
+                  {verdict.receipts.carried > verdict.receipts.verified
+                    ? ` · ${verdict.receipts.carried - verdict.receipts.verified} carried a receipt the chain did not confirm`
+                    : ""}
+                </>
+              ) : (
+                <>payment: not checked — no receipt ledger to read</>
+              )}
+              {verdict.receipts.carried === 0
+                ? " · no asset in this file claims to have been paid for"
+                : ""}
             </p>
             <ul className="asset-list">
               {verdict.assets.map((a) => (

@@ -58,7 +58,11 @@ export function ManifestCard({ ctx }: { ctx: LockerCtx }) {
       const headBlock = client.publicClient
         ? await client.publicClient.getBlockNumber({ cacheTime: 0 })
         : 0n;
-      const verdict = await verifyManifest(m, { anchors: client.anchors, headBlock });
+      const verdict = await verifyManifest(m, {
+        anchors: client.anchors,
+        headBlock,
+        ...(client.receipts ? { receipts: client.receipts } : {}),
+      });
       setManifest({ text: serialiseManifest(m), verdict });
       if (verdict.ok) {
         mutate((j) => {
@@ -107,6 +111,12 @@ export function ManifestCard({ ctx }: { ctx: LockerCtx }) {
             <span>
               · {manifest.verdict.ms.toFixed(0)} ms ({manifest.verdict.merkleMs.toFixed(0)} Merkle +
               anchoring, {manifest.verdict.signatureMs.toFixed(0)} signatures)
+            </span>
+            {/* Payment, said out loud: a seller's file usually carries none, and that is not a pass. */}
+            <span data-testid="receipt-coverage">
+              {manifest.verdict.receipts.checked
+                ? ` · ${manifest.verdict.receipts.verified} paid read(s) proved on chain`
+                : " · payment not checked"}
             </span>
             <Button variant="inline" icon="download" onClick={download}>
               download JSON

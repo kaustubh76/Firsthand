@@ -100,9 +100,15 @@ export const GatewayConfigSchema = z.object({
   /** The capture app this gateway serves; linked from the landing page and discovery. */
   CAPTURE_URL: z.string().url().optional(),
 
-  /** `vercel` keeps blobs and passports in Vercel Blob — durable across serverless invocations. */
-  BLOB_STORE: z.enum(["memory", "fs", "vercel"]).default("memory"),
+  /**
+   * `vercel` keeps blobs and passports in Vercel Blob — durable across serverless invocations.
+   * `ipfs` puts ciphertext in IPFS, addressed by the same keccak id (the CID is derived from it,
+   * not stored); it needs `IPFS_API_URL` and a node that offers the keccak-256 multihash.
+   */
+  BLOB_STORE: z.enum(["memory", "fs", "vercel", "ipfs"]).default("memory"),
   BLOB_DIR: z.string().default("./data/blobs"),
+  /** Kubo RPC API for `BLOB_STORE=ipfs`, e.g. http://127.0.0.1:5001. */
+  IPFS_API_URL: z.string().url().optional(),
   CATALOG: z.enum(["memory", "fs", "vercel"]).default("memory"),
   CATALOG_DIR: z.string().default("./data/passports"),
   /** Vercel Blob read-write token; the name Vercel injects when a store is connected to the project. */

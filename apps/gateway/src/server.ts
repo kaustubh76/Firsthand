@@ -14,6 +14,7 @@ import {
   FsPassportCatalog,
   fromRequirementsV2,
   type GrantReader,
+  IpfsBlobStore,
   type LedgerScan,
   LocalFacilitator,
   LogsConsentLedger,
@@ -217,6 +218,14 @@ function readDeployment(config: GatewayConfig): Deployment {
   return d;
 }
 
+/** `BLOB_STORE=ipfs` is only a store if it has a node to talk to; say so at boot, not on first serve. */
+function ipfsApiUrl(config: GatewayConfig): string {
+  if (!config.IPFS_API_URL) {
+    throw new ConfigError("IPFS_API_URL is required when BLOB_STORE is ipfs");
+  }
+  return config.IPFS_API_URL;
+}
+
 /** Durable storage for hosts without a disk; both stores share one client and one token. */
 function objectStoreClient(config: GatewayConfig) {
   if (!config.BLOB_READ_WRITE_TOKEN) {
@@ -317,9 +326,11 @@ export function createGateway(
   const blobs =
     config.BLOB_STORE === "vercel" && objects
       ? new ObjectBlobStore({ client: objects, prefix: `${config.BLOB_PREFIX}/blobs` })
-      : config.BLOB_STORE === "fs"
-        ? new FsBlobStore(config.BLOB_DIR)
-        : new MemoryBlobStore();
+      : config.BLOB_STORE === "ipfs"
+        ? new IpfsBlobStore({ apiUrl: ipfsApiUrl(config) })
+        : config.BLOB_STORE === "fs"
+          ? new FsBlobStore(config.BLOB_DIR)
+          : new MemoryBlobStore();
   const catalog =
     config.CATALOG === "vercel" && objects
       ? new ObjectPassportCatalog({ client: objects, prefix: `${config.BLOB_PREFIX}/passports` })

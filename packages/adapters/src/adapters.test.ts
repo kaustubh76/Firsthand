@@ -896,10 +896,11 @@ describe("shells and chain wiring", () => {
         new Response(JSON.stringify({ errors: [{ message: "bad" }] }))) as unknown as typeof fetch,
     });
     await expect(erroring.query("{ x }", {})).rejects.toThrow("bad");
-    const ipfs = new IpfsBlobStore({ apiUrl: "http://127.0.0.1:5001" });
-    expect(ipfs.apiUrl).toContain("5001");
-    await expect(ipfs.put(new Uint8Array())).rejects.toThrow(NotImplementedError);
-    await expect(ipfs.get(b32(1))).rejects.toThrow(NotImplementedError);
-    await expect(ipfs.has(b32(1))).rejects.toThrow(NotImplementedError);
+    // IpfsBlobStore used to be asserted here as a third shell. It is implemented now — see
+    // `blobs/IpfsBlobStore.test.ts` for its behaviour and `test/testnet/ipfs.interop.test.ts` for
+    // the same contract against a real Kubo node. EnvioConsentLedger stays a shell by decision
+    // (ADR-0013), which is why it is still asserted as one above.
+    const ipfs = new IpfsBlobStore({ apiUrl: "http://127.0.0.1:5001/" });
+    expect(ipfs.apiUrl).toBe("http://127.0.0.1:5001");
   });
 });

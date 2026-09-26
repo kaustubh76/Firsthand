@@ -1,0 +1,76 @@
+# The tier that depends on things this repo does not control.
+#
+# Deliberately not part of `ci`: §8 claim 4 rests on Monad's x402 facilitator behaving a particular
+# way, and a claim that depends on somebody else's uptime must not be able to redden a pull request
+# that did not touch it. On a schedule it becomes the thing it should be — a watch on third-party
+# drift, so if the facilitator changes its envelope we learn from a red Monday rather than from a
+# judge.
+name: interop
+
+on:
+  schedule:
+    # 06:00 UTC on Mondays, and before judging opens on the 14th it is worth running by hand too.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  ipfs:
+    name: IpfsBlobStore against a real Kubo node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # `docker run` with an explicit readiness poll rather than a `services:` block: the suite
+      # probes the node once at module load and does not retry, so the container has to be up
+      # before vitest imports the file. Measured locally: ready in about four seconds.
+      - name: Start Kubo
+        run: |
+          docker run -d --name fh-ipfs -p 5001:5001 ipfs/kubo:latest
+          for i in $(seq 1 60); do
+            curl -sf -X POST http://127.0.0.1:5001/api/v0/version >/dev/null && break
+            sleep 1
+          done
+          curl -sf -X POST http://127.0.0.1:5001/api/v0/version || { echo "kubo did not start"; exit 1; }
+      # Setting IPFS_API_URL is what makes a missing node an error instead of a silent skip, so a
+      # container that failed to start cannot leave this job green having tested nothing.
+      - name: Interop
+        env:
+          IPFS_API_URL: http://127.0.0.1:5001
+        run: pnpm --filter @firsthand/adapters test:testnet
+
+  x402:
+    name: Monad's x402 facilitator (third-party — informational)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # This one spends the hosted relayer's float and needs both the facilitator and the gateway
+      # up, so it is flaky by nature — it failed once and passed immediately after while this
+      # workflow was being written. That is the argument for the schedule, not against the test.
+      - run: pnpm --filter @firsthand/adapters test:testnet
+      # The suite rewrites experiments/results/x402-facilitator.json with a fresh timestamp every
+      # run, so it can never leave a clean tree. Keep the measurement as an artifact; committing a
+      # recorded run stays a deliberate act, done locally.
+      - name: The measurement it recorded
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x402-facilitator-run
+          path: experiments/results/x402-facilitator.json
+          if-no-files-found: ignore

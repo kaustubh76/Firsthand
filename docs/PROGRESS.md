@@ -613,6 +613,45 @@ The contracts are immutable, so this is documented and pinned by the anvil round
 papered over, with the verdict (not just the reason) asserted equal. A narrower claim than "identical
 reasons on and off chain", and a true one.
 
+---
+
+## The compliance file did not check the payment (27 Sep)
+
+Read as a specification, the diagram's auditor card says the Lineage Manifest "verifies offline:
+Merkle inclusion + anchors + receipts + finality depth". It verified the first two.
+
+`grep -c receipt packages/sdk/src/manifest/verify.ts` returned **0**. No receipts reader in the
+verify context, no receipt case among the failure reasons — so a manifest where nobody had ever paid
+returned `ok: true`, and a test asserted exactly that. The sharper problem was that nothing in the
+verdict said what had *not* been checked, so a receipt-free file and a fully-paid one rendered as the
+same green "verifies" in the Verify tab. This is the artefact the whole product is for — §1's
+"answerable per asset" — and `ReceiptLedger`'s own docstring already named the standard: *"Every
+served query leaves a receipt … so the chain — not the gateway — is the source of truth."* The
+manifest was the one place that never asked.
+
+Now it asks, in one `eth_call` per asset against `ReceiptLedger`'s own view — not a log scan, and not
+the gateway's API, because the gateway's word is what an audit is for. Four new reasons for things the
+file used to carry and nothing checked: `RECEIPT_UNKNOWN` (no such receipt — nobody paid for that
+read), `RECEIPT_MISMATCH` (it exists but does not say what the file says), `SCOPE_MISMATCH` (the
+anchored root belongs to a different principal or namespace than the header claims, under the same
+name the predicate and the Lens use) and `ANCHOR_MISMATCH` (the file invented the block its root was
+anchored in). The verdict reports `receipts: {carried, verified, checked}`, and with no reader it says
+`checked: false` rather than passing quietly — the same shape as `/v1/verify`'s `agree: null`.
+`ManifestVerifyOptions.finalityDepth` lets an auditor impose a floor; the old check compared against
+the manifest's own number, which every shipped call site set to 0, so it had never rejected anything.
+
+Measured rather than asserted: the gateway round-trip proves `{carried: 1, verified: 1, checked: true}`
+against a deployed `ReceiptLedger` and catches a forged receipt id; `pnpm demo` verifies its own
+receipts on chain and throws if they fail; and against live Monad testnet the reader returns the
+24 Sep run's receipt with its real grant, namespace, block and payer, while a fabricated id returns
+null.
+
+**One card claim deliberately not met.** It says "anchor block/**tx**". The chain does not store a
+transaction hash, so a carried one could never be verified, and a buyer reconstructing from sidecars
+cannot produce it — adding it would have broken the property that a buyer's file matches the seller's
+export, and would have added a carried-but-unchecked field in the very pass about removing them. The
+anchor *block* is now compared against the chain, which is the half that can be proved.
+
 Also retired: `forge-gate` now picks the Foundry matching CI's pin rather than the first on PATH.
 Two are installed here and they disagree about 40 files, which is why the gate could previously only
 report formatting. It enforces now, so the caveat it has carried since it was written is gone.

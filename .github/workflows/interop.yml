@@ -26,6 +26,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # `pnpm build` reaches the contracts package, whose build is `forge build` — so Foundry is
+      # required here even though nothing in this workflow runs a Solidity test.
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.1.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # `docker run` with an explicit readiness poll rather than a `services:` block: the suite
@@ -58,6 +63,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # `pnpm build` reaches the contracts package, whose build is `forge build` — so Foundry is
+      # required here even though nothing in this workflow runs a Solidity test.
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.1.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # This one spends the hosted relayer's float and needs both the facilitator and the gateway

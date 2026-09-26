@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # So a run can be started without inventing a commit — which is how this workflow was proved to
+  # run again after four days of being refused for billing (the repo is public now, so it is free).
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

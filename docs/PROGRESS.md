@@ -609,14 +609,31 @@ itself and then going to look. The remedies are therefore gates, not fixes: the 
 anvil gate that counts what ran, `forge fmt` in the local gate, `check:env` in CI, and a coverage
 floor on the buyer-agent template, which had 531 lines, zero tests and a green suite.
 
-**CI has not run since 20 Sep, and not for a code reason.** Every workflow run since then was
-refused before its first step: *"The job was not started because recent account payments have failed
-or your spending limit needs to be increased."* That is a GitHub billing state on the account, not a
-failing gate — but it means two things worth saying out loud. The Actions tab shows four days of red
-to anyone who looks, and every sentence in this repo of the form "CI runs X" has been aspirational
-for those four days. The gates themselves are green locally, including the six that only CI runs;
-until billing is restored, `pnpm check:all`, `pnpm test:anvil` and the browser tier are the evidence,
-and they are the ones quoted above.
+**CI was refused for six days, and the repo going public fixed it (26 Sep).** Every workflow run
+between 20 and 26 Sep was stopped before its first step: *"The job was not started because recent
+account payments have failed or your spending limit needs to be increased."* A billing state, not a
+failing gate — but it meant six days and roughly fifteen commits went unverified by the six gates
+that exist only in CI, and that every sentence here of the form "CI runs X" was aspirational.
+GitHub Actions is free for public repositories, so making the repo public cleared it: the next push
+started a run immediately.
+
+**The first real run found exactly one thing, and it was mine.** All six CI-only gates passed on
+their first sight of six days of work — `forge fmt --check` under the pinned Foundry v1.1.0
+(including the renamed `Wiring.t.sol`), `forge build --sizes`, `forge test` under
+`FOUNDRY_PROFILE=ci` at **10 000 fuzz runs and 512×64 invariant runs**, the `src/libraries/` ≥ 95 %
+coverage gate that `check:all` does not run, the anvil deploy dry-run, and the Phase 1 round-trip job
+— which ran through the new `scripts/anvil-gate.mjs` for the first time and reported its 12 tests
+correctly. What failed was `pnpm lint`: the ANSI-stripping regex that makes that very counter work
+had been added *after* the last `check:all` and pushed without re-linting, so a literal control
+character sat in a regex literal. Functionally harmless, caught in one run, fixed by building the
+byte instead of writing it. That is the gate doing its job the day it came back.
+
+**Going public exposed nothing.** Audited before anything else, because it is the one irreversible
+consequence: no `.env` or `*.local` file has ever been committed (all are git-ignored and untracked),
+the only private keys anywhere in history are anvil's two *published* test keys — which CI and the
+demo use deliberately — and the 64-hex strings a naive scan flags in `deploy/**` are curve constants
+(secp256k1 and P-256 generators, field primes) plus an EVM bytecode prefix. No Vercel blob token, no
+CLI token. Nothing was rotated, because nothing needed to be.
 
 **Known and still unfixed:** `forge fmt` is not stable across Foundry versions — CI pins v1.1.0 and
 a current toolchain rewraps 40 files — so the local gate reports the difference instead of enforcing

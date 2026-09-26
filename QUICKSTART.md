@@ -1,5 +1,7 @@
 # Quickstart — your first recall
 
+[![ci](https://github.com/kaustubh76/Firsthand/actions/workflows/ci.yml/badge.svg)](https://github.com/kaustubh76/Firsthand/actions/workflows/ci.yml)
+
 FIRSTHAND gives every piece of human-created data a passkey-signed passport of origin, price and
 consent. AI buyers pay **per query** over x402, every read leaves an on-chain receipt, and the human
 can withdraw consent — after which the same query is refused.

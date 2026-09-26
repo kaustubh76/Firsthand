@@ -73,13 +73,21 @@ jobs:
       - name: Deploy dry-run on anvil
         run: |
           anvil --silent --port 8545 &
-          sleep 2
+          for i in $(seq 1 30); do
+            curl -sf -X POST -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+              http://127.0.0.1:8545 >/dev/null && break
+            sleep 1
+          done
+          curl -sf -X POST -H 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+            http://127.0.0.1:8545 >/dev/null || { echo "anvil did not start"; exit 1; }
           DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           USDC_ADDRESS=0x0000000000000000000000000000000000000dc0 \
           forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 
   anvil-roundtrip:
-    name: Phase 1 gate · enroll → attest round-trip on anvil --odyssey
+    name: Phase 1 gate · enroll → attest round-trip on a live chain
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,9 +104,28 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Start anvil with the RIP-7212 precompile
+        # `--odyssey` is detected, not assumed: Foundry 1.1 (pinned above) hides the precompile
+        # behind it and 1.7 removed the flag, shipping it by default. apps/demo/src/env.ts and
+        # scripts/anvil-gate.mjs already detect it; this was the last place that hardcoded it.
+        #
+        # And the readiness poll matters more than it looks: anvil is backgrounded, so the step's
+        # exit status used to be `sleep 2`'s. A dead anvil passed here and surfaced two steps later
+        # as "Connection refused" from forge — a message that names nothing.
         run: |
-          anvil --odyssey --silent --port 8545 &
-          sleep 2
+          # `|| true` is load-bearing: Actions runs `bash -e`, and an assignment takes the
+          # command's exit status, so on a Foundry without the flag this step would abort
+          # before starting anything — the same silent-failure shape being fixed here.
+          ODYSSEY=$(anvil --help | grep -q -- --odyssey && echo --odyssey || true)
+          anvil $ODYSSEY --silent --port 8545 &
+          for i in $(seq 1 30); do
+            curl -sf -X POST -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+              http://127.0.0.1:8545 >/dev/null && break
+            sleep 1
+          done
+          curl -sf -X POST -H 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+            http://127.0.0.1:8545 >/dev/null || { echo "anvil did not start"; exit 1; }
       - name: Deploy
         working-directory: contracts
         run: |
@@ -125,3 +152,46 @@ jobs:
           pnpm --filter @firsthand/experiments s3 -- --arm B2-public-mempool --n 3 --dry-run
           pnpm --filter @firsthand/experiments s3 -- --arm commit-reveal --n 3 --dry-run
           pnpm --filter @firsthand/experiments s3 -- --arm btx-blind --n 3 --dry-run
+
+  browser:
+    name: Browser tier · passkey → capture → anchor → publish in headless Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # Foundry at run time, not only at build: the tier spawns `anvil` and shells `forge script`
+      # through apps/demo/src/env.ts.
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.1.0
+      - run: pnpm install --frozen-lockfile
+      # pnpm will not fetch the browser: playwright is declared only by apps/capture, and
+      # pnpm-workspace.yaml's onlyBuiltDependencies allows lifecycle scripts for biome and esbuild
+      # alone. Nothing in the repo ran this before, which is why the tier had no CI job.
+      - name: Cache the Chromium Playwright downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.62.1
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/capture
+      - run: pnpm build
+      # Default mode: no secret, no service, no egress. It spawns anvil, deploys with forge, starts
+      # the built gateway and drives Chromium with a virtual authenticator that speaks WebAuthn PRF.
+      # Everything else in this workflow runs in Node, where a blank page or a browser-only API
+      # difference passes every gate — this is the tier that caught `this.#fetch` being unbound.
+      - name: Browser proof
+        run: pnpm --filter firsthand-capture e2e
+      - name: Screenshots from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-tier-screenshots
+          path: apps/capture/e2e-out/
+          if-no-files-found: ignore

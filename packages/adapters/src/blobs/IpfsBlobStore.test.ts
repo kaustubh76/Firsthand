@@ -14,7 +14,7 @@ const KUBO_CID = "bafkrwiabcloyee5du32bpjhd2xocwvqs3my2nmouyhvbxxo2egxt5bb6ca";
 
 /** A Kubo stand-in: `add` echoes the CID the real node would return, reads come from a map. */
 function fakeKubo(blocks = new Map<string, Uint8Array>()): typeof fetch {
-  return (async (input: RequestInfo | URL) => {
+  return (async (input: Parameters<typeof fetch>[0]) => {
     const url = new URL(String(input));
     const cid = url.searchParams.get("arg") ?? "";
     if (url.pathname.endsWith("/add")) {
@@ -24,7 +24,10 @@ function fakeKubo(blocks = new Map<string, Uint8Array>()): typeof fetch {
     const held = blocks.get(cid);
     if (held === undefined) return new Response("no block", { status: 500 });
     if (url.pathname.endsWith("/block/stat")) return new Response(JSON.stringify({ Key: cid }));
-    return new Response(held as unknown as BodyInit);
+    // A fresh ArrayBuffer is a body under every lib setting (this package has no DOM lib).
+    const copy = new Uint8Array(held.byteLength);
+    copy.set(held);
+    return new Response(copy.buffer as ArrayBuffer);
   }) as typeof fetch;
 }
 

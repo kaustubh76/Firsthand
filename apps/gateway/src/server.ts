@@ -869,6 +869,13 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
    * ever checked in tests. This asks both and publishes the pair, so a disagreement is visible to
    * anyone rather than latent: `agree: false` means the gateway and the chain are reading a grant
    * differently, which is the one thing a consent protocol cannot afford.
+   *
+   * Measured, and precise about it: for any grant that **exists** the two agree down to the reason,
+   * live on Monad testnet. For a grant that never existed they both refuse and name it differently
+   * — this route short-circuits on `grantState === null` with GRANT_NOT_LIVE, while the Lens checks
+   * scope before status and sees a zero-valued grant, so it answers SCOPE_MISMATCH. The verdict is
+   * the same either way; the contracts are immutable, so this is documented rather than "fixed",
+   * and the anvil round-trip pins it so it cannot widen unnoticed.
    */
   app.get("/v1/verify/:passportId", async (c) => {
     const id = parseId(c.req.param("passportId"), "passport id");

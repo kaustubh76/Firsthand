@@ -320,6 +320,25 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
     expect(after.onchain).toMatchObject({ ok: false, reason: "GRANT_RESCINDED" });
     expect(after.agree).toBe(true);
 
+    // The one place the two differ, pinned so it cannot drift further. For a grant that never
+    // existed the gateway short-circuits on `grantState === null` and says GRANT_NOT_LIVE, while
+    // the Lens checks scope before status (FirsthandLens.sol:41) and sees a zero-valued grant whose
+    // principal cannot match the anchor's — so it says SCOPE_MISMATCH. Both refuse; only the reason
+    // differs, and only for a grant that was never granted. Found by `/v1/verify` itself on its
+    // first live call against Monad testnet, which is what the route is for.
+    const ghost = (await (
+      await fetchApp(`http://gw/v1/verify/${r.passportId}?grant=0x${"11".repeat(32)}`)
+    ).json()) as {
+      offchain: { ok: boolean; reason: string };
+      onchain: { ok: boolean; reason: string } | null;
+      agree: boolean | null;
+    };
+    expect(ghost.offchain).toMatchObject({ ok: false, reason: "GRANT_NOT_LIVE" });
+    expect(ghost.onchain).toMatchObject({ ok: false, reason: "SCOPE_MISMATCH" });
+    expect(ghost.agree).toBe(false);
+    // What must never differ is the verdict.
+    expect(ghost.onchain?.ok).toBe(ghost.offchain.ok);
+
     buyer.close();
     locker.dispose();
   });

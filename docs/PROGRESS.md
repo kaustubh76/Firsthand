@@ -562,6 +562,63 @@ that does not exist separates the two. Live, against the hosted gateway: the pay
 
 ---
 
+## The diagram audited the code, and the code lost (26 Sep)
+
+`docs/diagrams/firsthand-product.excalidraw` is the one-canvas map a newcomer is told to read before
+touching a lane — 40 status-badged cards, and its own legend dates the badges to 15 Sep. Read the
+other way round, as a specification rather than a report, it names things the code did not do. The
+protocol itself came out clean: the contracts lane is accurate claim-for-claim, and S1, S3, S4 and
+the manifest timings all match the committed traces. Five surfaces did not, and rather than restate
+the drawing, the code moved to meet it.
+
+- **`IpfsBlobStore` was three `NotImplementedError`s**, and the gateway could not select it anyway
+  (`BLOB_STORE` had no `ipfs`). The problem worth solving was that the port is keccak-addressed and
+  IPFS is CID-addressed, which normally wants a side index — state a content-addressed store exists
+  to avoid. It does not need one: keccak-256 is a registered multihash, so adding with
+  `hash=keccak-256` and a single raw leaf makes the CID's digest *be* the blob id, and the CID is
+  derived from the id on the way back. Reads use `block/get?offline=true`, not `cat`, because `cat`
+  on a CID the node lacks goes looking on the DHT and blocks — a miss now costs 0.02 s instead of an
+  open-ended wait. Proved against a Kubo container, including a 1.2 MB blob past the default chunk.
+- **Four of six libraries were not fuzzed** while the canvas said all six were. Nineteen new
+  properties, the sharpest being that `enroll(bytes32,uint64,bytes32)` and
+  `rescind(bytes32,uint64,bytes32)` take the same three values in the same order, so only the
+  typehash stops an enrolment signature from also rescinding — ADR-0009's whole purpose, asserted
+  nowhere until now. 122 → 141 tests, green at 10 000 fuzz runs.
+- **`FirsthandLens` reached no product surface.** It is the on-chain twin of core's
+  `verifyPredicate` and nothing ever called it, so "identical reasons on and off chain" was only
+  ever checked in tests. `GET /v1/verify/:passportId?grant=` now asks both and publishes the pair
+  with `agree`; the anvil round-trip asserts they match while a grant is live *and* after it is
+  rescinded, which is the case where a gateway reading a grant differently would keep serving.
+- **The CI card claimed "100 % lines on src/"** and CI gated 95 % on `src/libraries/`. Lines really
+  are 100.00 % (497/497); branches are 97.75 %, and one `--min` covered both, so the honest fix was
+  `--min-branches` — two claims, two numbers, both now gated.
+- **The importers CLI could not deposit**, though the card describes it as "parse → normalise (JCS)
+  → deposit through the SDK". It deposits now, authenticated by the `fhd1.` deposit delegation
+  rather than a passkey: scoped to one namespace and one epoch, unable to rescind, gas on the
+  relay. Importing a decade of history is precisely the job that should not hold the authority that
+  ends consent.
+
+One thing on the canvas was never true rather than merely stale: the buyer card's "Demo buyer: a
+Qwen agent accepting terms and paying". There is no Qwen anywhere in the repo, and no LLM client of
+any provider; the buyer is a viem keypair driving `BuyerSession`. Left as-is by instruction — §19
+plans that demo — but recorded here so nobody mistakes the plan for the build.
+
+**And the verify route earned its keep on its first live call.** Asked about a grant that never
+existed, the hosted gateway answered `agree: false` — off chain `GRANT_NOT_LIVE`, on chain
+`SCOPE_MISMATCH`. Chased down: the gateway short-circuits when `grantState` comes back null, while
+`FirsthandLens` checks scope before status (`FirsthandLens.sol:41`) and sees a zero-valued grant
+whose principal cannot match the anchor's. Both refuse, and for every grant that *does* exist the
+two agree down to the reason — confirmed live on Monad testnet, `ok: true / NONE` on both sides.
+The contracts are immutable, so this is documented and pinned by the anvil round-trip rather than
+papered over, with the verdict (not just the reason) asserted equal. A narrower claim than "identical
+reasons on and off chain", and a true one.
+
+Also retired: `forge-gate` now picks the Foundry matching CI's pin rather than the first on PATH.
+Two are installed here and they disagree about 40 files, which is why the gate could previously only
+report formatting. It enforces now, so the caveat it has carried since it was written is gone.
+
+---
+
 ## The wiring audit, and what it disproved (24 Sep)
 
 Four passes landed in eight days, each green on `pnpm check:all`. This one added nothing. It asked

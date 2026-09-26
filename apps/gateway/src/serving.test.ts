@@ -526,7 +526,8 @@ describe("gateway serving path (memory mode)", () => {
     const absent = await s.fetchApp(
       `http://gw/v1/verify/${s.r.passportId}?grant=0x${"77".repeat(32)}`,
     );
-    expect((await absent.json()).offchain).toMatchObject({ ok: false, reason: "GRANT_NOT_LIVE" });
+    const absentBody = (await absent.json()) as { offchain: { ok: boolean; reason: string } };
+    expect(absentBody.offchain).toMatchObject({ ok: false, reason: "GRANT_NOT_LIVE" });
 
     // Without ?grant there is nothing to verify against; say so rather than guessing one.
     expect((await s.fetchApp(`http://gw/v1/verify/${s.r.passportId}`)).status).toBe(400);

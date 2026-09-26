@@ -103,14 +103,18 @@ export async function startGateway(
   throw new Error("the gateway did not become healthy within 20s");
 }
 
-export async function resolveEnv(argv: readonly string[]): Promise<DemoEnv> {
+export async function resolveEnv(
+  argv: readonly string[],
+  /** Defaulted so tests can pass a literal instead of mutating the process — as `loadConfig` does. */
+  source: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<DemoEnv> {
   const root = repoRoot();
   const testnet = argv.includes("--testnet");
   if (!testnet) return localEnv(root);
 
-  const rpcUrl = process.env["MONAD_RPC_URL"] ?? "https://testnet-rpc.monad.xyz";
-  const relayerKey = process.env["RELAYER_PRIVATE_KEY"] as `0x${string}` | undefined;
-  const buyerKey = process.env["BUYER_PRIVATE_KEY"] as `0x${string}` | undefined;
+  const rpcUrl = source["MONAD_RPC_URL"] ?? "https://testnet-rpc.monad.xyz";
+  const relayerKey = source["RELAYER_PRIVATE_KEY"] as `0x${string}` | undefined;
+  const buyerKey = source["BUYER_PRIVATE_KEY"] as `0x${string}` | undefined;
   if (!relayerKey || !buyerKey) {
     throw new Error(
       "--testnet needs RELAYER_PRIVATE_KEY and BUYER_PRIVATE_KEY in .env (see QUICKSTART.md). " +
@@ -184,7 +188,7 @@ async function localEnv(root: string): Promise<DemoEnv> {
 
 /** True when the recorded deployment still has code — a restarted anvil forgets everything. */
 /** The contracts the demo path touches; the lens is recorded but not deployed on a local chain. */
-const REQUIRED_CONTRACTS = [
+export const REQUIRED_CONTRACTS = [
   "PrincipalRegistry",
   "PassportAnchors",
   "GrantManager",
@@ -200,17 +204,23 @@ const REQUIRED_CONTRACTS = [
  * be in flight, and a gateway started in that gap publishes an asset the chain does not have yet —
  * the buyer's first balanceOf then fails with "returned no data".
  */
-async function codeAt(deploymentsFile: string): Promise<boolean> {
+export async function codeAt(
+  deploymentsFile: string,
+  rpcUrl: string = anvilDefaults.rpcUrl,
+): Promise<boolean> {
   try {
     const { readFileSync } = await import("node:fs");
     const d = JSON.parse(readFileSync(deploymentsFile, "utf8")) as Record<string, unknown>;
     const addresses = REQUIRED_CONTRACTS.map((k) => d[k]).filter(
       (v): v is string => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v),
     );
-    if (addresses.length === 0) return false;
+    // Every one, not merely one: the filter drops absent keys, so `length === 0` would have let a
+    // file naming only PrincipalRegistry through — the exact "registry alone is not enough" case
+    // the comment above says this exists to prevent.
+    if (addresses.length !== REQUIRED_CONTRACTS.length) return false;
     const codes = await Promise.all(
       addresses.map(async (address) => {
-        const res = await fetch(anvilDefaults.rpcUrl, {
+        const res = await fetch(rpcUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({

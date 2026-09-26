@@ -59,8 +59,13 @@ const GRAPH = {
     external: ["viem", "zod"],
   },
   "@firsthand/importers": {
-    internal: ["@firsthand/core"],
-    external: ["zod"],
+    // The library entry point (`.`) stays pure parsing — core + zod. The `firsthand-import` bin
+    // additionally deposits what it parsed, which needs the SDK, so the package declares it. This
+    // does not touch the boundary ADR-0001 actually enforces: that is `firsthand-gateway` ⇏
+    // `@firsthand/crypto`, below, and it is unchanged. A CLI holding a deposit delegation is
+    // supposed to reach keys; a serving gateway is not.
+    internal: ["@firsthand/core", "@firsthand/sdk", "@firsthand/adapters"],
+    external: ["zod", "viem"],
   },
   "@firsthand/indexer": {
     internal: [],

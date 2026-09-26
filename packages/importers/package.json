@@ -32,7 +32,10 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@firsthand/adapters": "workspace:*",
     "@firsthand/core": "workspace:*",
+    "@firsthand/sdk": "workspace:*",
+    "viem": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

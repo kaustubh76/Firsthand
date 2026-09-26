@@ -1,22 +1,14 @@
-import { blockTime } from "../../lib/format.js";
+import { ConsentTimeline } from "../../components/ConsentTimeline.js";
 import { describeScan, type TimelineScan } from "../../lib/ledger.js";
 import { mergeLedger } from "../../lib/ledgerMerge.js";
-import {
-  Button,
-  Card,
-  Hash,
-  Notice,
-  Skeleton,
-  Timeline,
-  type TimelineItem,
-  Tx,
-} from "../../ui/index.js";
+import { Button, Card, Notice, Skeleton } from "../../ui/index.js";
 import type { LockerCtx } from "./types.js";
 
 /**
  * What the chain says about this principal, as a timeline, merged with what this browser did
  * beyond the gateway's scan window. A rescission is drawn as a cut through the line: the end of
- * consent, dated by block. The kind is its own element with nothing else in it.
+ * consent, dated by block. The rows themselves are `ConsentTimeline`, shared with the public
+ * Verify tab so an auditor and an owner read the same ledger.
  */
 export function LedgerCard({
   ctx,
@@ -33,48 +25,6 @@ export function LedgerCard({
 }) {
   const { session, config, journal, events } = ctx;
   const rows = mergeLedger(session.locker.principalId, events ?? [], journal);
-  const items: TimelineItem[] = rows.map((e) => ({
-    id: `${e.kind}-${e.txHash ?? e.grantId ?? ""}`,
-    status: e.kind === "rescinded" ? "cut" : e.source === "local" ? "local" : "chain",
-    title: (
-      <>
-        <span className="kind">{e.kind}</span>
-        <span className="hint">{e.source === "local" ? "this browser" : "on chain"}</span>
-      </>
-    ),
-    meta: (
-      <>
-        {e.blockNumber === null ? (
-          <span>local record</span>
-        ) : (
-          <span>
-            {e.kind === "rescinded" ? "consent ended at block " : "block "}
-            {e.blockNumber.toString()}
-          </span>
-        )}
-        {/* The commit dated the end of consent; the reveal only recorded it, later. */}
-        {e.viaCommitReveal && (
-          <span>
-            commit-reveal
-            {e.recordedBlock === null ? "" : ` — revealed at block ${e.recordedBlock.toString()}`}
-          </span>
-        )}
-        {e.timestamp !== null && blockTime(e.timestamp) && <span>{blockTime(e.timestamp)}</span>}
-        {e.grantId && (
-          <span>
-            grant <Hash value={e.grantId} n={6} />
-          </span>
-        )}
-        {e.granteeCard && (
-          <span>
-            card <Hash value={e.granteeCard} n={6} />
-          </span>
-        )}
-        {e.ns !== null && <span>ns {e.ns}</span>}
-        {e.txHash && <Tx hash={e.txHash} chainId={config.chainId} copy={false} />}
-      </>
-    ),
-  }));
   const scanNote = describeScan(scan);
   return (
     <Card
@@ -113,7 +63,7 @@ export function LedgerCard({
       ) : rows.length === 0 ? (
         <p className="hint">no events yet</p>
       ) : (
-        <Timeline items={items} data-testid="ledger" />
+        <ConsentTimeline rows={rows} chainId={config.chainId} testId="ledger" />
       )}
       <p className="hint">
         The gateway reads a bounded window of blocks per request; rows marked <em>local record</em>{" "}

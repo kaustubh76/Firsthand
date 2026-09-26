@@ -1,11 +1,14 @@
 import { type Bytes32, LineageManifestSchema, type PassportSidecar } from "@firsthand/core";
 import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
+import { ConsentTimeline } from "../components/ConsentTimeline.js";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
 import { explainFailure } from "../lib/failures.js";
 import { blockTime, pluralise } from "../lib/format.js";
+import { describeScan, fetchTimeline, type TimelineScan } from "../lib/ledger.js";
+import { mergeLedger } from "../lib/ledgerMerge.js";
 import { askLens, describeLens, type LensReport } from "../lib/lens.js";
 import type { CaptureClient } from "../lib/locker.js";
 import {
@@ -45,6 +48,12 @@ export function Verify({
   // question from the manifest's, and why both belong on screen.
   const [lens, setLens] = useState<LensReport | null>(null);
   const [passportId, setPassportId] = useState("");
+  // The Consent Ledger, for whoever holds the link. It lived only inside the passkey-gated Locker,
+  // which put the timestamped end of consent out of reach of the auditor it is written for.
+  const [timeline, setTimeline] = useState<{
+    rows: ReturnType<typeof mergeLedger>;
+    scan: TimelineScan | null;
+  } | null>(null);
   const [sidecar, setSidecar] = useState<
     | { id: Bytes32; sidecar: PassportSidecar; anchored: boolean; block: bigint | null }
     | "missing"
@@ -108,7 +117,17 @@ export function Verify({
       if (!config.gatewayUrl) throw new Error("no gateway configured");
       const p = id.trim().toLowerCase() as Bytes32;
       if (!/^0x[0-9a-f]{64}$/.test(p)) throw new Error("a principal id is 32 bytes of hex");
+      setTimeline(null);
       setListing(await fetchListing(config.gatewayUrl, p));
+      // Same id, same gateway, one more read: what this locker has consented to and withdrawn.
+      const t = await fetchTimeline(config.gatewayUrl, p).catch(() => null);
+      if (t) {
+        setTimeline({
+          // No journal to merge: a visitor has only what the chain says, which is the point.
+          rows: mergeLedger(p, t.events, { deposits: [], grants: [], receipts: [] }),
+          scan: t.scan,
+        });
+      }
     });
 
   const lookupAgent = () =>
@@ -340,6 +359,26 @@ export function Verify({
           </ul>
         )}
       </Card>
+
+      {timeline && (
+        <Card
+          id="verify-ledger"
+          icon="clock"
+          title="Consent Ledger"
+          subtitle="Every grant this locker gave and every one it withdrew, read from the chain's own event logs — including the block consent ended at. No passkey: this is the auditor's view, and it is the same ledger the owner sees."
+        >
+          {describeScan(timeline.scan) && (
+            <p className="hint" data-testid="public-ledger-scan">
+              {describeScan(timeline.scan)}
+            </p>
+          )}
+          {timeline.rows.length === 0 ? (
+            <p className="hint">no consent events in the gateway's scan window</p>
+          ) : (
+            <ConsentTimeline rows={timeline.rows} chainId={config.chainId} testId="public-ledger" />
+          )}
+        </Card>
+      )}
 
       <Card
         id="verify-agent"

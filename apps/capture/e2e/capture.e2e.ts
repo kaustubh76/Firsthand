@@ -846,6 +846,30 @@ async function main() {
       ok(`ledger dates the end of consent at the commit: ${dated.slice(0, 120)}`);
     }
 
+    step("the auditor's view: a link, no passkey, and the dated end of consent");
+    // The Consent Ledger lived only inside the passkey-gated Locker, so the one party the diagram
+    // writes it for — an auditor, a regulator, a buyer's compliance desk — could not open it. A
+    // fresh context holds no credential id, which is what "no passkey" means to this app.
+    {
+      const auditorContext = await browser.newContext();
+      const auditor = await auditorContext.newPage();
+      await auditor.goto(
+        `${appUrl}/?gateway=${encodeURIComponent(gatewayUrl)}&principal=${sidecar.principalId}`,
+      );
+      const publicLedger = auditor.getByTestId("public-ledger");
+      await publicLedger.waitFor({ timeout: 60_000 });
+      const text = ((await publicLedger.textContent()) ?? "").replace(/\s+/g, " ").trim();
+      if (!/consent ended at block \d+/.test(text)) {
+        throw new Error(`the auditor's ledger does not date the end of consent: ${text}`);
+      }
+      // And it really is unauthenticated: the app never left the public frame.
+      if ((await auditor.locator("nav").count()) > 0) {
+        throw new Error("the auditor's view is showing the unlocked navigation");
+      }
+      ok(`auditor with no passkey reads: ${text.slice(0, 120)}`);
+      await auditorContext.close();
+    }
+
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");
     const phone = await browser.newContext({
       viewport: { width: 390, height: 844 },

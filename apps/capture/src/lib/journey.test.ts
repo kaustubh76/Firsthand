@@ -79,7 +79,7 @@ describe("deriveJourney", () => {
     const steps = deriveJourney({
       unlocked: true,
       live: true,
-      liveness: { kind: "live", epoch: 0n },
+      liveness: { kind: "live", epoch: 0n, lastAttested: 0n, attestedThisEpoch: true },
       journal: j,
     });
     const s = statuses(steps);
@@ -97,7 +97,7 @@ describe("deriveJourney", () => {
       deriveJourney({
         unlocked: true,
         live: true,
-        liveness: { kind: "live", epoch: 0n },
+        liveness: { kind: "live", epoch: 0n, lastAttested: 0n, attestedThisEpoch: true },
         journal: j,
       }),
     );

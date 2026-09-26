@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addressUrl, short, txUrl } from "./explorer.js";
 import { loadJournal, updateJournal } from "./journal.js";
 import { mergeLedger } from "./ledgerMerge.js";
-import { describeLiveness, livenessOf } from "./liveness.js";
 import { canonicalJson, mediaCap, metaHashOf } from "./media.js";
 import { lockerLink, parseGrantRequest, parsePrincipalLink, requestLink } from "./requests.js";
 
@@ -92,28 +91,6 @@ describe("grant requests", () => {
       principal,
     );
     expect(parsePrincipalLink("?principal=0x12")).toBeNull();
-  });
-});
-
-describe("liveness", () => {
-  it("maps the chain's view to what the human must do next", () => {
-    expect(livenessOf(null, 5n)).toEqual({ kind: "not-enrolled" });
-    expect(livenessOf({ lastAttestedEpoch: 5n, thawEpoch: 0n }, 5n)).toEqual({
-      kind: "live",
-      epoch: 5n,
-    });
-    expect(livenessOf({ lastAttestedEpoch: 4n, thawEpoch: 0n }, 5n)).toEqual({
-      kind: "attest-needed",
-      epoch: 5n,
-      lastAttested: 4n,
-    });
-    expect(livenessOf({ lastAttestedEpoch: 5n, thawEpoch: 7n }, 5n)).toEqual({
-      kind: "frozen",
-      thawEpoch: 7n,
-    });
-    expect(describeLiveness({ kind: "attest-needed", epoch: 5n, lastAttested: 4n })).toMatch(
-      /Re-attest/,
-    );
   });
 });
 

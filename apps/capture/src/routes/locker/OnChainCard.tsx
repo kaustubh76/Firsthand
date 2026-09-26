@@ -1,5 +1,5 @@
 import { activate as activateLocker, reattest as reattestLocker } from "../../lib/activation.js";
-import { describeLiveness, type Liveness } from "../../lib/liveness.js";
+import { canAnchor, describeLiveness, type Liveness } from "../../lib/liveness.js";
 import { Button, Card, Hash, Notice, Pill, Tx } from "../../ui/index.js";
 import type { LockerCtx } from "./types.js";
 
@@ -17,7 +17,11 @@ export function OnChainCard({
   const batches = session.batcher.flushed();
   const pending = session.batcher.pendingCount();
   const activated = journal.attestTx !== undefined;
-  const reattestMode = liveness.kind === "attest-needed" || (liveness.kind === "live" && activated);
+  // One attest away: out of grace, thawing, or live on a stale epoch root.
+  const reattestMode =
+    liveness.kind === "lapsed" ||
+    liveness.kind === "frozen" ||
+    (liveness.kind === "live" && (activated || !liveness.attestedThisEpoch));
 
   const activate = () =>
     actions.run("activate", async () => {
@@ -36,7 +40,7 @@ export function OnChainCard({
       await session.flush();
     });
 
-  const tone = liveness.kind === "live" ? "ok" : liveness.kind === "unknown" ? "neutral" : "warn";
+  const tone = canAnchor(liveness) ? "ok" : liveness.kind === "unknown" ? "neutral" : "warn";
 
   return (
     <Card

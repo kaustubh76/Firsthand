@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { type Activated, activate, reattest } from "../lib/activation.js";
 import type { AppConfig } from "../lib/config.js";
-import { describeLiveness, type Liveness } from "../lib/liveness.js";
+import { canAnchor, describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { Button, Card, Notice, Tx } from "../ui/index.js";
 
@@ -32,9 +32,10 @@ export function ActivationCard({
   const actions = useAsyncActions<"activate">();
   const [done, setDone] = useState<Activated | null>(null);
   // Once done, the card stays to show its transactions until the judge moves on.
-  if (done === null && (liveness.kind === "live" || liveness.kind === "unknown")) return null;
+  if (done === null && (canAnchor(liveness) || liveness.kind === "unknown")) return null;
   if (!config.live) return null;
-  const needsFreshAttest = liveness.kind === "attest-needed";
+  // Every state that reaches here but "not-enrolled" is one attest away; the subtitle says which.
+  const needsFreshAttest = liveness.kind !== "not-enrolled";
 
   const run = () =>
     actions.run("activate", async () => {

@@ -3,8 +3,7 @@ import { publishWrap } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
 import { formatUsdc } from "../../lib/agent.js";
 import { type AgentInfo, bindingHolds, fetchAgent } from "../../lib/agents.js";
-import type { Liveness } from "../../lib/liveness.js";
-import { readerFor } from "../../lib/liveness.js";
+import { canGrant, type Liveness, readerFor } from "../../lib/liveness.js";
 import { dismissRequest, type GrantRequest } from "../../lib/requests.js";
 import { PRICE_UNITS, termsFor } from "../../lib/terms.js";
 import { Button, Card, Hash, Notice, Pill } from "../../ui/index.js";
@@ -136,7 +135,7 @@ export function RequestsCard({
                   variant="primary"
                   size="sm"
                   icon="key"
-                  disabled={!config.live || actions.busy !== null || liveness.kind !== "live"}
+                  disabled={!config.live || actions.busy !== null || !canGrant(liveness)}
                   pending={actions.is(`approve:${r.card}`)}
                   pendingLabel="Granting…"
                   onClick={() => approve(r)}

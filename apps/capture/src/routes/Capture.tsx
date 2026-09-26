@@ -16,7 +16,7 @@ import { type LandingPhase, type LandOptions, land } from "../lib/deposits.js";
 import { reportFailure } from "../lib/failures.js";
 import { formatBytes, pluralise } from "../lib/format.js";
 import { type DepositEntry, updateJournal } from "../lib/journal.js";
-import type { Liveness } from "../lib/liveness.js";
+import { canAnchor, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { mediaCap, metaHashOf, readMedia } from "../lib/media.js";
 import { describeUploadCap } from "../lib/settings.js";
@@ -242,6 +242,9 @@ export function Capture({
     });
 
   const busy = actions.busy !== null;
+  // On a live chain a stamp ends in an anchor, so it needs this epoch's deposit-key root attested
+  // (the card above says so). Offline there is nothing to anchor against, so sealing stays open.
+  const stampBlocked = config.live && !canAnchor(liveness);
   const cap = mediaCap(config.maxUploadBytes);
 
   return (
@@ -300,7 +303,7 @@ export function Capture({
               onClick={depositText}
               pending={actions.is("text")}
               pendingLabel="Sealing + anchoring…"
-              disabled={text.trim() === "" || busy}
+              disabled={text.trim() === "" || busy || stampBlocked}
             >
               Stamp passport
             </Button>
@@ -347,7 +350,7 @@ export function Capture({
               onClick={depositMedia}
               pending={actions.is("media")}
               pendingLabel="Sealing + anchoring…"
-              disabled={!file || busy}
+              disabled={!file || busy || stampBlocked}
             >
               Stamp passport
             </Button>
@@ -396,7 +399,7 @@ export function Capture({
               onClick={depositImport}
               pending={actions.is("import")}
               pendingLabel="Minting one passport per conversation…"
-              disabled={!exportFile || busy}
+              disabled={!exportFile || busy || stampBlocked}
             >
               Mint one passport per conversation
             </Button>

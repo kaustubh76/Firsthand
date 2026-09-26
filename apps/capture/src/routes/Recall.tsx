@@ -23,7 +23,7 @@ import type { AppConfig } from "../lib/config.js";
 import { downloadJson } from "../lib/download.js";
 import { reportFailure } from "../lib/failures.js";
 import { pluralise } from "../lib/format.js";
-import { describeLiveness, type Liveness } from "../lib/liveness.js";
+import { canGrant, describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
 import { useNavigation } from "../shell/navigation.js";
@@ -119,7 +119,7 @@ export function Recall({
 
   const target = published.find((d) => d.passportId === passportId) ?? null;
   const blocked =
-    config.live && liveness.kind !== "live" && liveness.kind !== "unknown"
+    config.live && !canGrant(liveness) && liveness.kind !== "unknown"
       ? describeLiveness(liveness)
       : null;
   const ready = Boolean(

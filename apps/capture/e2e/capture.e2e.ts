@@ -319,7 +319,15 @@ async function main() {
     const sellerFile = readFileSync((await (await downloading).path()) ?? "", "utf8");
     if (!sellerFile.includes('"version": 1'))
       throw new Error("downloaded manifest is not a manifest");
-    ok(`downloaded the seller's manifest (${sellerFile.length} bytes)`);
+    // The file states a finality depth it can back. It used to write a flat 0 — no claim — under a
+    // Verify tab that told the reader each asset was checked for "anchoring, and finality".
+    const claimedDepth = (JSON.parse(sellerFile) as { finalityDepth: number }).finalityDepth;
+    if (!Number.isInteger(claimedDepth) || claimedDepth < 1) {
+      throw new Error(`the manifest claims finalityDepth ${claimedDepth}`);
+    }
+    ok(
+      `downloaded the seller's manifest (${sellerFile.length} bytes, finalityDepth ${claimedDepth})`,
+    );
 
     step("reload: the passkey unlocks the same locker, evidence rebuilt from the gateway");
     await page.reload();

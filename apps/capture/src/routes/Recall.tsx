@@ -25,6 +25,7 @@ import { reportFailure } from "../lib/failures.js";
 import { pluralise } from "../lib/format.js";
 import { canGrant, describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
+import { honestFinalityDepth } from "../lib/manifest.js";
 import { commitRescind, type RescindMode, revealRescind } from "../lib/rescind.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
 import { useNavigation } from "../shell/navigation.js";
@@ -293,14 +294,20 @@ export function Recall({
       );
       // The buyer walks away with its compliance file: sidecar + receipt per served query, verified
       // against the chain before it is handed over. No locker, no gateway call.
+      const headBlock = await publicClient.getBlockNumber({ cacheTime: 0 });
       const file = await manifestFromQueries({
         domain,
         results: [opened.result],
         anchors: client.anchors,
         payer: agent.address,
-        finalityDepth: 0,
+        // What the anchors have actually reached; a flat zero made "and finality" a claim about
+        // nothing (lib/manifest.ts).
+        finalityDepth: await honestFinalityDepth(
+          client.anchors,
+          [opened.result.sidecar.batchRoot],
+          headBlock,
+        ),
       });
-      const headBlock = await publicClient.getBlockNumber({ cacheTime: 0 });
       const verdict = await verifyManifest(file, {
         anchors: client.anchors,
         headBlock,

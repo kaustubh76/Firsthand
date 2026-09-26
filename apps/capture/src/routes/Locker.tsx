@@ -7,6 +7,7 @@ import { Portability } from "../components/Portability.js";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { useJournal } from "../hooks/useJournal.js";
 import type { AppConfig } from "../lib/config.js";
+import { type Earnings, fetchEarnings, ownTerms } from "../lib/earnings.js";
 import { reportFailure } from "../lib/failures.js";
 import { fetchGrantStatuses, type GrantChainStatus } from "../lib/grants.js";
 import { fetchReceipts, fetchTimeline, type TimelineScan } from "../lib/ledger.js";
@@ -14,11 +15,11 @@ import { type Liveness, readerFor } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import type { GrantRequest } from "../lib/requests.js";
 import { fetchRevealWindow } from "../lib/rescind.js";
-import { PRICE_UNITS } from "../lib/terms.js";
+import { NS, termsFor } from "../lib/terms.js";
 import { Hash, Notice, Pill } from "../ui/index.js";
 import { ActivityCard } from "./locker/ActivityCard.js";
 import { DepositsCard } from "./locker/DepositsCard.js";
-import { type Earnings, EarningsCard } from "./locker/EarningsCard.js";
+import { EarningsCard } from "./locker/EarningsCard.js";
 import { GrantsCard } from "./locker/GrantsCard.js";
 import { LedgerCard } from "./locker/LedgerCard.js";
 import { ManifestCard } from "./locker/ManifestCard.js";
@@ -90,21 +91,36 @@ export function LockerView({
     setEarningsBusy(true);
     setEarningsError(null);
     const from = journal.enrolBlock ? BigInt(journal.enrolBlock) : undefined;
-    const rows: { tx: string; grantId: string; block: bigint }[] = [];
     try {
+      const receipts = [];
       for (const id of grantIds) {
-        for (const r of await fetchReceipts(config.gatewayUrl, id, from)) {
-          rows.push({ tx: r.txHash, grantId: r.grantId, block: r.blockNumber });
-        }
+        receipts.push(...(await fetchReceipts(config.gatewayUrl, id, from)));
       }
-      setEarnings({ count: rows.length, total: PRICE_UNITS * BigInt(rows.length), rows });
+      // Priced from the chain's registered terms, split by the terms' own weights — see
+      // `lib/earnings.ts` for what this replaced.
+      const reader = client.publicClient ? readerFor(config, client.publicClient) : null;
+      setEarnings(
+        reader === null
+          ? {
+              count: receipts.length,
+              settled: 0n,
+              yours: 0n,
+              unattributed: receipts.length,
+              rows: [],
+            }
+          : await fetchEarnings(
+              receipts,
+              reader,
+              ownTerms(Object.values(NS).map((ns) => termsFor(session, ns))),
+            ),
+      );
     } catch (e) {
       setEarningsError(reportFailure(e));
     } finally {
       setEarningsBusy(false);
     }
     // grantKey stands in for grantIds so a new grant re-reads without a new array identity.
-  }, [config.live, config.gatewayUrl, journal.enrolBlock, grantKey]);
+  }, [config.live, config.gatewayUrl, journal.enrolBlock, grantKey, client, session]);
   useEffect(() => {
     void refreshEarnings();
   }, [refreshEarnings]);

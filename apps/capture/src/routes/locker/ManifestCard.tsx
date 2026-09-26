@@ -11,6 +11,7 @@ import { useToasts } from "../../hooks/useToasts.js";
 import { downloadJson } from "../../lib/download.js";
 import { pluralise } from "../../lib/format.js";
 import { fetchReceipts } from "../../lib/ledger.js";
+import { honestFinalityDepth } from "../../lib/manifest.js";
 import { fetchSidecar } from "../../lib/sidecars.js";
 import { NS } from "../../lib/terms.js";
 import { Button, Card, Hash, Notice, Pill } from "../../ui/index.js";
@@ -46,6 +47,9 @@ export function ManifestCard({ ctx }: { ctx: LockerCtx }) {
         if (sc) sidecars.push(sc);
       }
       if (sidecars.length === 0) throw new Error("no published captures to export yet");
+      const head = client.publicClient
+        ? await client.publicClient.getBlockNumber({ cacheTime: 0 })
+        : 0n;
       const m = await manifestFromSidecars({
         domain: session.locker.domain,
         principalId,
@@ -53,14 +57,16 @@ export function ManifestCard({ ctx }: { ctx: LockerCtx }) {
         sidecars,
         anchors: client.anchors,
         receipts,
-        finalityDepth: 0,
+        // Claim the depth the anchors have actually reached, never a flat zero — see lib/manifest.ts.
+        finalityDepth: await honestFinalityDepth(
+          client.anchors,
+          sidecars.map((sc) => sc.batchRoot),
+          head,
+        ),
       });
-      const headBlock = client.publicClient
-        ? await client.publicClient.getBlockNumber({ cacheTime: 0 })
-        : 0n;
       const verdict = await verifyManifest(m, {
         anchors: client.anchors,
-        headBlock,
+        headBlock: head,
         ...(client.receipts ? { receipts: client.receipts } : {}),
       });
       setManifest({ text: serialiseManifest(m), verdict });

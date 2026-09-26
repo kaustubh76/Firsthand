@@ -13,7 +13,7 @@ export function StatTiles({
 }: {
   journal: Journal;
   grantStatuses: ReadonlyMap<string, GrantChainStatus> | null;
-  earnings: { count: number; total: bigint } | null;
+  earnings: { count: number; yours: bigint } | null;
   pendingBatch: number;
   live: boolean;
 }) {
@@ -47,9 +47,9 @@ export function StatTiles({
       <StatTile
         label="Earned"
         icon="wallet"
-        value={formatUsdc(earnings?.total ?? 0n)}
+        value={formatUsdc(earnings?.yours ?? 0n)}
         hint="split to your deposit key"
-        tone={earnings && earnings.total > 0n ? "ok" : "neutral"}
+        tone={earnings && earnings.yours > 0n ? "ok" : "neutral"}
         loading={live && earnings === null}
       />
       <StatTile

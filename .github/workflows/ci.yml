@@ -188,6 +188,18 @@ jobs:
       # difference passes every gate — this is the tier that caught `this.#fetch` being unbound.
       - name: Browser proof
         run: pnpm --filter firsthand-capture e2e
+      # The `e2e` script rebuilds deploy/capture before serving it, and that tree is *committed* —
+      # docs/DEPLOY.md's claim is that what is in git is what Vercel serves. So the rebuild is also
+      # a check on that claim: if these sources no longer produce the committed bytes, someone
+      # changed the PWA and shipped a stale tree. Runs after the proof so a hash difference cannot
+      # mask a real browser failure.
+      - name: The committed deploy tree is what these sources produce
+        run: |
+          git diff --exit-code --stat -- deploy/capture || {
+            echo "deploy/capture no longer matches its sources — rebuild and commit it:"
+            echo "  pnpm --filter firsthand-capture bundle:vercel && git add deploy/capture"
+            exit 1
+          }
       - name: Screenshots from a failed run
         if: failure()
         uses: actions/upload-artifact@v4

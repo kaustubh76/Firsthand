@@ -1,7 +1,7 @@
 import type { ConsentEvent } from "@firsthand/adapters/client";
 import { GrantStatus } from "@firsthand/core";
 import { describe, expect, it } from "vitest";
-import { fetchGrantStatuses, grantStatusLabel, grantView } from "./grants.js";
+import { fetchGrantExpiries, fetchGrantStatuses, grantStatusLabel, grantView } from "./grants.js";
 import type { GrantEntry } from "./journal.js";
 
 const grant: GrantEntry = {
@@ -48,5 +48,24 @@ describe("grants", () => {
     const m = await fetchGrantStatuses(statusOf, ["0x01", "0xbad"]);
     expect(m.get("0x01")).toBe("withdrawn");
     expect(m.get("0xbad")).toBe("unknown");
+  });
+});
+
+describe("fetchGrantExpiries", () => {
+  it("derives the lapse epoch from epochStart + term", async () => {
+    const m = await fetchGrantExpiries(
+      async (id) => (id === "0x01" ? { epochStart: 5n, term: 4n } : null),
+      ["0x01", "0x02"],
+    );
+    expect(m.get("0x01")).toBe(9n);
+    // A grant the chain does not know is simply absent, never a zero the row would print.
+    expect(m.has("0x02")).toBe(false);
+  });
+
+  it("never throws on a failed read", async () => {
+    const m = await fetchGrantExpiries(async () => {
+      throw new Error("rpc");
+    }, ["0x01"]);
+    expect(m.size).toBe(0);
   });
 });

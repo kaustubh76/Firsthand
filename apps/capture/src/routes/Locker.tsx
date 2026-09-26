@@ -9,7 +9,7 @@ import { useJournal } from "../hooks/useJournal.js";
 import type { AppConfig } from "../lib/config.js";
 import { type Earnings, fetchEarnings, ownTerms } from "../lib/earnings.js";
 import { reportFailure } from "../lib/failures.js";
-import { fetchGrantStatuses, type GrantChainStatus } from "../lib/grants.js";
+import { fetchGrantExpiries, fetchGrantStatuses, type GrantChainStatus } from "../lib/grants.js";
 import { fetchReceipts, fetchTimeline, type TimelineScan } from "../lib/ledger.js";
 import { type Liveness, readerFor } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
@@ -127,6 +127,7 @@ export function LockerView({
 
   // Grant status from the contract, refining what the journal and the events already say.
   const [statuses, setStatuses] = useState<Map<Bytes32, GrantChainStatus> | null>(null);
+  const [expiries, setExpiries] = useState<ReadonlyMap<Bytes32, bigint>>(new Map());
   const refreshStatuses = useCallback(async () => {
     if (!config.live || !client.publicClient) return;
     if (grantIds.length === 0) {
@@ -139,7 +140,12 @@ export function LockerView({
     const statusOf = client.lens
       ? (id: Bytes32) => (client.lens as OnchainLensReader).grantStatus(id)
       : (id: Bytes32) => reader.effectiveStatus(id);
-    setStatuses(await fetchGrantStatuses(statusOf, grantIds));
+    const [next, ends] = await Promise.all([
+      fetchGrantStatuses(statusOf, grantIds),
+      fetchGrantExpiries((id) => reader.grantState(id), grantIds),
+    ]);
+    setStatuses(next);
+    setExpiries(ends);
   }, [config, client.publicClient, grantKey]);
   useEffect(() => {
     void refreshStatuses();
@@ -225,6 +231,7 @@ export function LockerView({
           <GrantsCard
             ctx={ctx}
             statuses={statuses}
+            expiries={expiries}
             reveal={reveal}
             onWithdrawn={() => void refreshStatuses()}
           />

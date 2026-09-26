@@ -28,11 +28,14 @@ import type { LockerCtx } from "./types.js";
 export function GrantsCard({
   ctx,
   statuses,
+  expiries,
   reveal,
   onWithdrawn,
 }: {
   ctx: LockerCtx;
   statuses: ReadonlyMap<Bytes32, GrantChainStatus> | null;
+  /** Epoch each grant lapses at on its own (`epochStart + term`), derived from the chain. */
+  expiries: ReadonlyMap<Bytes32, bigint>;
   /** The deployment's reveal window and the chain's head — what a pending commit's deadline is read from. */
   reveal: { readonly window: bigint | null; readonly head: bigint | null };
   onWithdrawn: () => void;
@@ -128,6 +131,12 @@ export function GrantsCard({
                 <div className="row-meta">
                   <span>ns {g.ns}</span>
                   <span>{relativeTime(g.at)}</span>
+                  {/* Consent has an end even if nobody withdraws it; say when. */}
+                  {view.status === "live" && expiries.get(g.grantId) !== undefined && (
+                    <span data-testid={`expiry:${g.grantId}`}>
+                      runs through epoch {(expiries.get(g.grantId) as bigint) - 1n}
+                    </span>
+                  )}
                   <Tx hash={g.txHash} chainId={config.chainId} label="granted" copy={false} />
                   {g.rescindTx && <Tx hash={g.rescindTx} chainId={config.chainId} copy={false} />}
                 </div>

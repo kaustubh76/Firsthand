@@ -67,3 +67,23 @@ export async function fetchGrantStatuses(
   );
   return out;
 }
+
+/**
+ * When consent lapses on its own, per grant: a grant expires at `epochStart + term` and the chain
+ * stores `epochEnd` only once it is rescinded, so the expiry has to be derived — which is why the
+ * app showed a status of "expired" after the fact and never a date before it. A principal
+ * approving a request should be able to see how long they are agreeing to.
+ */
+export async function fetchGrantExpiries(
+  stateOf: (grantId: Bytes32) => Promise<{ epochStart: bigint; term: bigint } | null>,
+  ids: readonly Bytes32[],
+): Promise<Map<Bytes32, bigint>> {
+  const out = new Map<Bytes32, bigint>();
+  await Promise.all(
+    ids.map(async (id) => {
+      const g = await stateOf(id).catch(() => null);
+      if (g) out.set(id, g.epochStart + g.term);
+    }),
+  );
+  return out;
+}

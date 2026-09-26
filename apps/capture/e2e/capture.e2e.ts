@@ -773,6 +773,51 @@ async function main() {
       agent.close();
     }
 
+    step("withdraw privately: a commit that names nothing, a reveal that back-dates consent");
+    // README §8 claim 1's fallback (ADR-0012), and the arm the Evidence tab measures. The direct
+    // path announces which grant is ending before it ends — the race §13's observer bot is built to
+    // win. `Rescissions.commit` publishes only `keccak256(grantId, salt)`, carries no signature and
+    // needs no passkey; `revealRescind` then proves the preimage and ends consent at the *commit's*
+    // block. Until now the SDK could do this and the page could not, so nothing exercised it in a
+    // browser. The outsider's grant is the one still live at this point.
+    {
+      await page.locator("nav").getByRole("button", { name: "locker" }).click();
+      const row = page
+        .getByTestId("grants")
+        .locator("li")
+        .filter({ hasText: outsider.cardId.slice(2, 8) });
+      await row.waitFor({ timeout: 30_000 });
+      await row.getByRole("button", { name: "Withdraw privately" }).click();
+      const commitRow = row.getByTestId(`commit:${outsiderGrant}`);
+      await commitRow.waitFor({ timeout: 120_000 });
+      const committed = ((await commitRow.textContent()) ?? "").replace(/\s+/g, " ").trim();
+      if (!/commit posted/.test(committed)) throw new Error(`commit row reads: ${committed}`);
+      ok(`committed without naming the grant — ${committed.slice(0, 110)}`);
+
+      // Still live on chain: a commitment is not a rescission until it is revealed, and the page
+      // must not pretend otherwise — the buyer can still pay right now.
+      const stillServed = await buy(outsider, gatewayUrl, fullDisco, outsiderGrant, passportId);
+      if (!new TextDecoder().decode(stillServed.plaintext).includes("hallway light")) {
+        throw new Error("the gateway refused a grant whose rescission was only committed");
+      }
+      ok("consent still holds between the two steps — the commit alone ends nothing");
+
+      await row.getByRole("button", { name: "Reveal and end consent" }).click();
+      await row.getByText("withdrawn").waitFor({ timeout: 120_000 });
+      ok("revealed — the row now reads withdrawn");
+
+      let refused: string | null = null;
+      try {
+        await buy(outsider, gatewayUrl, fullDisco, outsiderGrant, passportId);
+      } catch (error) {
+        refused = error instanceof Error ? error.message : String(error);
+      }
+      if (refused === null) throw new Error("the gateway served after a revealed rescission");
+      if (!/RESCINDED|403/.test(refused))
+        throw new Error(`refused for the wrong reason: ${refused}`);
+      ok(`the same buyer is refused: ${refused.slice(0, 100)}`);
+    }
+
     step("phone-shaped: every screen fits a 390 px viewport (no horizontal overflow)");
     const phone = await browser.newContext({
       viewport: { width: 390, height: 844 },

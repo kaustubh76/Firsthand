@@ -127,6 +127,19 @@ export class OnchainGrantReader implements GrantReader {
     });
   }
 
+  /**
+   * Blocks a commit-reveal rescission has to reveal in before `GrantManager.revealRescind` refuses it
+   * with `RevealWindowElapsed`. Not on the `GrantReader` port: serving never asks this, but a client
+   * that has committed must show the deadline it is working against.
+   */
+  revealWindowBlocks(): Promise<bigint> {
+    return this.#c.readContract({
+      address: this.#o.grantManager,
+      abi: GrantManagerAbi,
+      functionName: "revealWindowBlocks",
+    });
+  }
+
   async chainTime(): Promise<bigint> {
     return (await this.#c.getBlock()).timestamp;
   }

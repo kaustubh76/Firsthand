@@ -13,6 +13,7 @@ import { fetchReceipts, fetchTimeline, type TimelineScan } from "../lib/ledger.j
 import { type Liveness, readerFor } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
 import type { GrantRequest } from "../lib/requests.js";
+import { fetchRevealWindow } from "../lib/rescind.js";
 import { PRICE_UNITS } from "../lib/terms.js";
 import { Hash, Notice, Pill } from "../ui/index.js";
 import { ActivityCard } from "./locker/ActivityCard.js";
@@ -122,6 +123,28 @@ export function LockerView({
     void refreshStatuses();
   }, [refreshStatuses]);
 
+  // A committed-but-unrevealed withdrawal has a deadline: `revealRescind` refuses once
+  // `head - commitBlock > revealWindowBlocks`. Read both, and only while something is pending.
+  const pendingCommits = journal.pendingRescissions?.length ?? 0;
+  const [reveal, setReveal] = useState<{ window: bigint | null; head: bigint | null }>({
+    window: null,
+    head: null,
+  });
+  useEffect(() => {
+    if (pendingCommits === 0 || !client.publicClient) return;
+    const read = async () => {
+      const [window, head] = await Promise.all([
+        fetchRevealWindow(config, client),
+        client.publicClient?.getBlockNumber({ cacheTime: 0 }).catch(() => null) ?? null,
+      ]);
+      setReveal({ window, head: head ?? null });
+    };
+    void read();
+    // The head moves, so the deadline is re-read while a commit is outstanding.
+    const timer = setInterval(() => void read(), 30_000);
+    return () => clearInterval(timer);
+  }, [pendingCommits, config, client]);
+
   const ctx: LockerCtx = {
     session,
     config,
@@ -177,7 +200,12 @@ export function LockerView({
           />
           <OnChainCard ctx={ctx} liveness={liveness} onActivated={onActivated} />
           <DepositsCard ctx={ctx} />
-          <GrantsCard ctx={ctx} statuses={statuses} onWithdrawn={() => void refreshStatuses()} />
+          <GrantsCard
+            ctx={ctx}
+            statuses={statuses}
+            reveal={reveal}
+            onWithdrawn={() => void refreshStatuses()}
+          />
           <EarningsCard
             ctx={ctx}
             earnings={earnings}

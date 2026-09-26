@@ -11,7 +11,9 @@ export type LockerAction =
   | "anchor"
   | "manifest"
   | `approve:${string}`
-  | `rescind:${string}`;
+  | `rescind:${string}`
+  | `commit:${string}`
+  | `reveal:${string}`;
 
 /** What every card on the Locker shares. */
 export interface LockerCtx {

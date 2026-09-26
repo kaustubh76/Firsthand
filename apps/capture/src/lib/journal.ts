@@ -2,9 +2,10 @@ import type { Bytes32 } from "@firsthand/core";
 
 /**
  * What this browser did with its locker, kept locally so history survives the gateway's scan window
- * (a log-backed ledger sees a bounded range of blocks per request) and reloads. Nothing here is a
- * secret: passport ids, grant ids and transaction hashes are all public on chain. Bigints are
- * strings because this is JSON.
+ * (a log-backed ledger sees a bounded range of blocks per request) and reloads. Nothing here is key
+ * material: passport ids, grant ids and transaction hashes are all public on chain. The one value
+ * that is not yet public is a `PendingRescission.salt`, and it becomes public the moment its
+ * rescission is revealed — see the note on that type. Bigints are strings because this is JSON.
  */
 export interface DepositEntry {
   readonly passportId: Bytes32;
@@ -39,6 +40,26 @@ export interface ReceiptEntry {
   readonly at: number;
 }
 
+/**
+ * A commit-reveal rescission this browser started (README §8 claim 1's fallback, ADR-0012).
+ *
+ * `Rescissions.commit` publishes `keccak256(grantId, salt)` and nothing else, so the mempool cannot
+ * tell which grant is ending or whose it is; `GrantManager.revealRescind` then back-dates the end of
+ * consent to the **commit's block**, which is the property the two steps buy. The salt is what links
+ * them, so it has to survive a reload and lives here. It is not key material and it is published at
+ * reveal; until then its only job is unlinkability. Losing it costs nothing irreversible — the grant
+ * is still live and a direct rescission still ends it.
+ */
+export interface PendingRescission {
+  readonly grantId: Bytes32;
+  readonly salt: Bytes32;
+  readonly commitment: Bytes32;
+  readonly commitTx: Bytes32;
+  /** The block the commitment landed in — what the reveal back-dates consent's end to. */
+  commitBlock?: string;
+  readonly at: number;
+}
+
 /** A deposit delegation issued from this browser — scope only, never the code itself. */
 export interface DelegationEntry {
   readonly ns: number;
@@ -53,6 +74,8 @@ export interface Journal {
   deposits: DepositEntry[];
   grants: GrantEntry[];
   receipts: ReceiptEntry[];
+  /** Commit-reveal withdrawals committed but not yet revealed. */
+  pendingRescissions?: PendingRescission[];
   delegations?: DelegationEntry[];
   /** Beats of the three-minute script this browser has been through (the journey rail reads them). */
   refusalAt?: number;

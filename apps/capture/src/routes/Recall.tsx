@@ -25,6 +25,7 @@ import { reportFailure } from "../lib/failures.js";
 import { pluralise } from "../lib/format.js";
 import { canGrant, describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
+import { commitRescind, type RescindMode, revealRescind } from "../lib/rescind.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
 import { useNavigation } from "../shell/navigation.js";
 import {
@@ -63,7 +64,7 @@ const STEPS: { id: StepId; title: string; what: string }[] = [
   {
     id: "rescind",
     title: "You withdraw consent",
-    what: "One passkey-signed transaction. Effective at its own block; the Consent Ledger dates it.",
+    what: "Directly: one passkey-signed transaction, effective at its own block. Privately: a blind commitment first, then a reveal that back-dates the end of consent to the commit's block — the mempool never learns which grant is ending. The Consent Ledger dates whichever you choose.",
   },
   {
     id: "refused",
@@ -116,6 +117,10 @@ export function Recall({
     () => (client.relay ? openAgent(config, client.relay) : null),
     [client.relay, config],
   );
+
+  // Which of the two rescind paths this run takes. Direct by default — the §19 script's default —
+  // with the private path one click away, because it is the arm the Evidence tab measures.
+  const [mode, setMode] = useState<RescindMode>("direct");
 
   const target = published.find((d) => d.passportId === passportId) ?? null;
   const blocked =
@@ -328,6 +333,31 @@ export function Recall({
 
     const ok4 = await step("rescind", async () => {
       if (!grant) throw new Error("no grant");
+      if (mode === "commit-reveal") {
+        // Two transactions, and the order is the point: the commitment names nothing, and the reveal
+        // back-dates the end of consent to the commit's block.
+        const pending = await commitRescind(session, client, grant);
+        say(
+          "rescind",
+          <>
+            committed — {tx(pending.commitTx)} · the mempool saw only{" "}
+            <code>keccak256(grant, salt)</code>
+            {pending.commitBlock === undefined ? null : `, block ${pending.commitBlock}`}
+          </>,
+        );
+        const revealTx = await revealRescind(session, client, pending);
+        say(
+          "rescind",
+          <>
+            revealed — {tx(revealTx)} · consent ended at
+            {pending.commitBlock === undefined
+              ? " the commit's block"
+              : ` block ${pending.commitBlock}`}
+            , not this one
+          </>,
+        );
+        return;
+      }
       const sent = await session.sendRescind(session.planRescind(grant));
       await waitForTx?.(sent.txHash, "Consent withdrawn");
       mutate((j) => {
@@ -477,6 +507,21 @@ export function Recall({
                 )}
               </Field>
             )}
+            <Field label="How you withdraw">
+              {(id) => (
+                <select
+                  id={id}
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as RescindMode)}
+                  data-testid="rescind-mode"
+                >
+                  <option value="direct">directly — one signed transaction, public</option>
+                  <option value="commit-reveal">
+                    privately — commit, then reveal (consent ends at the commit)
+                  </option>
+                </select>
+              )}
+            </Field>
             <Button
               variant="primary"
               icon="replay"

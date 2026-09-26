@@ -16,25 +16,10 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
-const candidates = [
-  "forge",
-  join(homedir(), ".foundry", "bin", "forge"),
-  join(homedir(), ".cargo", "bin", "forge"),
-];
-const forge = candidates.find((c) =>
-  c === "forge"
-    ? spawnSync("forge", ["--version"], { stdio: "ignore" }).status === 0
-    : existsSync(c),
-);
-if (!forge) {
-  console.log(
-    "forge-gate: Foundry not installed — skipping `forge test` (CI runs it; see docs/DEVELOPMENT.md)",
-  );
-  process.exit(0);
-}
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contracts = join(root, "contracts");
 
 /** The Foundry version CI installs, read from the workflow that installs it — one source of truth. */
@@ -46,9 +31,40 @@ function pinnedVersion() {
     return null;
   }
 }
-const version = spawnSync(forge, ["--version"], { encoding: "utf8" });
-const local = version.stdout?.match(/\d+\.\d+\.\d+/)?.[0] ?? null;
 const pinned = pinnedVersion();
+
+const versionOf = (bin) =>
+  spawnSync(bin, ["--version"], { encoding: "utf8" }).stdout?.match(/\d+\.\d+\.\d+/)?.[0] ?? null;
+
+/**
+ * More than one Foundry is often installed — foundryup's and cargo's — and they may be years apart.
+ * Prefer whichever one matches the version CI pins, because that is the formatter whose verdict
+ * actually decides the build. Measured on this machine: ~/.cargo/bin was 1.1.0 (CI's pin) while
+ * ~/.foundry/bin was 1.7.1, and the two disagree about 40 files — so picking the first on PATH meant
+ * the gate could only report. Picking the right one lets it enforce.
+ */
+const installed = [
+  "forge",
+  join(homedir(), ".foundry", "bin", "forge"),
+  join(homedir(), ".cargo", "bin", "forge"),
+]
+  .filter((c) =>
+    c === "forge"
+      ? spawnSync("forge", ["--version"], { stdio: "ignore" }).status === 0
+      : existsSync(c),
+  )
+  .map((bin) => ({ bin, version: versionOf(bin) }));
+if (installed.length === 0) {
+  console.log(
+    "forge-gate: Foundry not installed — skipping `forge test` (CI runs it; see docs/DEVELOPMENT.md)",
+  );
+  process.exit(0);
+}
+const matching = installed.find((f) => f.version !== null && f.version === pinned);
+const chosen = matching ?? installed[0];
+const forge = chosen.bin;
+const local = chosen.version;
+if (matching) console.log(`forge-gate: using Foundry ${local} (CI's pin) at ${forge}`);
 const sameFormatter = local !== null && pinned !== null && local === pinned;
 
 const fmt = spawnSync(forge, ["fmt", "--check"], { cwd: contracts, stdio: "inherit" });

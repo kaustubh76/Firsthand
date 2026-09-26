@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+import {console} from "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {IPrincipalRegistry} from "../../src/interfaces/IPrincipalRegistry.sol";
 import {AuthorityDigests} from "../../src/libraries/AuthorityDigests.sol";
@@ -9,10 +10,22 @@ import {PassportLib} from "../../src/libraries/PassportLib.sol";
 import {P256Signer} from "../P256Signer.sol";
 
 /// @title PrincipalRegistryForkTest
-/// @notice `test:testnet` only: exercises the deployed registry on a fork of Monad testnet, so the P-256
-///         signature is verified by the chain's native precompile rather than the etched double.
-/// @dev    Reads deployments/<chainId>.json; skips when MONAD_RPC_URL is unset. The enrolment is a fresh,
-///         throw-away key: nothing here is a real principal.
+/// @notice `test:testnet` only: exercises the **deployed** registry's bytecode against forked Monad
+///         testnet state, with a real P-256 signature rather than the etched double.
+/// @dev    Reads deployments/<chainId>.json; skips when MONAD_RPC_URL is unset. The enrolment is a
+///         fresh, throw-away key: nothing here is a real principal.
+///
+///         What a fork does and does not prove. `vm.createSelectFork` takes *state* from the remote
+///         chain but executes in Foundry's own EVM, so the RIP-7212 precompile at 0x100 is Foundry's,
+///         not Monad's — and it is present only when the toolchain supplies it (`--odyssey` on the
+///         v1.1.0 this repo pins; `foundry.toml` sets `evm_version = "cancun"`, which predates the
+///         RIP). Without it every signature reads as invalid, so this probes for the precompile and
+///         skips with a reason rather than failing as `InvalidAuthoritySignature` — which is how this
+///         test spent its whole life red once anyone set MONAD_RPC_URL, unnoticed because
+///         `contracts test:testnet` died on a dangling `--rpc-url` before reaching it.
+///
+///         The *native* precompile is proved where it can only be proved: by real transactions on
+///         Monad testnet — `pnpm demo -- --testnet` and the browser tier against the live links.
 contract PrincipalRegistryForkTest is Test {
     IPrincipalRegistry internal registry;
 
@@ -29,8 +42,21 @@ contract PrincipalRegistryForkTest is Test {
     uint256 internal y;
     bytes32 internal id;
 
+    /// @dev A signature we know is good: if it does not verify, the EVM has no P-256 precompile.
+    function hasP256Precompile() internal view returns (bool) {
+        uint256 probeKey = uint256(keccak256("rip-7212 probe"));
+        (uint256 px, uint256 py) = P256Signer.publicKey(vm, probeKey);
+        bytes32 probe = keccak256("rip-7212 probe digest");
+        return P256.verifySignature(probe, P256Signer.sign(vm, probeKey, probe), px, py);
+    }
+
     function test_enrollAndAttestOnRealPrecompile() public {
         if (address(registry) == address(0)) {
+            vm.skip(true);
+            return;
+        }
+        if (!hasP256Precompile()) {
+            console.log("fork: this EVM has no RIP-7212 precompile - run with --odyssey (Foundry 1.1)");
             vm.skip(true);
             return;
         }

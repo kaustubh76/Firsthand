@@ -13,11 +13,22 @@ import { IpfsBlobStore } from "../../src/blobs/IpfsBlobStore.js";
  * Kept out of `check:all` for the same reason as the x402 interop suite: no gate in this repo should
  * depend on a service being up. Skips with a printed reason when there is no node.
  */
-const API = process.env["IPFS_API_URL"] ?? "http://127.0.0.1:5001";
+const configured = process.env["IPFS_API_URL"];
+const API = configured ?? "http://127.0.0.1:5001";
 
 const reachable = await fetch(`${API}/api/v0/version`, { method: "POST" })
   .then((r) => r.ok)
   .catch(() => false);
+// Skipping is for the developer who simply has no node running. If someone went to the trouble of
+// naming one in IPFS_API_URL, its absence is a failure — otherwise a CI container that never came
+// up leaves a green job that tested nothing, which is the shape of every gate this repo has had to
+// go back and fix.
+if (!reachable && configured !== undefined) {
+  throw new Error(
+    `IPFS_API_URL is set to ${API} but no Kubo node answered there. Start one with ` +
+      "`docker run -d -p 5001:5001 ipfs/kubo`, or unset IPFS_API_URL to skip this suite.",
+  );
+}
 if (!reachable) console.log(`ipfs: no node at ${API} — skipping (docker run … ipfs/kubo)`);
 
 describe.skipIf(!reachable)("IpfsBlobStore against a live Kubo node", () => {

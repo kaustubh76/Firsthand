@@ -35,7 +35,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:testnet": "vitest run -c vitest.anvil.config.ts",
     "coverage": "vitest run --coverage",
     "test:anvil": "vitest run -c vitest.anvil.config.ts"
   },

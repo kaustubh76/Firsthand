@@ -38,7 +38,12 @@ colour-coded flows. Open it at excalidraw.com before touching a lane you have no
   skipped otherwise. Runs serialised (`turbo --concurrency=1`, `fileParallelism: false`) because
   every file shares the relayer's nonce. Kill stale nodes with `pkill -f anvil` before restarting —
   a leftover node keeps the old deployment and the round-trips fail on `EpochNotAttested`.
-- `test:testnet` — needs `MONAD_RPC_URL` (and `DEPLOYER_PRIVATE_KEY` for scripts). Skipped otherwise.
+- `test:testnet` — the suites that need something outside this repo. `contracts` forks Monad with
+  `MONAD_RPC_URL` and skips with a printed reason without it (it used to interpolate the variable
+  unquoted, so forge got a dangling `--rpc-url` and the whole tier died rather than skipping); it
+  detects `--odyssey`, because a fork runs in Foundry's EVM and the RIP-7212 precompile is only there
+  when the toolchain supplies it. `@firsthand/adapters` runs the x402 and IPFS interop suites — IPFS
+  skips when `IPFS_API_URL` is unset and **fails** when it is set and nothing answers.
 - Foundry: `forge test` (default profile), `FOUNDRY_PROFILE=ci forge test` (10k fuzz runs).
 - `pnpm --filter firsthand-capture e2e` — **the browser tier.** Everything above runs in Node; a
   blank page, a wrong asset path or a browser-only API difference passes all of it. This serves the

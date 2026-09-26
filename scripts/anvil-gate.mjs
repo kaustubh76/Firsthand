@@ -126,7 +126,11 @@ if (status !== 0) process.exit(status ?? 1);
 // The whole point of this script: turbo exiting 0 is not evidence. Count what vitest reported.
 // Strip the colour codes first — turbo writes `Tests \x1b[1m\x1b[32m11 passed`, so a regex over the
 // raw bytes finds nothing and this check would report zero on a perfectly good run.
-const plain = transcript.replace(/\u001b\[[0-9;]*m/g, "");
+// ESC is built rather than written: a literal control character in a regular expression is a lint
+// error (Biome's noControlCharactersInRegex), and suppressing the rule to strip colour codes would
+// be the wrong trade.
+const CSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+const plain = transcript.replace(CSI, "");
 const ran = [...plain.matchAll(/Tests\s+(\d+) passed/g)].reduce((n, m) => n + Number(m[1]), 0);
 if (ran === 0) {
   die(

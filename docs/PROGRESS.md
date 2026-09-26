@@ -652,6 +652,64 @@ cannot produce it — adding it would have broken the property that a buyer's fi
 export, and would have added a carried-but-unchecked field in the very pass about removing them. The
 anchor *block* is now compared against the chain, which is the half that can be proved.
 
+---
+
+## The tiers that ran nowhere, and the red test one of them was hiding (27 Sep)
+
+Two whole test tiers existed, were documented as the best tests in the repo, and no workflow ran
+either. The browser tier — the only test that opens a browser, the one that caught the `this.#fetch`
+bug that made the relay unreachable from every browser — had a sentence in `docs/DEVELOPMENT.md`
+telling you to run it by hand as its substitute for a gate. **It is a CI job now, and passed on its
+first run.** It needs no secret, no service and no network egress; the only missing piece was
+`playwright install`, which nothing in the repo did, because pnpm never fetches the browser.
+
+The testnet tier turned out to be hiding something. `contracts/package.json` interpolated
+`--rpc-url $MONAD_RPC_URL` unquoted, so with the variable unset the word vanished and forge got a
+dangling flag — `argc: 5` — and died on a parse error. Not a skip: the tier was red on any machine
+without the variable, while `docs/DEVELOPMENT.md` had said "Skipped otherwise" since the day it was
+written. True of the Solidity, which guards properly; false of the script that never reached it.
+
+Set the variable and the tier ran for the first time, and its one fork test failed with
+`InvalidAuthoritySignature` — broken since it landed on 13 Sep, unrunnable and therefore unnoticed.
+The cause was a false premise in the test's own docstring: it claims to verify "by the chain's
+native precompile", but `vm.createSelectFork` takes *state* from the remote chain and executes in
+Foundry's EVM, and `foundry.toml` pins `evm_version = "cancun"`, which predates RIP-7212. Foundry
+v1.1.0 — the pinned version — has `forge test --odyssey`; 1.7 dropped the flag. With it: **1 passed,
+the first time ever.** The script detects the flag now, the test probes for the precompile and skips
+with a reason instead of reporting a signature failure that is really a missing opcode, and the
+docstring says what a fork can and cannot prove. The native precompile is proved where it can only
+be proved — real transactions on Monad testnet.
+
+Two more silent-skip holes closed: `packages/sdk`'s `test:testnet` was byte-identical to its own
+`test:anvil`, so under the testnet tier it ran zero tests and exited green — the very failure
+`scripts/anvil-gate.mjs` exists to stop, in the tier that gate does not cover. And the IPFS interop
+suite skipped whenever no node answered even when `IPFS_API_URL` had been set deliberately, so a CI
+container that failed to start would have left a green job. Absence is an error now when the node
+was named. A scheduled `interop` workflow watches both suites weekly — never a required check,
+because §8 claim 4 depends on a service this project does not control, and a claim resting on
+someone else's uptime must not be able to redden an unrelated pull request.
+
+CI's anvil steps now poll `eth_chainId` rather than `sleep 2`. anvil is backgrounded, so the step's
+exit status was the sleep's: a dead anvil passed its own step and surfaced two steps later as
+"Connection refused" from forge. Worth recording the hazard that nearly repeated the bug while
+fixing it — Actions runs `bash -e`, and `VAR=$(cmd)` takes the command's exit status, so the
+flag-detection line aborts the step unless it ends `|| true`.
+
+Finally, `apps/demo/src/env.ts` — the bootstrap `pnpm demo` and the browser tier both stand on — had
+zero executed coverage, because the package declared no `coverage` script and turbo skipped it
+entirely. Ten tests take it to 37 % of lines, and writing them found a defect: `codeAt`'s docstring
+says "checking the registry alone is not enough", and the code filtered out absent contracts and
+rejected only when *all* were missing, so a deployment file naming just `PrincipalRegistry` passed.
+It requires all seven now.
+
+One experiment, and it came back positive. The browser tier rebuilds the *committed*
+`deploy/capture` tree before serving it, so asserting `git diff --exit-code` afterwards turns that
+rebuild into a check on `docs/DEPLOY.md`'s claim that what is in git is what Vercel serves — the
+claim that was false on 24 Sep. It was landed as its own commit because vite's determinism across
+macOS-arm64 and linux-x64 was unproven and a negative result would have been worth having. It
+passed: CI's tree is byte-identical to the committed one, so the claim now has a gate rather than a
+convention.
+
 Also retired: `forge-gate` now picks the Foundry matching CI's pin rather than the first on PATH.
 Two are installed here and they disagree about 40 files, which is why the gate could previously only
 report formatting. It enforces now, so the caveat it has carried since it was written is gone.

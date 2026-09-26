@@ -3,10 +3,16 @@
  * Gates Foundry line + branch coverage for a path prefix (default: contracts/src/libraries/).
  *
  * Usage: node scripts/coverage-gate.mjs --lcov contracts/lcov.info --min 95 --include src/libraries/
+ *        node scripts/coverage-gate.mjs --lcov contracts/lcov.info --min 100 --min-branches 95 --include src/
  *
  * Parses LCOV records (SF/DA/BRDA) and fails when the aggregate line or branch coverage over the
- * included files is below `--min` percent. Branch coverage is skipped when no BRDA records exist
+ * included files is below its minimum. Branch coverage is skipped when no BRDA records exist
  * (older forge versions emit none).
+ *
+ * `--min-branches` exists because the two are different claims and the repo makes a different one
+ * about each: every line of `contracts/src` is executed (100 %), while branches stand at 97.75 %.
+ * Gating both at one number would either let the line claim rot or assert a branch figure that is
+ * not true. Defaults to `--min`, so existing invocations are unchanged.
  */
 import { readFileSync } from "node:fs";
 
@@ -17,6 +23,7 @@ function arg(name, fallback) {
 
 const lcovPath = arg("lcov", "contracts/lcov.info");
 const min = Number(arg("min", "95"));
+const minBranches = Number(arg("min-branches", String(min)));
 const include = arg("include", "src/libraries/");
 
 const text = readFileSync(lcovPath, "utf8");
@@ -69,9 +76,10 @@ const branchCov = branches.found ? pct(branches.hit, branches.found) : null;
 console.log(
   `\n${include}: lines ${lineCov.toFixed(2)}%` +
     (branchCov === null ? " (no branch data)" : `, branches ${branchCov.toFixed(2)}%`) +
-    ` — minimum ${min}%`,
+    ` — minimum ${min}% lines` +
+    (branchCov === null ? "" : `, ${minBranches}% branches`),
 );
-const failed = lineCov < min || (branchCov !== null && branchCov < min);
+const failed = lineCov < min || (branchCov !== null && branchCov < minBranches);
 if (failed) {
   console.error("✗ coverage gate failed");
   process.exit(1);

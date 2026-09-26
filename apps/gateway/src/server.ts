@@ -45,6 +45,7 @@ import {
 } from "@firsthand/adapters";
 import {
   EpochLibAbi,
+  FirsthandLensAbi,
   GrantManagerAbi,
   MerkleLibAbi,
   MockUSDCAbi,
@@ -62,11 +63,13 @@ import { type Deployment, loadDeployment, parseDeployment } from "@firsthand/con
 import {
   type Address,
   type AttestationClass,
+  type Bytes32,
   Bytes32Schema,
   ConfigError,
   DEFAULT_HALF_LIFE_SECONDS,
   type Eip712Domain,
   normalizeNetwork,
+  type PassportSidecar,
   parseSidecar,
   ValidationError,
 } from "@firsthand/core";
@@ -234,6 +237,61 @@ function objectStoreClient(config: GatewayConfig) {
   return createVercelBlobClient({ token: config.BLOB_READ_WRITE_TOKEN });
 }
 
+/**
+ * `VerifyFailure` as the chain numbers it (`contracts/src/types/Structs.sol`), ordinal by ordinal.
+ * Solidity enums cross the ABI as integers, so this is the only place the two spellings meet — and
+ * `serving.test.ts` asserts it still matches `Object.keys(VerifyFailure)`, because a reason that
+ * decodes to the wrong name would make the twin look like it disagreed when it did not.
+ */
+export const LENS_REASONS = [
+  "NONE",
+  "SIG_INVALID",
+  "MERKLE_INVALID",
+  "ROOT_UNKNOWN",
+  "TERMS_MISMATCH",
+  "EPOCH_OUT_OF_GRANT",
+  "GRANT_NOT_LIVE",
+  "GRANT_RESCINDED",
+  "GRANT_EXPIRED",
+  "GRANT_FROZEN",
+  "SCOPE_MISMATCH",
+] as const;
+
+/** The ABI wants `bytes32[8]`; a sidecar that carries any other depth is not a FIRSTHAND proof. */
+function siblings8(
+  siblings: readonly `0x${string}`[],
+): readonly [
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+] {
+  if (siblings.length !== 8) {
+    throw new ValidationError("a batch proof has exactly 8 siblings (Merkle depth 8, ADR-0004)", {
+      context: { got: siblings.length },
+    });
+  }
+  return siblings as unknown as readonly [
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+    `0x${string}`,
+  ];
+}
+
+type LensVerify = (
+  sidecar: PassportSidecar,
+  grantId: Bytes32,
+) => Promise<{ ok: boolean; reason: string }>;
+
 /** Assembles adapters from config. Memory mode needs no network — used by tests and `pnpm dev`. */
 export function createGateway(
   config: GatewayConfig,
@@ -353,6 +411,8 @@ export function createGateway(
   let blockTime: ((blockNumber: bigint) => Promise<bigint | null>) | null = null;
   let relayerFloat: (() => Promise<{ address: Address; balanceWei: bigint }>) | null = null;
   let erc8004: (Erc8004Registry & Erc8004Writer) | null = overrides.erc8004 ?? null;
+  /** The on-chain twin of `verifyPredicate`, when the gateway is bound to a chain that has a Lens. */
+  let lens: { address: Address; verify: LensVerify } | null = null;
   let relayerAddress: Address | null = overrides.relayerAddress ?? null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
@@ -392,6 +452,27 @@ export function createGateway(
         balanceWei: await clients.publicClient.getBalance({ address }),
       });
     }
+    // FirsthandLens: the same predicate, evaluated by the chain rather than by us. Read-only, so
+    // it needs nothing but a public client — `GET /v1/verify/:passportId` puts the two side by side.
+    const lensAddress = d.FirsthandLens.toLowerCase() as Address;
+    lens = {
+      address: lensAddress,
+      verify: async (sidecar, grantId) => {
+        const [ok, reason] = await clients.publicClient.readContract({
+          address: lensAddress,
+          abi: FirsthandLensAbi,
+          functionName: "verify",
+          args: [
+            sidecar.signed.passport,
+            sidecar.signed.signature,
+            sidecar.batchRoot,
+            { index: sidecar.proof.index, siblings: siblings8(sidecar.proof.siblings) },
+            grantId,
+          ],
+        });
+        return { ok, reason: LENS_REASONS[Number(reason)] ?? `UNKNOWN_${reason}` };
+      },
+    };
     // ERC-8004 reference registries, where the chain has them (Monad testnet/mainnet).
     const registries = new OnchainErc8004Registry({
       publicClient: clients.publicClient,
@@ -685,6 +766,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         anchors: "/v1/anchors/:root",
         // The audit surface — the Consent Ledger a judge is pointed at — named here too, so a
         // client that reads only this document can find it.
+        verify: "/v1/verify/:passportId?grant= — the predicate off chain and on, side by side",
         timeline: "/v1/principals/:principalId/timeline?fromBlock=",
         principalAnchors: "/v1/principals/:principalId/anchors?ns=&fromBlock=",
         receipts: "/v1/grants/:grantId/receipts?fromBlock=",
@@ -779,6 +861,39 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
       return c.json(result);
     },
   );
+
+  /**
+   * The twin, side by side. `FirsthandLens.verify` is the on-chain statement of the same predicate
+   * `@firsthand/core` runs off chain (README §7.3), and the two are supposed to agree — down to the
+   * reason, not merely the verdict. Until now nothing ever asked the chain, so the claim was only
+   * ever checked in tests. This asks both and publishes the pair, so a disagreement is visible to
+   * anyone rather than latent: `agree: false` means the gateway and the chain are reading a grant
+   * differently, which is the one thing a consent protocol cannot afford.
+   */
+  app.get("/v1/verify/:passportId", async (c) => {
+    const id = parseId(c.req.param("passportId"), "passport id");
+    const grantId = parseId(c.req.query("grant"), "grant (pass ?grant=0x…)");
+    const sidecar = await serving.sidecar(id);
+    const offchain = await serving.verify(sidecar, grantId);
+    const offReason = offchain.ok ? "NONE" : offchain.reason;
+    const onchain = lens === null ? null : await lens.verify(sidecar, grantId);
+    return c.json({
+      passportId: id,
+      grantId,
+      offchain: { ok: offchain.ok, reason: offReason, by: "@firsthand/core verifyPredicate" },
+      onchain:
+        onchain === null
+          ? null
+          : {
+              ok: onchain.ok,
+              reason: onchain.reason,
+              by: "FirsthandLens.verify",
+              at: lens?.address,
+            },
+      // null where there is no chain to ask (memory mode), never a silent "true".
+      agree: onchain === null ? null : onchain.ok === offchain.ok && onchain.reason === offReason,
+    });
+  });
 
   app.get("/v1/passports/:id", async (c) => {
     const sidecar = await serving.sidecar(parseId(c.req.param("id"), "passport id"));

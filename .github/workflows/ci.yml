@@ -65,9 +65,10 @@ jobs:
       - run: forge fmt --check
       - run: forge build --sizes
       - run: forge test -vv
-      - name: Coverage gate on src/libraries (>= 95%)
+      - name: Coverage gates — 100% lines on src/, 95% on src/libraries
         run: |
           FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)'
+          node ../scripts/coverage-gate.mjs --lcov lcov.info --min 100 --min-branches 95 --include src/
           node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/
       - name: Deploy dry-run on anvil
         run: |

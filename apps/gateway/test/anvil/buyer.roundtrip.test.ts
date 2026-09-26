@@ -212,6 +212,22 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
     await wait((await sendGrant(locker, transport, plan)).txHash);
     await publishWrap({ gatewayUrl: "http://gw", fetch: fetchApp }, plan.grantId, plan.wrap);
 
+    // README §7.3's twin, asked for real: `FirsthandLens.verify` runs the same predicate on chain
+    // that `@firsthand/core` runs off it, and they have to agree on the reason, not merely the
+    // verdict. In memory mode there is no Lens; here there is one, so this is the first place the
+    // claim is actually tested against a chain.
+    const parity = (await (
+      await fetchApp(`http://gw/v1/verify/${r.passportId}?grant=${plan.grantId}`)
+    ).json()) as {
+      offchain: { ok: boolean; reason: string };
+      onchain: { ok: boolean; reason: string; at: string } | null;
+      agree: boolean | null;
+    };
+    expect(parity.onchain, "the Lens was not consulted").not.toBeNull();
+    expect(parity.offchain).toMatchObject({ ok: true, reason: "NONE" });
+    expect(parity.onchain).toMatchObject({ ok: true, reason: "NONE" });
+    expect(parity.agree).toBe(true);
+
     // Three paid queries.
     const reader = new OnchainGrantReader({
       publicClient: relayer.publicClient,
@@ -290,6 +306,20 @@ describe.skipIf(!enabled)("Phase 3 gate: paid queries through the gateway on a l
     await expect(
       buyer.query({ gatewayUrl: "http://gw", grantId: plan.grantId, passportId: r.passportId }),
     ).rejects.toMatchObject({ context: { code: "FH_GRANT_RESCINDED", status: 403 } });
+
+    // And they still agree once consent is withdrawn — the case that matters, because this is where
+    // a gateway reading a grant differently from the chain would quietly keep serving.
+    const after = (await (
+      await fetchApp(`http://gw/v1/verify/${r.passportId}?grant=${plan.grantId}`)
+    ).json()) as {
+      offchain: { ok: boolean; reason: string };
+      onchain: { ok: boolean; reason: string } | null;
+      agree: boolean | null;
+    };
+    expect(after.offchain).toMatchObject({ ok: false, reason: "GRANT_RESCINDED" });
+    expect(after.onchain).toMatchObject({ ok: false, reason: "GRANT_RESCINDED" });
+    expect(after.agree).toBe(true);
+
     buyer.close();
     locker.dispose();
   });

@@ -12,6 +12,7 @@ import {
   Scope,
   sidecarToWire,
   type Terms,
+  VerifyFailure,
   WAD,
   ZERO_HASH,
 } from "@firsthand/core";
@@ -32,7 +33,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "./config.js";
-import { createGateway } from "./server.js";
+import { createGateway, LENS_REASONS } from "./server.js";
 
 /**
  * Full memory-mode flow through the HTTP surface: a principal deposits and publishes, grants to a
@@ -503,6 +504,39 @@ describe("gateway serving path (memory mode)", () => {
     );
     await new Promise((r) => setTimeout(r, 200));
     expect(reg.feedback).toHaveLength(0);
+  });
+
+  it("the verify route reports the predicate off chain, and says plainly when no chain was asked", async () => {
+    // README §7.3: `FirsthandLens.verify` is the on-chain twin of core's `verifyPredicate`, and the
+    // two must agree down to the reason. In memory mode there is no Lens to ask, and the honest
+    // answer is `null` — never a `true` that nothing checked. The live parity check runs on anvil.
+    const s = await scenario();
+    const res = await s.fetchApp(`http://gw/v1/verify/${s.r.passportId}?grant=${s.grantId}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      offchain: { ok: boolean; reason: string };
+      onchain: unknown;
+      agree: boolean | null;
+    };
+    expect(body.offchain).toMatchObject({ ok: true, reason: "NONE" });
+    expect(body.onchain).toBeNull();
+    expect(body.agree).toBeNull();
+
+    // A grant that does not exist is refused, with the reason named rather than a bare false.
+    const absent = await s.fetchApp(
+      `http://gw/v1/verify/${s.r.passportId}?grant=0x${"77".repeat(32)}`,
+    );
+    expect((await absent.json()).offchain).toMatchObject({ ok: false, reason: "GRANT_NOT_LIVE" });
+
+    // Without ?grant there is nothing to verify against; say so rather than guessing one.
+    expect((await s.fetchApp(`http://gw/v1/verify/${s.r.passportId}`)).status).toBe(400);
+  });
+
+  it("the Lens reason ordinals still line up with core's VerifyFailure", () => {
+    // Solidity enums cross the ABI as integers, so this table is the only place the two spellings
+    // meet. If someone reorders either enum, a verdict would decode to the wrong name and the twin
+    // would look like it disagreed when it did not — so the coupling is asserted, not assumed.
+    expect(LENS_REASONS).toEqual(["NONE", ...Object.keys(VerifyFailure)]);
   });
 
   it("exit: a locker bundle re-hosts on another conformant gateway, and the buyer's query works there", async () => {

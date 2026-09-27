@@ -188,16 +188,20 @@ jobs:
       # difference passes every gate — this is the tier that caught `this.#fetch` being unbound.
       - name: Browser proof
         run: pnpm --filter firsthand-capture e2e
-      # The `e2e` script rebuilds deploy/capture before serving it, and that tree is *committed* —
-      # docs/DEPLOY.md's claim is that what is in git is what Vercel serves. So the rebuild is also
-      # a check on that claim: if these sources no longer produce the committed bytes, someone
-      # changed the PWA and shipped a stale tree. Runs after the proof so a hash difference cannot
-      # mask a real browser failure.
-      - name: The committed deploy tree is what these sources produce
+      # The `e2e` script rebuilds deploy/capture before serving it, and that tree is *committed*, so
+      # the rebuild checks one half of docs/DEPLOY.md's claim: these sources still produce the
+      # committed bytes. It does NOT check the other half — whether what is live is the committed
+      # tree — because nothing here touches the network. This step said it did, once, and eight
+      # commits went live-stale under it. `scripts/live-gate.mjs` fetches, and runs on a schedule in
+      # interop.yml. Runs after the proof so a hash difference cannot mask a real browser failure.
+      - name: The committed deploy trees are what these sources produce
         run: |
-          git diff --exit-code --stat -- deploy/capture || {
-            echo "deploy/capture no longer matches its sources — rebuild and commit it:"
-            echo "  pnpm --filter firsthand-capture bundle:vercel && git add deploy/capture"
+          pnpm --filter firsthand-gateway bundle:vercel
+          git diff --exit-code --stat -- deploy/capture deploy/gateway || {
+            echo "a deploy tree no longer matches its sources — rebuild and commit it:"
+            echo "  pnpm --filter firsthand-capture bundle:vercel"
+            echo "  pnpm --filter firsthand-gateway bundle:vercel"
+            echo "  git add deploy"
             exit 1
           }
       - name: Screenshots from a failed run

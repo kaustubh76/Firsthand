@@ -3,6 +3,7 @@
 // is COMMITTED: Vercel builds it from git as a plain four-dependency npm project, so every push
 // redeploys without the builder ever touching the monorepo, Foundry or the Node-26 engine gate.
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -89,6 +90,17 @@ writeFileSync(
 // Vercel wants a static output directory even when everything is a function.
 mkdirSync(join(out, "public"), { recursive: true });
 writeFileSync(join(out, "public", "robots.txt"), "User-agent: *\nDisallow: /v1/\n");
+/**
+ * The deployed build's identity, so `scripts/live-gate.mjs` can tell whether what is live is what is
+ * committed. It goes in `public/` — served statically at the root, verified — rather than into the
+ * function, because a digest cannot live inside the file it digests. Nothing in the gateway's own
+ * code changes for it. The capture side needs no equivalent: the asset filenames in its `index.html`
+ * are already content hashes.
+ */
+writeFileSync(
+  join(out, "public", "build.txt"),
+  `${createHash("sha256").update(readFileSync(bundle)).digest("hex")}\n`,
+);
 
 writeFileSync(
   join(out, "README.md"),

@@ -84,3 +84,17 @@ jobs:
           name: x402-facilitator-run
           path: experiments/results/x402-facilitator.json
           if-no-files-found: ignore
+
+  live:
+    name: The live links are what is committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No build, no Foundry, no secret: this reads two public URLs and compares them with files in
+      # the repository. The gate it closes is the one `ci.yml` cannot — CI proves the committed
+      # deploy trees are what their sources produce, and proves nothing about what Vercel serves.
+      # Eight commits of the capture PWA went live-stale under exactly that gap on 2026-09-27.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/live-gate.mjs

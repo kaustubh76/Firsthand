@@ -378,6 +378,26 @@ describe("verify() and the Lineage Manifest", () => {
     expect(verdict.hashesPerAsset).toBe(8);
     expect(verdict.assets.filter((a) => a.ok)).toHaveLength(3); // second batch anchored at head-? → not final yet
     expect(verdict.assets.filter((a) => a.reason === "NOT_FINAL")).toHaveLength(2);
+
+    // Two assets above are NOT_FINAL because the file claimed a depth of 2 that its newest anchor
+    // does not back. That is the whole reason every caller in this repo used to pass `0` instead,
+    // which claims nothing at all. Hand the builder the head and it claims what the anchors back —
+    // so a file exported now verifies now, without anyone choosing a number.
+    const derived = exportManifest({
+      domain,
+      principalId: locker.principalId,
+      ns: 0,
+      batches: batcher.flushed(),
+      receipts,
+      headBlock: anchors.head,
+      now: () => 123n,
+    });
+    expect(derived.finalityDepth).toBeLessThanOrEqual(2);
+    const freshly = await verifyManifest(JSON.parse(serialiseManifest(derived)), {
+      anchors,
+      headBlock: anchors.head,
+    });
+    expect(freshly.assets.some((a) => a.reason === "NOT_FINAL")).toBe(false);
     anchors.mineBlocks(5);
     const final = await verifyManifest(parsed, { anchors, headBlock: anchors.head });
     expect(final.ok).toBe(true);

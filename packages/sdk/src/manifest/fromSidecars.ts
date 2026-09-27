@@ -10,6 +10,7 @@ import {
   passportId,
 } from "@firsthand/core";
 import type { QueryResult } from "../verbs/query.js";
+import { DEFAULT_MANIFEST_FINALITY, honestFinalityDepth } from "./finality.js";
 
 /**
  * Lineage Manifests from what a gateway publishes — no batcher, no locker. A sidecar already carries
@@ -26,6 +27,12 @@ export interface SidecarManifestInput {
   readonly anchors: Pick<AnchorWriter, "anchorBlock">;
   /** Receipts keyed by passport id; assets without one are unpaid lineage. */
   readonly receipts?: ReadonlyMap<Bytes32, ReceiptView>;
+  /**
+   * Pass the chain's head and the manifest claims the depth its anchors have actually reached
+   * (`honestFinalityDepth`), which is what a caller wants unless it has a reason to state its own.
+   * An explicit `finalityDepth` still wins; with neither, the file claims the default.
+   */
+  readonly headBlock?: bigint;
   readonly finalityDepth?: number;
   readonly now?: () => bigint;
 }
@@ -85,7 +92,12 @@ export async function manifestFromSidecars(input: SidecarManifestInput): Promise
     principalId: input.principalId,
     ns: input.ns,
     generatedAt: (input.now ?? (() => BigInt(Math.floor(Date.now() / 1000))))().toString(),
-    finalityDepth: input.finalityDepth ?? 2,
+    // The anchor blocks are already in hand from the loop above, so the honest depth costs no reads.
+    finalityDepth:
+      input.finalityDepth ??
+      (input.headBlock === undefined
+        ? DEFAULT_MANIFEST_FINALITY
+        : honestFinalityDepth(blocks.values(), input.headBlock)),
     assets,
   };
   return LineageManifestSchema.parse(wire);
@@ -97,6 +109,8 @@ export interface QueriesManifestInput {
   /** The buyer's paying address, recorded on each receipt view (not part of the manifest itself). */
   readonly payer?: Address;
   readonly anchors: Pick<AnchorWriter, "anchorBlock">;
+  /** See `SidecarManifestInput.headBlock`: the honest depth, computed from the anchors it collects. */
+  readonly headBlock?: bigint;
   readonly finalityDepth?: number;
   readonly now?: () => bigint;
 }
@@ -130,6 +144,7 @@ export async function manifestFromQueries(input: QueriesManifestInput): Promise<
     sidecars: input.results.map((r) => r.sidecar),
     anchors: input.anchors,
     receipts,
+    ...(input.headBlock === undefined ? {} : { headBlock: input.headBlock }),
     ...(input.finalityDepth === undefined ? {} : { finalityDepth: input.finalityDepth }),
     ...(input.now ? { now: input.now } : {}),
   });

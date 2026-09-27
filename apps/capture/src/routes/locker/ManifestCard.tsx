@@ -11,7 +11,6 @@ import { useToasts } from "../../hooks/useToasts.js";
 import { downloadJson } from "../../lib/download.js";
 import { pluralise } from "../../lib/format.js";
 import { fetchReceipts } from "../../lib/ledger.js";
-import { honestFinalityDepth } from "../../lib/manifest.js";
 import { fetchSidecar } from "../../lib/sidecars.js";
 import { NS } from "../../lib/terms.js";
 import { Button, Card, Hash, Notice, Pill } from "../../ui/index.js";
@@ -57,12 +56,8 @@ export function ManifestCard({ ctx }: { ctx: LockerCtx }) {
         sidecars,
         anchors: client.anchors,
         receipts,
-        // Claim the depth the anchors have actually reached, never a flat zero — see lib/manifest.ts.
-        finalityDepth: await honestFinalityDepth(
-          client.anchors,
-          sidecars.map((sc) => sc.batchRoot),
-          head,
-        ),
+        // The builder claims the depth these anchors have actually reached; it has the blocks.
+        headBlock: head,
       });
       const verdict = await verifyManifest(m, {
         anchors: client.anchors,

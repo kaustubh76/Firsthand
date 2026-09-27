@@ -377,19 +377,22 @@ export async function complianceFile(
     publicClient: buyer.reader.publicClient,
   });
   const domain = { chainId: BigInt(disco.chainId), verifyingContract: anchorsAddress };
+  const headBlock = await buyer.reader.publicClient.getBlockNumber({ cacheTime: 0 });
   const manifest = await manifestFromQueries({
     domain,
     results,
     anchors,
     payer: buyer.address,
-    finalityDepth: 0,
+    // Claim the finality the anchors have actually reached rather than nothing at all: a file that
+    // says `finalityDepth: 0` is telling its auditor to check nothing about settlement.
+    headBlock,
   });
   // The buyer's own file, proving its own payments: the receipts come from ReceiptLedger, not from
   // the gateway that served the queries — which is the point of auditing one.
   const receiptLedger = (disco.contracts as Record<string, Address> | null)?.["ReceiptLedger"];
   const verdict = await verifyManifest(manifest, {
     anchors,
-    headBlock: await buyer.reader.publicClient.getBlockNumber({ cacheTime: 0 }),
+    headBlock,
     ...(receiptLedger
       ? {
           receipts: new OnchainReceiptReader({

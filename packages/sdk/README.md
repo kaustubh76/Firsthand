@@ -13,4 +13,8 @@ Phase 1, 2 and 4 gates; the Phase 3 gate (buyer loop through the real gateway) l
 `apps/gateway/test/anvil`.
 Coverage excludes `src/webauthn/**` (browser-only) and `src/contracts/**` (RPC-backed) — exercised
 by the capture PWA and `test:testnet`. `verifyManifest` has explicit signature modes (`"all"` default,
-`"none"`, or a sample size) and reports Merkle vs signature time separately; see S1 results.
+`"none"`, or a sample size) and reports Merkle vs signature time separately; see S1 results. It also
+proves each carried receipt against `ReceiptLedger` and reports the coverage separately from the
+verdict, and takes an auditor's own `finalityDepth` floor — the effective depth is the greater of
+that and the file's, so a manifest cannot talk its reader down. Builders derive the depth they can
+back from a `headBlock` (`honestFinalityDepth`) rather than asserting one.

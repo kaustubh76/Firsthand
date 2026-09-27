@@ -10,6 +10,7 @@ export type { LockerOptions, NamespaceInfo } from "./locker/Locker.js";
 export { Locker } from "./locker/Locker.js";
 export type { ExportInput } from "./manifest/export.js";
 export { exportManifest, serialiseManifest } from "./manifest/export.js";
+export { DEFAULT_MANIFEST_FINALITY, honestFinalityDepth } from "./manifest/finality.js";
 export type { QueriesManifestInput, SidecarManifestInput } from "./manifest/fromSidecars.js";
 export { manifestFromQueries, manifestFromSidecars } from "./manifest/fromSidecars.js";
 export type {

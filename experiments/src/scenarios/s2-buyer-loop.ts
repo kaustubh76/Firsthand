@@ -204,6 +204,8 @@ export const s2: Scenario = {
       principalId: locker.principalId,
       ns: 0,
       batches: batcher.flushed(),
+      // Deliberate: this harness times verification, and must not wait for blocks it is not
+      // measuring. A file that claims no finality is the honest artefact of a timing run.
       finalityDepth: 0,
       ...(last
         ? {

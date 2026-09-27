@@ -864,14 +864,15 @@ export function createMcpServer(deps: McpDeps): McpServer {
           );
           results.push(result);
         }
+        const headBlock = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
         const manifest = await manifestFromQueries({
           domain: deps.passportDomain,
           results,
           anchors: deps.anchors,
           payer: buyer.owner,
-          finalityDepth: 0,
+          // The depth these anchors have reached, not a flat zero (see @firsthand/sdk finality.ts).
+          headBlock,
         });
-        const headBlock = await deps.publicClient.getBlockNumber({ cacheTime: 0 });
         const verdict = await verifyManifest(manifest, {
           anchors: deps.anchors,
           headBlock,

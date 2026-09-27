@@ -8,7 +8,9 @@ import {
   passportId,
   ValidationError,
 } from "@firsthand/core";
+
 import type { AnchoredBatch } from "../batch/Batcher.js";
+import { DEFAULT_MANIFEST_FINALITY, honestFinalityDepth } from "./finality.js";
 
 /**
  * Lineage Manifest export (README §1, §19): one entry per licensed passport with its batch proof and
@@ -21,6 +23,8 @@ export interface ExportInput {
   readonly batches: readonly AnchoredBatch[];
   /** Receipts keyed by passport id; assets without a receipt are still listed (unpaid lineage). */
   readonly receipts?: ReadonlyMap<Bytes32, ReceiptView>;
+  /** See `SidecarManifestInput.headBlock`: with the chain's head, the file claims the depth it has. */
+  readonly headBlock?: bigint;
   readonly finalityDepth?: number;
   readonly now?: () => bigint;
 }
@@ -45,7 +49,15 @@ export function exportManifest(input: ExportInput): LineageManifest {
     principalId: input.principalId,
     ns: input.ns,
     generatedAt: (input.now ?? (() => BigInt(Math.floor(Date.now() / 1000))))().toString(),
-    finalityDepth: input.finalityDepth ?? 2,
+    // Each batch carries the block it anchored in, so the honest depth needs no extra read.
+    finalityDepth:
+      input.finalityDepth ??
+      (input.headBlock === undefined
+        ? DEFAULT_MANIFEST_FINALITY
+        : honestFinalityDepth(
+            input.batches.map((b) => b.anchor.blockNumber),
+            input.headBlock,
+          )),
     assets: input.batches.flatMap((batch) =>
       batch.passports.map((signed) => {
         const id = passportId(signed.passport);

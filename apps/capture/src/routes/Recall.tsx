@@ -25,7 +25,6 @@ import { reportFailure } from "../lib/failures.js";
 import { pluralise } from "../lib/format.js";
 import { canGrant, describeLiveness, type Liveness } from "../lib/liveness.js";
 import type { CaptureClient } from "../lib/locker.js";
-import { honestFinalityDepth } from "../lib/manifest.js";
 import { commitRescind, type RescindMode, revealRescind } from "../lib/rescind.js";
 import { PRICE_UNITS, termsFor } from "../lib/terms.js";
 import { useNavigation } from "../shell/navigation.js";
@@ -300,13 +299,8 @@ export function Recall({
         results: [opened.result],
         anchors: client.anchors,
         payer: agent.address,
-        // What the anchors have actually reached; a flat zero made "and finality" a claim about
-        // nothing (lib/manifest.ts).
-        finalityDepth: await honestFinalityDepth(
-          client.anchors,
-          [opened.result.sidecar.batchRoot],
-          headBlock,
-        ),
+        // The builder claims the depth these anchors have actually reached; it has the blocks.
+        headBlock,
       });
       const verdict = await verifyManifest(file, {
         anchors: client.anchors,

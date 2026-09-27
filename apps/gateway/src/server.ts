@@ -575,6 +575,9 @@ export function createGateway(
       },
       settlement: settlement.kind,
       blobs: config.BLOB_STORE,
+      // Why the last paid query did or did not reach the agent's reputation. Silent before: the
+      // feedback path runs after the response and could only log.
+      reputation: serving.lastFeedback,
       relayer: await floatOf(),
     }),
   );

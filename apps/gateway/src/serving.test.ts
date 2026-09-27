@@ -475,6 +475,14 @@ describe("gateway serving path (memory mode)", () => {
     await vi.waitFor(() => expect(reg.feedback).toHaveLength(1), { timeout: 10_000 });
     expect(reg.feedback[0]).toMatchObject({ agentId, tag1: "firsthand", tag2: "paid-query" });
     expect(refusals).toBeGreaterThan(1); // it really did retry the read
+
+    // And the outcome is visible from outside the function. The retry above works against a double;
+    // on the hosted gateway (2026-09-27) two live runs credited nothing anyway, and from outside
+    // there was no way to tell a rate-limited read from the feature being off. Now there is.
+    const health = (await (await s.gw.app.request("/healthz")).json()) as {
+      reputation: { agentId: string; ok: boolean; detail?: string } | null;
+    };
+    expect(health.reputation).toMatchObject({ agentId: agentId.toString(), ok: true });
   });
 
   it("ERC-8004: a write that timed out is NOT retried — crediting twice is worse than crediting late", async () => {
@@ -504,6 +512,13 @@ describe("gateway serving path (memory mode)", () => {
     );
     await new Promise((r) => setTimeout(r, 200));
     expect(reg.feedback).toHaveLength(0);
+    // Not credited, and `/healthz` says so with the reason. A dropped credit used to be visible only
+    // as an agent that had never been credited, which is the same symptom as the feature being off.
+    const health = (await (await s.gw.app.request("/healthz")).json()) as {
+      reputation: { ok: boolean; detail?: string } | null;
+    };
+    expect(health.reputation?.ok).toBe(false);
+    expect(health.reputation?.detail).toMatch(/timed out/);
   });
 
   it("the verify route reports the predicate off chain, and says plainly when no chain was asked", async () => {

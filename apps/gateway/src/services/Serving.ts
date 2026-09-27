@@ -109,8 +109,24 @@ export interface ListedPassport {
 const toHex = (bytes: Uint8Array): `0x${string}` =>
   `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 
+/**
+ * The outcome of the last reputation feedback this instance attempted. Feedback runs off the response
+ * path, so a failure has nowhere to surface: `logger.warn` on a serverless host is a line nobody
+ * reads, and the only external symptom is an agent that was never credited. Measured on the hosted
+ * gateway 2026-09-27: two consecutive live runs credited nothing, and from outside the function the
+ * evidence was indistinguishable from the feature being switched off. `/healthz` reports this, so the
+ * next such failure names its own reason.
+ */
+export interface FeedbackOutcome {
+  readonly at: number;
+  readonly agentId: string;
+  readonly ok: boolean;
+  readonly detail?: string;
+}
+
 export class Serving {
   readonly #d: ServingDeps;
+  #lastFeedback: FeedbackOutcome | null = null;
 
   constructor(deps: ServingDeps) {
     this.#d = deps;
@@ -354,6 +370,12 @@ export class Serving {
       );
       if (bound === null) return;
       if (!bound.ok) {
+        this.#lastFeedback = {
+          at: Date.now(),
+          agentId: agentId.toString(),
+          ok: false,
+          detail: "agent is not bound to the grant's card",
+        };
         this.#d.logger.warn("agent is not bound to the grant's card; no feedback", {
           agentId: agentId.toString(),
           grantId,
@@ -377,14 +399,26 @@ export class Serving {
           }),
         retrying("feedback", isRateLimited),
       );
+      this.#lastFeedback = { at: Date.now(), agentId: agentId.toString(), ok: true };
       this.#d.logger.info("reputation feedback", { agentId: agentId.toString(), grantId, txHash });
     } catch (error) {
+      this.#lastFeedback = {
+        at: Date.now(),
+        agentId: agentId.toString(),
+        ok: false,
+        detail: messagesOf(error)[0] ?? String(error),
+      };
       this.#d.logger.warn("reputation feedback failed", {
         agentId: agentId.toString(),
         grantId,
         error,
       });
     }
+  }
+
+  /** What became of the last feedback attempt, for `/healthz`. Null when none has been tried. */
+  get lastFeedback(): FeedbackOutcome | null {
+    return this.#lastFeedback;
   }
 
   /** The one call, composed from chain reads (README §7.3). */

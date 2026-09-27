@@ -18,7 +18,7 @@ Addresses are in `deployments/10143.json`; the full transaction list is in
 | `FirsthandLens` | `0x06B2Ae48a954e3fbEB00cA165b53a83Ce127c960` |
 | `MockUSDC` (faucet double — **not** real USDC) | `0xD27582210629348ED8eaCfd5796ee4Ecdb4ED4f5` |
 
-Parameters: `genesis = 1789257600` (Mon 2026-09-14 00:00 UTC), `epochLength = 604800` (7 d),
+Parameters: `genesis = 1789257600` (Sun 2026-09-13 00:00 UTC), `epochLength = 604800` (7 d),
 `revealWindowBlocks = 1512000` (~1 epoch at 0.4 s), `anchorsLayout = "baseline"`.
 First deploy tx: `0x41985bd7d388d1f700d3453f6064c533c01d06b3eb877b8b9d9cc7b1c2ae026e` (PrincipalRegistry).
 
@@ -38,9 +38,9 @@ the relayer).
 
 | Role | Address | Funding |
 |---|---|---|
-| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`, and funds the browser tier's outside buyer (0.15 MON, swept back); **7.04 MON on 2026-09-24** (funded from the hosted relayer, tx `0x15ffad85…`) |
+| Deployer **and** relayer | `0x5a6472782a098230e04A891a78BeEE1b7d48E90c` | testnet MON (faucet) — pays for `pnpm demo --testnet` and `E2E_TESTNET=1`, and funds the browser tier's outside buyer (0.15 MON, swept back); **6.38 MON on 2026-09-27**, after two testnet browser-tier runs and two hosted ones |
 | Buyer | `0xE73b48c4d667aAe87cEf56624F5EDB7ba9A1CcD5` | **none** — it only signs; the relayer submits |
-| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float; refill from the faucet — **7.54 MON on 2026-09-24, `/healthz` says `low: false`**; one full live script ≈ 0.3 MON at 102 gwei |
+| Hosted relayer (public gateway only) | `0x0DbDFcAa601F7C8EC642C2E475e8C8129aD15A8C` | small float; refill from the faucet — **6.91 MON on 2026-09-27, `/healthz` says `low: false`**; one full live script ≈ 0.43 MON at 102 gwei (measured 2026-09-27; the private rescission is two transactions where the direct one is one) |
 
 The hosted relayer is deliberately a separate key with a small float: the public relay spends its
 gas on request, so a stranger looping on it can only ever drain that float, never the deployer.
@@ -64,9 +64,29 @@ double, card, terms → grant (`0xa2870bdd39…86ff097b5d`) → paid query settl
 (`0x510b5d9365…f84ffc54c3`, 0.001 USDC to the deposit key) → rescission (`0xd68e2b1c4e…bec5d81471`)
 → the same query refused `FH_GRANT_RESCINDED` → ledger and manifest verified. Sidecars survive
 redeploys (Vercel Blob). Redeploy with `pnpm deploy:hosted` (`docs/DEPLOY.md`). One full script —
-now sixteen relayed transactions with the outside buyer's handshake, its settlement and the
-ERC-8004 feedback — ≈ 0.3 MON of relayer gas at 102 gwei (measured 20 Sep; the earlier 0.08 figure
-was the shorter script at a quieter fee).
+now eighteen relayed transactions with the outside buyer's handshake, its settlement, the ERC-8004
+feedback and the private commit→reveal withdrawal — ≈ 0.43 MON of relayer gas at 102 gwei (measured
+27 Sep; the earlier 0.3 figure predated the second rescission path and the 0.08 one was the shorter
+script at a quieter fee).
+
+**Live browser tier against the hosted links (27 Sep).** Both surfaces redeployed after the UI pass
+(eight commits: the liveness grace fix, the private commit→reveal withdrawal, the FirsthandLens
+verdict on Verify, the auditor's public Consent Ledger, chain-priced earnings, an honest
+`finalityDepth`, the cold-open verbs). `scripts/live-gate.mjs` — new — was run **before** the deploy
+on purpose and named the drift: the live app was serving `assets/index-gm2hC97o.js` while git had
+`index-Dmu7qL6N.js`, and discovery published six of the seven deployed addresses, withholding
+`FirsthandLens`. Green after. It now runs weekly in `interop.yml`, because CI proves the committed
+trees match their *sources* and can prove nothing about what Vercel serves.
+
+The tier itself passed every beat against the live pair except the last ERC-8004 credit, twice, and
+the gateway's own log says why: `"chain rpc unavailable" · "requests limited to 15/sec"` on
+`GET /v1/grants/:id/wrap` at 05:22 UTC. Monad's public RPC allows 15 requests per second from a
+serverless function's shared egress; the feedback path's four chain reads fire in the same second as
+the query that triggered them, and `waitUntil` cannot outlast a saturated window. The retry is
+unit-tested against the double (three ERC-8004 tests in `apps/gateway/src/serving.test.ts`); what was
+missing was any way to see the failure from outside, so `/healthz` now reports the last feedback
+outcome and its reason. Agent #1936 registered and paid; its credit did not land. Recorded as a
+limitation in `docs/JUDGES.md` rather than smoothed over: self-hosted, with its own RPC, it lands.
 
 **Live browser tier, end to end (24 Sep).** First full run against the hosted links since 20 Sep —
 ERC-8004, the robustness pass, exit/delegation, x402 and the wiring audit had all landed in between.

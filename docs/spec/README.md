@@ -23,6 +23,16 @@ Where the README and this file disagree, this file wins for encodings and the RE
 - **Liveness:** `ACTIVE ⇔ e_now ≤ e_attested + g ∧ e_now ≥ thawEpoch`; an attest after the grace
   lapsed sets `thawEpoch = e + 1` (`PrincipalState.thawEpoch`, `PrincipalThawScheduled`). (ADR-0012)
 
+### A.1 Discovery, and the non-goal it sits beside
+
+§22 forbids "marketplace UI/discovery", and the gateway serves
+`GET /v1/principals/:principalId/passports`. The boundary is the principal id: there is no
+cross-principal index, no search, no ranking and no listing endpoint that does not already name whose
+locker it is — a buyer reaches one because its owner shared a link (`?principal=…`) or an agent was
+handed the id. The namespace freshness that comes with it is the market signal §7.3 defines, and the
+UI says so on the row: "a market signal from the newest anchor's block time, **not a protocol rule**".
+A marketplace is the thing that ranks strangers against each other; this ranks nothing.
+
 ## B. Error codes
 
 `FH_VALIDATION FH_CONFIG FH_NOT_IMPLEMENTED FH_REFUSED_ORIGIN FH_REFUSED_DUPLICATE FH_MERKLE_INVALID
@@ -49,7 +59,7 @@ and `demand.test.ts`.
 |---|---|---|
 | `AnchorWriter` (`anchor`, `isAnchored`, `isIncluded`, `anchorOf`) | supply | `OnchainAnchorWriter` (viem) |
 | `TxTransport` | supply | `PublicMempoolTransport`; `BtxTransport` (sign → seal → post, refuses `FH_BTX_UNAVAILABLE` until the node knows the method — BTX is not on Monad testnet 2026-09) |
-| `BlobStore` | supply | `FsBlobStore`, `ObjectBlobStore` (any `ObjectStore`), memory; `IpfsBlobStore` is a typed shell whose three methods throw `NotImplementedError` and which no app can select (`BLOB_STORE` has no `ipfs` value) |
+| `BlobStore` | supply | `FsBlobStore`, `ObjectBlobStore` (any `ObjectStore`), memory; `IpfsBlobStore` (Kubo RPC, CID derived from the keccak blob id, `BLOB_STORE=ipfs`, interop-tested against a real node) |
 | `PassportCatalog` (`put`, `get` public sidecars) | gateway | `FsPassportCatalog`, `ObjectPassportCatalog`, memory |
 | `ObjectStore` (`put`, `get`, `list`) | gateway | Vercel Blob (`apps/gateway/src/storage/vercelBlob.ts`), memory — what lets the hosted gateway survive a cold start |
 | `Erc8004Registry` | demand | `OnchainErc8004Registry`, memory |

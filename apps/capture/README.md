@@ -4,15 +4,22 @@ The three verbs from one link. **Capture:** a note, a photo/clip from the camera
 mime, size and name committed via `metaHash`), or a ChatGPT/Claude export (one passport per
 conversation) — minted under the passkey, sealed client-side, anchored through the relay, published
 to the gateway; plus the refusal (a passport signed by another locker's key → `FH_REFUSED_ORIGIN`).
-**Locker:** activation, deposits, grants with one-tap direct rescission, the Consent Ledger (gateway
-timeline since the enrol block), the Lineage Manifest exported and verified in-browser.
+**Locker:** activation (and re-attestation, with the chain's two-epoch grace honoured — grants stay
+live through it, only new captures need a fresh root), deposits, grants with two ways to withdraw —
+directly, or **privately** by commitment, where the reveal back-dates the end of consent to the
+commit's block — the Consent Ledger (the gateway's event scan, bounded per request, with the window
+stated on screen), and the Lineage Manifest exported and verified in-browser.
 **Recall:** a demo buyer agent in the same browser — funds itself from the MockUSDC faucet double
 through the selector-scoped relay, registers a card, accepts terms; you grant; it pays per query
 over x402 (on-chain settlement, receipt, your USDC delta); you withdraw; the same query is refused.
 **Evidence:** H1/H2/H3, S2 and S4 numbers read from `experiments/results` at build time — the
 sign flip on H1, BTX marked not measurable, the H3 signature re-proof shown as the regression it is.
-**Verify:** no locker needed — paste a Lineage Manifest and it is verified against the chain
-(origin signatures, Merkle inclusion, anchoring, finality), or look up a passport the gateway hosts.
+**Verify:** no locker needed, four cards. Paste a Lineage Manifest → verified against the chain
+(origin signatures, Merkle inclusion, anchoring, finality, and each receipt against `ReceiptLedger`),
+with `FirsthandLens` asked *in the present tense* beside it — the file proves the sale, the chain says
+whether consent still stands. Look up a passport the gateway hosts. Look up a principal → what they
+published, **and their Consent Ledger**, which is the auditor's view and needs no passkey. Look up an
+ERC-8004 agent → its identity, card binding and reputation.
 **Access requests:** an outside buyer (`firsthand_request_access` in the MCP) hands the human a
 link `?grant=<card>&pub=<x25519>&ns=<n>&from=<label>`; the Locker shows it, one passkey tap grants.
 **Exit:** Locker → *Take your locker with you* downloads everything the gateway holds for you

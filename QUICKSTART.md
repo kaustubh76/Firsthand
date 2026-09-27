@@ -9,9 +9,11 @@ can withdraw consent — after which the same query is refused.
 This page gets you from `git clone` to watching that happen. Target: **under 10 minutes.**
 
 > **No install needed — open the live app:** <https://firsthand-capture.vercel.app>
-> All three verbs from one link, on Monad testnet: create a passkey → *Locker → Activate on chain*
-> → *Capture* a note, a photo or a ChatGPT export → *Recall* runs a buyer agent that pays per query,
-> then you withdraw consent and watch the same query refused → *Locker* shows the Consent Ledger and
+> All three verbs from one link, on Monad testnet: create a passkey → *Activate on chain* (the card
+> is offered wherever you are standing — Capture, Recall or Locker) → *Capture* a note, a photo or a
+> ChatGPT export → *Recall* runs a buyer agent that pays per query, then you withdraw consent —
+> directly, or privately by commitment — and watch the same query refused → *Locker* shows the
+> Consent Ledger and
 > verifies the Lineage Manifest → *Verify* checks any manifest against the chain, *Evidence* shows
 > the measured H1/H2/H3 numbers. Every hash links to the explorer. The browser holds no key and pays
 > no gas (hosted gateway <https://firsthand-gateway.vercel.app>). Needs a passkey-capable browser —

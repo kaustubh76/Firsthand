@@ -33,7 +33,7 @@ nothing else. Implementation: `packages/crypto/src/kdf/keytree.ts` (ADR-0005).
 | Logs | `@firsthand/runtime` logger | non-removable redaction of `prf`, `prk`, `secret`, `privateKey`, `dek`, `vaultKey`, `scalar`, `seed`, … plus `[bytes N]` for buffers |
 | Ciphertext at rest | `BlobStore` | content-addressed; AADs bind blobs to `passportId` and `(ns, e)` so they cannot be re-attached |
 | Grant wraps | `GrantManager.wrapRef` + gateway `POST /v1/grants/:id/wrap` | the gateway hosts only bytes whose `keccak256` equals the on-chain `wrapRef`; the sealed box opens only with the grantee's X25519 key, which the gateway never sees |
-| Settlement relayer key (`RELAYER_PRIVATE_KEY`) | `apps/gateway` (`OnchainSettlement`) | pays gas for `RoyaltyRouter.settle` only; it is not a user key, holds no user funds, cannot sign passports, grants or rescissions, and the buyer's EIP-3009 authorization names the router, not the relayer |
+| Settlement + relay key (`RELAYER_PRIVATE_KEY`) | `apps/gateway` (`OnchainSettlement`, `Relay`) | pays gas for `RoyaltyRouter.settle` **and** for relayed calls to the four signature-authorised contracts — `PrincipalRegistry`, `PassportAnchors`, `GrantManager`, `Rescissions` — plus, where the USDC is the faucet double, a selector- and amount-capped `mint`. Nothing else: `to` is allow-listed, `value` must be zero, and every call is simulated first. It is not a user key, holds no user funds, and cannot sign a passport, a grant or a rescission — authorisation for those lives in the calldata as a P-256 signature (ADR-0009), which is why relaying them is safe. The buyer's EIP-3009 authorization names the router, not the relayer |
 
 Limits: JavaScript cannot guarantee zeroization (engine copies, GC). `zeroize` is best effort;
 WebAuthn PRF output is the only long-lived root and it is evaluated on demand, never stored.
@@ -98,8 +98,10 @@ cannot rescind).
    you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt
    Injection* (2023); Wallace et al., *Concealed Data Poisoning Attacks on NLP Models* (2021).
    Provenance tags are the shipped defence layer; screening is a buyer-side, opt-in concern.
-5. BTX advantage holds only where BTX is live; the commit-reveal fallback narrows but does not
-   eliminate the race — measured, not asserted.
+5. BTX advantage holds only where BTX is live. The commit-reveal fallback does not narrow the race
+   at all — S3 measured 1.00 extraction success against the public mempool's 0.98, because a bot that
+   cannot attribute a commitment reacts to every commit. It removes *attribution* and dates the end
+   of consent at the commit; that is the property, measured, not asserted.
 
 Three more, found by auditing the spec against the code rather than promised anywhere:
 
@@ -124,7 +126,11 @@ Three more, found by auditing the spec against the code rather than promised any
 - Direct path (`GrantManager.rescind`): effective at inclusion. Over BTX the payload would be
   unreadable before inclusion. **BTX is not deployed on Monad testnet as of 2026-09**; the
   transport ships probe-gated and refuses rather than degrading to the public mempool
-  (ADR-0006/0012). Commit-reveal is the un-front-runnable path available today.
+  (ADR-0006/0012). Commit-reveal is the fallback that ships today, and it is **not**
+  un-front-runnable: S3 measured its extraction success at 1.00 against the public mempool's 0.98 —
+  a bot that cannot map a commitment to a grant reacts to every commit and wins the same race. What
+  it buys is a *timestamp*: the reveal back-dates the end of consent to the commit's block, so
+  anything served in between is provably post-consent. Un-front-runnability needs BTX.
 - Measured (S3, ADR-0012): on a fee-ordered 400 ms block, a public-mempool observer lands a
   4-query burst before the rescission in 98 % of trials; a bot with **no signal** still lands ~6
   continuously-paid queries in the rescission block. An encrypted mempool removes the signal, not

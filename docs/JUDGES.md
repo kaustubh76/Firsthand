@@ -8,16 +8,16 @@ Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's c
 | Beat (Readme §19) | Tap | What you see / what landed |
 | --- | --- | --- |
 | 0:00 **Problem** | — | The masthead: *the data locker that can prove what's inside it*. The status strip says `live · chain 10143 · firsthand-gateway.vercel.app`. Under it, **The script**: the seven beats of this table as a rail lit by real state — done beats checked, the next one lit, a tap jumps to it. The gear opens **Settings**: the venue's health and float, a gateway switcher, theme, install. |
-| **Enrol** | *Create passkey* | One WebAuthn tap; the PRF output derives every key. Nothing but a credential id is stored. |
-| **Activate** | the card on Capture: *Activate on chain (enroll + attest)* | Two relayed transactions (`PrincipalRegistry.enroll`, `attest`) — the browser holds no key and pays no gas. The strip now reads `attested for epoch N`. |
+| **Enrol** | *Create passkey* | Before the prompt, the three verbs and which tab each lives on — *deposit* (Capture), *query* (Recall), *rescind* (Locker) — ending on the one that matters: consent you can end, dated by a chain, with the refusal provable afterwards. Then one WebAuthn tap; the PRF output derives every key. Nothing but a credential id is stored. |
+| **Activate** | the card on Capture: *Activate on chain (enroll + attest)* | Two relayed transactions (`PrincipalRegistry.enroll`, `attest`) — the browser holds no key and pays no gas. The strip now reads `attested for epoch N`. A locker attested in an earlier epoch reads *grants live through epoch N; attest to anchor new captures* instead — the chain gives two epochs of grace, so grants keep serving and only new captures need a fresh root. |
 | 0:20 **Deposit** | Capture → *Note* → type → *Stamp passport* | Passport minted under the passkey, sealed client-side, batch anchored (`PassportAnchors.anchor`), ciphertext + sidecar published — *published ↗* opens the gateway's copy. *Photo / clip* does the same for the camera (≤ 4 MiB hosted), *Import export* mints one passport per ChatGPT/Claude conversation. |
 | 0:50 **Refusal** | Capture → *The refusal* → *Inject a scraped datum* | A well-formed passport signed by another locker's key is turned away: `FH_REFUSED_ORIGIN` — before anything is sealed (S4). |
 | 1:05 **Query** | Recall → *Run the first recall* | A demo AI buyer in the same browser funds itself from the MockUSDC faucet double (relayed `mint`), registers its card, accepts your terms; **you grant** (one passkey tap); the agent **pays per query** over x402 — `RoyaltyRouter.settle` pulls 0.001 USDC by EIP-3009, splits it to your deposit key, writes a receipt — and opens the plaintext with the wrap. *download the buyer's compliance file*: the Lineage Manifest, verified against the chain. |
 | **Who checked the payment** | — (visible in `/.well-known/firsthand.json`) | `x402.verification` names Monad's native facilitator (`x402-facilitator.molandak.org`, x402 v2) — it verified that payment, and a forged signature would have been refused. `x402.settlement` names `RoyaltyRouter.settle`: the facilitator verifies, it never settles, because the receipt and the royalty split are the product (ADR-0014). The gateway offers the same verification to anyone at `POST /x402/verify`. |
-| 1:50 **Rescind** | (same run) | *You withdraw consent*: one passkey-signed `GrantManager.rescind`. *The same query is refused*: `FH_GRANT_RESCINDED` (HTTP 403) — no data, no charge. |
-| 2:00 **Ledger** | Locker | Grants with *withdrawn*, Earnings (receipts, USDC), the **Consent Ledger** — enrolled · attested · granted · rescinded with block numbers — and *Export + verify manifest*. |
-| 2:25 **Evidence** | Evidence tab | H1 (+1.9 % on a vanilla EVM, −4.2 % on Monad — the sign flip), H2 per arm with BTX *not measurable*, H3 1.93 s Merkle-only vs 31 s full re-proof, S2, S4 — read from `experiments/results` at build. |
-| **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published, with each passport's attestation class and the namespace's freshness (README §7.3). |
+| 1:50 **Rescind** | (same run; *How you withdraw* picks the path) | **Directly**: one passkey-signed `GrantManager.rescind`, effective at its own block and visible in the public mempool before it lands. **Privately**: `Rescissions.commit(keccak(grantId, salt))` — no grant named, no signature, **no passkey tap** — then *Reveal and end consent*, which back-dates the end of consent to the **commit's** block. Either way, *The same query is refused*: `FH_GRANT_RESCINDED` (HTTP 403) — no data, no charge. Between a commit and its reveal the buyer is still served: a commitment is not a rescission. |
+| 2:00 **Ledger** | Locker | Grants with *withdrawn*, each live one showing *runs through epoch N* (consent lapses on its own even if nobody withdraws it); Earnings — priced from the terms the chain registered and split by their own weights, not from the app's idea of its price; the **Consent Ledger** — enrolled · attested · granted · rescinded, a rescission drawn as a cut and dated by the block consent *ended* at, which on the private path is the commit's, with the reveal's own block named beside it; and *Export + verify manifest*. |
+| 2:25 **Evidence** | Evidence tab | H1 (+1.9 % on a vanilla EVM, −4.2 % on Monad — the sign flip), H2 per arm with BTX *not measurable* and its venue named (local anvil — Monad exposes no global mempool, so the race cannot be run there at all), H3 1.93 s Merkle-only vs 31 s full re-proof, S2, S4 — read from `experiments/results` at build. |
+| **Verify** (any time) | Verify tab, no locker needed | Paste a manifest → verified against the chain (edit one proof index → `MERKLE_INVALID`). Paste a passport id → origin, terms, anchor block. Paste a principal id (or open a shared locker link) → what they published, with each passport's attestation class and the namespace's freshness (README §7.3), **and that locker's Consent Ledger** — the auditor's view, no passkey, bounded by the gateway's scan window, which the card states. Paste an ERC-8004 agent id → its identity, card binding and reputation. Beside the manifest verdict, `FirsthandLens` answers in the present tense: *consent now: N of M grant(s) would still be served* — the file proves the sale, the chain says whether consent still stands. |
 | **Handoff** (the MCP from the phone's locker) | Locker → *Let an agent deposit for you* | An `fhd1.` deposit code for one namespace and this epoch. `FIRSTHAND_DELEGATION=…` in `firsthand-mcp`: `firsthand_deposit` lands in *this* locker under *this* principal; grant, rescind and attest stay with the passkey (`FH_DELEGATION_SCOPE`). |
 | **Exit** (README §4) | Locker → *Take your locker with you* | One file: ciphertext, sidecars, grant wraps — no plaintext, no key. Point the app at another gateway (`?gateway=…`) and *Re-publish here*: it verifies every object against the chain before hosting it. The browser tier proves a second, empty gateway serves the buyer's paid query under the grant it already held. |
 
@@ -38,19 +38,37 @@ flow as a script in [`integrations/buyer-agent`](../integrations/buyer-agent/REA
 
 - **The BTX split screen.** Monad's encrypted mempool is not deployed on testnet (2026-09); the
   transport ships probe-gated and the race harness refuses to fake it. The Evidence tab marks the
-  arm *not measurable*; the public-mempool arm and commit-reveal are measured honestly (S3).
+  arm *not measurable* and names its venue: the arms ran on a local anvil, because Monad exposes no
+  readable global mempool, so the race cannot be staged there at all. Commit-reveal **is** a path you
+  can run here on your own grant — it is the fallback that ships — but it does not win the race: S3
+  measured its extraction success at 1.00 against the public mempool's 0.98. What it buys is the
+  timestamp, not immunity.
 - **A large live clip.** Hosted captures are capped at 4 MiB (Vercel's request-body ceiling; the
   gateway publishes the limit). A self-hosted gateway takes 8 MiB.
-- **Weekly epochs.** A locker attested last week needs *Attest this epoch* (offered on the Capture
-  card) before it anchors again — the app says so before anything reverts; the strip announces a
-  rollover inside its last six hours.
-- **The venue's float.** Every relayed step is paid by the gateway's relayer (≈0.3 MON per full
-  script at 102 gwei). The strip words the float once it is low; if it runs dry the app says so in
+- **Weekly epochs.** A locker attested in an earlier epoch needs *Attest this epoch* (offered on the
+  Capture card) before it **anchors** again — the app says so before anything reverts, and the strip
+  announces a rollover inside its last six hours. Its **grants are unaffected** for two epochs of
+  grace: granting, approving a request and being served all keep working, because that is what the
+  chain's `effectiveStatus` says.
+- **The reputation credit, sometimes.** A paid query by a carded agent should file one unit of
+  ERC-8004 feedback. On the hosted gateway that happens after the response, and Monad's public RPC
+  allows 15 requests per second from a serverless function's shared egress — measured twice on
+  2026-09-27, a live run's four chain reads fell inside a saturated window and the credit never
+  landed. The retry is tested and the outcome is now reported by `/healthz` (`reputation`), so the
+  failure names itself instead of looking like the feature being switched off. Self-hosted, with its
+  own RPC, it lands.
+- **The venue's float.** Every relayed step is paid by the gateway's relayer (≈0.43 MON per full
+  script at 102 gwei, measured 2026-09-27 — the private rescission is two transactions where the
+  direct one is one). The strip words the float once it is low; if it runs dry the app says so in
   a banner (`FH_INSUFFICIENT_FUNDS`) and reading, verifying and the evidence still work.
 
 ## Proof that this script works
 
-`pnpm --filter firsthand-capture e2e` drives exactly this path in headless Chromium with a virtual
-passkey — including an outside buyer's handshake and a 390 px phone pass — and passes on a local
-chain, on Monad testnet, and against the live links (`E2E_GATEWAY_URL` / `E2E_APP_URL`). The
-transactions of the last live run are in [`deployments/NOTES.md`](../deployments/NOTES.md).
+`pnpm --filter firsthand-capture e2e` drives this path and more in headless Chromium with a virtual
+passkey: every beat above, plus an outside buyer's handshake, the private commit→reveal withdrawal
+(asserting that consent still holds between the two steps), the auditor's public ledger opened in a
+second browser context that holds no credential, and a 390 px phone pass. It is a required CI job on
+a local chain, and runs on Monad testnet and against the live links by hand (`E2E_TESTNET=1`, or
+`E2E_GATEWAY_URL` / `E2E_APP_URL`). `scripts/live-gate.mjs` separately checks that the live links are
+serving the bytes this repository has committed. The transactions of recent live runs, and what each
+of them cost, are in [`deployments/NOTES.md`](../deployments/NOTES.md).

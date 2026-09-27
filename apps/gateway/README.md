@@ -9,7 +9,9 @@ Routes: `GET /healthz`, `GET /.well-known/firsthand.json` (discovery),
 `GET /v1/blobs/:id` (ciphertext), `GET /v1/grants/:id/wrap`, `GET /v1/anchors/:root`;
 the Consent Ledger — `GET /v1/principals/:id/timeline` (deposits, grants, queries and rescissions as
 one ordered account), `GET /v1/principals/:id/passports`, `GET /v1/principals/:id/anchors`,
-`GET /v1/grants/:id/receipts`; `GET /v1/agents/:agentId` (ERC-8004 reputation),
+`GET /v1/grants/:id/receipts`; `GET /v1/verify/:passportId?grant=` (the predicate off chain and
+on chain, side by side — `FirsthandLens` is the twin of core's `verifyPredicate`, and this publishes
+whether they agree); `GET /v1/agents/:agentId` (ERC-8004 reputation),
 `GET /x402/supported` and `POST /x402/verify` (x402 v2 — ADR-0014);
 `POST /v1/relay` + `GET /v1/relay/capabilities` (opt-in: submits signature-authorised calls for
 clients holding no key — allow-listed targets, zero value, simulated first); ingest

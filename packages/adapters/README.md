@@ -7,7 +7,7 @@ Ports and adapters for everything external or Monad-specific (ADR-0006).
 | Responsibility | `TxTransport` (btx / public / http-relay / memory), `AnchorWriter` (onchain / memory), `X402Facilitator` (Monad / local / fallback / memory), `Erc8004Registry` (onchain / memory), `ConsentLedger` (`LogsConsentLedger` live, Envio shell deferred — ADR-0013), `BlobStore` (fs / ipfs / object / memory), `PassportCatalog` (fs / object / memory), `ObjectStore`, `GrantReader`, `Settlement`, viem chain wiring. |
 | Holds secrets? | **No.** `PublicMempoolTransport` / `BtxTransport` sign with a *relayer* wallet, never with user keys. |
 | Runtime deps | `core`, `runtime`, `contracts`, `viem`, `zod` |
-| Browser use | import `@firsthand/adapters/memory` (pure) or `@firsthand/adapters/x402` (payment codec + typed data); the root entry pulls Node `fs`. |
+| Browser use | import `@firsthand/adapters/client` (everything a keyless client needs: chain clients, the relay transport, and the on-chain readers — anchors, grants, receipts, `OnchainLensReader` + `LENS_REASONS`, ERC-8004), `/memory` (pure doubles) or `/x402` (payment codec + typed data). The root entry pulls Node `fs`. |
 
 The three x402 verifiers are one decision, not three (ADR-0014): `MonadFacilitatorClient` asks
 Monad's native facilitator, which speaks x402 v2 and — measured, not read — accepts the envelope from

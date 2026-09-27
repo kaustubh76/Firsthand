@@ -1,7 +1,7 @@
 # FIRSTHAND — progress report
 
 **Monad Metropolis 2026 · Track 04 (Trust, Identity & AI Infrastructure) · solo build**
-Repo: <https://github.com/kaustubh76/Firsthand> · as of 24 Sep 2026
+Repo: <https://github.com/kaustubh76/Firsthand> · as of 27 Sep 2026
 **Live on Monad testnet (chainId 10143)** — addresses and costs in `deployments/NOTES.md`
 **Try it:** <https://firsthand-capture.vercel.app> (passkey → capture → anchored on Monad) ·
 gateway <https://firsthand-gateway.vercel.app>
@@ -35,9 +35,9 @@ live and measured, roughly two and a half weeks ahead of the project's own calen
 | 5 · Surfaces | quickstart + `pnpm demo`, MCP and capture PWA on the live deployment, gateway relay, Consent Ledger | **done** except Envio and the docs site |
 | 6 · Traction & freeze | two external integration PRs, testnet deploy, demo, videos | **both track integrations live and measured** (ERC-8004 · Monad's x402 facilitator, ADR-0014); testnet deployed; external *PRs* and videos still open |
 
-Shipped so far: nine immutable contracts (no proxies, no admin keys) with **122 Foundry tests,
+Shipped so far: nine immutable contracts (no proxies, no admin keys) with **141 Foundry tests,
 100 % line coverage** on `src/`, 10 000-run fuzz and invariant suites; a TypeScript monorepo of
-eight packages plus four apps and the buyer-agent template, with **464 tests** and coverage gates;
+eight packages plus four apps and the buyer-agent template, with **524 tests** and coverage gates;
 an MCP server with **17 tools**; a self-hostable gateway that holds no key material; a capture PWA;
 ChatGPT/Claude importers; and an experiments harness whose raw traces are committed as JSON.
 
@@ -151,7 +151,7 @@ it gives accountability, not prevention, and the README says so in those words.
 > **FIRSTHAND** (Metropolis Track 04, solo): passkey-signed data passports + per-query x402 payment
 > + withdrawable consent. **Live on Monad testnet** — nine contracts deployed and all four phase
 > gates passing against the real chain, P-256 enrolment running on the native RIP-7212 precompile.
-> Phases 0–5 of 6 done: 122 Foundry tests at 100 % line coverage, gateway, MCP server, SDK, capture
+> Phases 0–5 of 6 done: 141 Foundry tests at 100 % line coverage, gateway, MCP server, SDK, capture
 > PWA, and an experiments harness whose raw traces are committed. Both track integrations are live:
 > paid queries verified by Monad's native x402 facilitator, and each one credited to the buyer's
 > ERC-8004 reputation.
@@ -707,8 +707,11 @@ One experiment, and it came back positive. The browser tier rebuilds the *commit
 rebuild into a check on `docs/DEPLOY.md`'s claim that what is in git is what Vercel serves — the
 claim that was false on 24 Sep. It was landed as its own commit because vite's determinism across
 macOS-arm64 and linux-x64 was unproven and a negative result would have been worth having. It
-passed: CI's tree is byte-identical to the committed one, so the claim now has a gate rather than a
-convention.
+passed: CI's tree is byte-identical to the committed one. **The sentence that followed here claimed
+more than that, and was wrong**: byte-identical on a runner proves sources → committed tree and
+nothing about what Vercel serves. On 27 Sep eight commits of the PWA were live-stale under exactly
+that gap. `scripts/live-gate.mjs` fetches the two public URLs and compares them with the committed
+trees; it runs weekly in `interop.yml`, and the CI step's own comment now says only what it does.
 
 Also retired: `forge-gate` now picks the Foundry matching CI's pin rather than the first on PATH.
 Two are installed here and they disagree about 40 files, which is why the gate could previously only
@@ -792,3 +795,83 @@ CLI token. Nothing was rotated, because nothing needed to be.
 **Known and still unfixed:** `forge fmt` is not stable across Foundry versions — CI pins v1.1.0 and
 a current toolchain rewraps 40 files — so the local gate reports the difference instead of enforcing
 it, and says why. Reformatting the whole contract tree three weeks before judging buys nothing.
+
+## The UI met the diagram, and then the live links did not (27 Sep)
+
+Two passes, one day. The first took the seven diagram cards that describe the capture PWA and moved
+the code to meet them, claim by claim. Seven of twelve held; five did not, and separately three
+numbers on screen were backed by no chain read.
+
+The one that mattered most was not cosmetic. `livenessOf` flipped a principal to "needs attestation"
+the moment `lastAttestedEpoch < epochNow`, with no grace — while `PrincipalRegistry.effectiveStatus`
+gives two epochs of it. On the wrong side of a boundary the app disabled "Approve with passkey",
+disabled the Recall run, un-completed the activation beat and nagged on every screen, for a principal
+the chain would still have served. It now calls `principalEffectiveStatus` from `@firsthand/core`, the
+twin of the Solidity, and separates the chain's liveness (grants, approvals, serving — true throughout
+grace) from the stricter question anchoring asks (this epoch's deposit-key root), which gates the three
+stamp buttons.
+
+`Rescind (commit-reveal)` was on the diagram as a screen that existed. The contract was deployed, the
+SDK verbs were there, an anvil round-trip proved it, the Evidence tab *displayed* the arm — and no UI
+could run it. It can now: `Rescissions.commit` takes no signature, so the commit needs no passkey tap
+and rides the relay that has always allow-listed it; the reveal back-dates the end of consent to the
+commit's block. Proved live on Monad testnet — consent ended at block 65,950,621 and the reveal that
+recorded it landed at 65,950,654, thirty-three blocks later, with the buyer still served in between.
+A commitment is not a rescission, and the browser tier asserts that.
+
+Then `FirsthandLens` — the twin of `verifyPredicate`, badged BUILT, with "read-only views for
+dashboards" on its card and, with Envio deferred, **no consumer anywhere** outside the gateway's own
+closure. Discovery published every deployed address except that one, so a browser could not have
+addressed it if it had wanted to. The reader moved to `@firsthand/adapters`, and Verify now shows both
+questions: the manifest proves the sale, the Lens says in the present tense whether consent still
+stands. The Consent Ledger, which the diagram writes for "auditor / regulator / compliance", was
+reachable only through a passkey; it is on the public Verify tab now, and the tier opens a second
+browser context holding no credential to prove it.
+
+The three unbacked numbers: Earnings was `receiptCount × a constant` under a card claiming a royalty
+split, now priced from `GrantManager.termsOf` and split with core's `split()`; every manifest wrote
+`finalityDepth: 0` while Verify advertised "and finality", now the depth the shallowest anchor has
+actually reached; the H2 evidence card named no venue while sitting between two labelled Monad, and
+its arms ran on a local anvil because Monad exposes no readable global mempool.
+
+**Then the second pass found that none of it was on the link a judge is given.** The live PWA was
+serving the bundle from before the first of those eight commits. `docs/JUDGES.md` sends judges there.
+Four hours before it was found, the epoch had rolled over — so the live app was telling any locker
+attested in epoch 1 that it was frozen, using the exact code the first pass had fixed.
+
+Worse, a comment in `ci.yml` claimed this was already watched: "the rebuild is also a check on that
+claim" — that what is in git is what Vercel serves. It is not. It runs `git diff` on a runner and
+never touches the network. I wrote that sentence two passes earlier, and `PROGRESS.md` repeated it.
+The staleness was found by hand, curling the live index and diffing an asset hash.
+
+So: `scripts/live-gate.mjs`, which fetches. The capture half needs no new machinery — the asset names
+in `index.html` are already content hashes. The gateway half needed an identity, and got one that
+changes nothing in the gateway's own code: the bundler writes `public/build.txt` = `sha256(api/index.js)`,
+and `public/` is served at the root. The gate also reads `/healthz` for the relayer's float and
+cross-checks discovery against `deployments/<chainId>.json` — the check that would have caught
+`FirsthandLens` being withheld. It ran **before** the redeploy on purpose, named both faults, and went
+green after. It runs weekly in `interop.yml`, never in `ci`, for the reason that workflow already
+gives: a check resting on someone else's uptime must not redden a pull request that did not touch it.
+
+The hosted tier then found something the local one cannot. Both live runs completed every beat except
+the ERC-8004 credit, and the gateway's own log named the cause: `"chain rpc unavailable" ·
+"requests limited to 15/sec"`. Monad's public RPC allows fifteen requests a second from a serverless
+function's shared egress; the feedback path's four chain reads fire in the same second as the query
+that triggered them, and `waitUntil` cannot outlast a saturated window. The retry added on 24 Sep is
+tested three ways against the double and works there. What was missing was any way to see the failure
+from outside: it logged a warning nobody reads, and the only external symptom was an agent that had
+never been credited — indistinguishable from the feature being switched off. `/healthz` now reports
+the last feedback outcome and its reason, and `docs/JUDGES.md` carries it as a limitation rather than
+smoothing it over. Self-hosted, with its own RPC, it lands.
+
+One more sibling family closed on the way: `finalityDepth: 0` was hardcoded at four call sites, and
+fixing the PWA's two had left the partner-facing buyer template and the MCP's export still claiming
+nothing. The correctness moved into the builders — pass a `headBlock` and `manifestFromSidecars`,
+`manifestFromQueries` and `exportManifest` claim what their anchors back, from blocks they already
+hold. The two experiment scenarios keep their explicit `0`, with the reason written down: a harness
+timing verification should not wait for blocks it is not measuring.
+
+**Known and still unfixed:** hosted ERC-8004 feedback is best-effort under Monad's public-RPC ceiling
+(visible now, not silent). Envio's handlers remain the one genuine shell, deferred by ADR-0013 in
+favour of `LogsConsentLedger`. The Phase 5 quickstart gate — under ten minutes to a first recall, by a
+non-author — is unmeasured, and both submission videos are unrecorded.

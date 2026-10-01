@@ -131,6 +131,16 @@ async function localEnv(root: string): Promise<DemoEnv> {
   const running = await isUp(anvilDefaults.rpcUrl);
   const cleanups: (() => Promise<void>)[] = [];
 
+  // Reusing a node is a convenience; reusing one that cannot verify a passkey is a trap.
+  if (running && !(await verifiesP256(anvilDefaults.rpcUrl))) {
+    throw new Error(
+      `a node is already listening on ${anvilDefaults.rpcUrl} but it does not verify P-256 at ` +
+        "0x100 (RIP-7212), so every enrolment would revert with InvalidAuthoritySignature. It is " +
+        "probably an older anvil started without `--odyssey`. Stop it and let this run start its " +
+        "own: `pkill -f 'anvil.*8545'`.",
+    );
+  }
+
   if (!running) {
     console.log("   starting anvil…");
     // Enrolment verifies a P-256 signature through the RIP-7212 precompile. Older anvil exposes it
@@ -235,6 +245,46 @@ export async function codeAt(
       }),
     );
     return codes.every(Boolean);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Does the node at `url` verify P-256 through RIP-7212 at 0x100?
+ *
+ * Enrolment is a passkey signature checked on chain, so a node without the precompile fails every
+ * run with `InvalidAuthoritySignature` — which reads like a bad signature, not a missing precompile.
+ * `localEnv` reuses whatever is already listening on 8545, so a leftover node from an older Foundry
+ * (v1.1.0 needed `--odyssey`; v1.7 ships it by default and dropped the flag) silently poisons every
+ * subsequent run. Measured 2026-10-02: exactly that, for a confusing hour.
+ *
+ * The probe is the RIP-7212 vector: a valid signature returns 32 bytes of 1, anything else returns
+ * empty. A node without the precompile returns empty too, so this is "proved working", not "proved
+ * absent" — which is the direction that matters here.
+ */
+async function verifiesP256(url: string): Promise<boolean> {
+  // (hash ‖ r ‖ s ‖ x ‖ y) — the valid case from `packages/test-vectors/vectors/p256-signatures.v1.json`,
+  // so this probe and the key tests agree on what a good signature is.
+  const input =
+    "0x0deab5a2880087abad7cbb743483e65a0774a4a78ea6e21104948bdf0d2aff31" +
+    "85822163f46fae19abd3662458d9856cfae5d48b2ddc7fe5fd1c95c1938e2086" +
+    "6614e206b13f6ed4a355d7a7387f950cac4e82e632af6b8d4eee719d87acaa8c" +
+    "cdd61de9b78f38ec9fd29181202f4fdd5f1b42f9bacb4d3198f9c4268bbdac39" +
+    "0ce7ab1ac7587227ffd5387b1db83aa9a642f55396b872f143e2a5ee46d23cd8";
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_call",
+        params: [{ to: "0x0000000000000000000000000000000000000100", data: input }, "latest"],
+      }),
+    });
+    const body = (await res.json()) as { result?: string };
+    return /^0x0{63}1$/.test(body.result ?? "");
   } catch {
     return false;
   }

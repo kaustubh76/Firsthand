@@ -242,6 +242,8 @@ export function Recall({
           termsHash,
           txHash: sent.txHash,
           at: Date.now(),
+          epochStart: plan.epochStart.toString(),
+          term: plan.term.toString(),
         }),
       );
       say(

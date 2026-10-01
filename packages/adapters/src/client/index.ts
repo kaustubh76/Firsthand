@@ -1,3 +1,8 @@
+// The pacer is re-exported here, not imported from `@firsthand/runtime` directly, because the
+// browser bundles only reach `@firsthand/adapters` (the runtime's barrel pulls node built-ins and
+// is not on the capture app's dependency allow-list). The pacer itself is pure timers.
+export type { Pacer, PacerOptions } from "@firsthand/runtime";
+export { createPacer, immediatePacer, pacedMap } from "@firsthand/runtime";
 /**
  * Browser-safe surface: everything a client app needs to talk to a live deployment without holding a
  * key, and nothing that touches node built-ins. `FsBlobStore` and `FsPassportCatalog` are the only

@@ -6,6 +6,7 @@ import {
   principalEffectiveStatus,
 } from "@firsthand/core";
 import type { PublicClient } from "viem";
+import { pacerForClient } from "./chainPacer.js";
 import type { AppConfig } from "./config.js";
 
 /**
@@ -78,13 +79,44 @@ export function describeLiveness(l: Liveness): string {
   }
 }
 
+/**
+ * One reader, one pacer, per chain client.
+ *
+ * Monad answers about fifteen requests a second from one egress and refuses the rest, and viem
+ * retries a refusal up to five times — so an unbounded fan-out does not merely fail, it multiplies.
+ * This used to build a fresh reader on every call, which left nowhere for a shared scheduler to
+ * live: the Locker read every grant's state at once and a locker with four grants could put twenty
+ * calls on the wire in one tick. Memoizing by `(publicClient, addresses)` gives every browser read
+ * — grant statuses, expiries, a requester's card, liveness, the reveal window — one joint budget,
+ * which per-call-site fixes cannot.
+ */
+const readers = new WeakMap<PublicClient, Map<string, OnchainGrantReader>>();
+
 export function readerFor(config: AppConfig, publicClient: PublicClient): OnchainGrantReader {
-  return new OnchainGrantReader({
+  const key = [
+    config.chainId.toString(),
+    config.grantManager,
+    config.principalRegistry,
+    config.receiptLedger,
+  ].join(":");
+  // Keyed by client first: a gateway switch builds a new client, and a reader holding the old one
+  // would read the old chain.
+  let byAddress = readers.get(publicClient);
+  if (!byAddress) {
+    byAddress = new Map();
+    readers.set(publicClient, byAddress);
+  }
+  const cached = byAddress.get(key);
+  if (cached) return cached;
+  const reader = new OnchainGrantReader({
     publicClient: publicClient as never,
     grantManager: config.grantManager,
     principalRegistry: config.principalRegistry,
     receiptLedger: config.receiptLedger,
+    pacer: pacerForClient(publicClient),
   });
+  byAddress.set(key, reader);
+  return reader;
 }
 
 export async function fetchLiveness(

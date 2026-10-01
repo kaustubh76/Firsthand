@@ -28,6 +28,13 @@ export interface GrantEntry {
   rescindTx?: Bytes32;
   /** When this browser withdrew — so a rescission older than the gateway's scan window still has a date. */
   rescindAt?: number;
+  /**
+   * The epoch window this browser granted, as decimal strings. Recorded because *this* browser
+   * chose them: without it the Locker asked the chain for `grantState` on every grant just to show
+   * an expiry date — four `eth_call`s each, for a number it already knew.
+   */
+  epochStart?: string;
+  term?: string;
   /** The grantee's ERC-8004 agent id, when the request carried one and the binding verified. */
   agentId?: string;
   agentName?: string;

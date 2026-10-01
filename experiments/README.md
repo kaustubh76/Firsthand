@@ -55,8 +55,17 @@ page); measuring an `anchorMany` arm would show the same effect on the write pat
 measured yet, and neither is claimed.
 
 Caveat on the same run: `verifyMerkleMs` for on-chain arms (9.0 s / 7.3 s for 2 560 assets) is
-**not** comparable to the H3 figure below — on a live chain the verifier makes one `isAnchored` RPC
-round-trip per batch root, so that number is dominated by network latency, not hashing.
+**not** comparable to the H3 figure below — on a live chain that number is dominated by network
+latency, not hashing. The arithmetic: 10 distinct roots × 3 reads × ~285 ms per round trip against
+Monad's public RPC ≈ 8.5 s of the 9.0 s, with ~0.5 s of actual hashing. Anchor reads were already
+deduplicated per root (not per asset), so this was never an N+1 — it was round trips.
+
+**Those two figures predate 2026-10-02 and are no longer what the code does.** The verifier now
+reads `isAnchored` and `anchorOf` together, and skips the separate `anchorBlock` entirely where a
+reader offers `anchorOf` (it already carries the anchored block) — 3 sequential round trips per root
+become 1, so the same corpus should spend roughly a third of that time. The numbers above are left
+as measured rather than re-estimated; re-running S1 on chain would re-anchor 2 560 passports, which
+is not worth the gas to refresh a caveat.
 
 **S4 on-chain half (`anchors-baseline`), 20 forged anchors signed by a foreign deposit key against
 an enrolled principal:** 20 refused by the contract (`InvalidDepositSignature`), 0 accepted; a

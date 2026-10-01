@@ -67,7 +67,10 @@ describe("resilientFetch", () => {
     expect(s.calls).toHaveLength(2);
   });
 
-  it("waits out a 503 and honours retry-after", async () => {
+  // This one genuinely sleeps on `retry-after: 1` across several attempts, so vitest's 5 s default
+  // is not enough under a loaded parallel `pnpm coverage` run — it passed alone and failed in CI,
+  // which is the worst way for a test to behave. The assertion below still bounds the wait.
+  it("waits out a 503 and honours retry-after", { timeout: 30_000 }, async () => {
     // The gateway answers 503 + retry-after when its own chain RPC is rate-limiting it. A read is
     // worth waiting for; the header is capped so a hostile value cannot park the buyer for an hour.
     const s = stubFetch(json({ busy: true }, { status: 503, headers: { "retry-after": "1" } }));

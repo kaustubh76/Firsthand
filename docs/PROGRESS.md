@@ -109,11 +109,28 @@ forged anchors were refused by the contract itself.
    need the method name and whether the seal step is client-side. Happy to be an early tester.
    Related: with no global mempool on Monad, is the intended threat model for BTX *leader*
    visibility rather than mempool visibility? That changes what H2 should even be claiming.
-2. **MIP-8 storage pages.** My clustered layout measures 4.2 % cheaper than the flat one on testnet,
+2. ~~**MIP-8 storage pages.** My clustered layout measures 4.2 % cheaper than the flat one on testnet,
    which is the right direction but smaller than the ~98 % headline. Is there a spec or pricing note
-   so I can tell whether the layout is actually hitting the page discount, or only partly?
-3. **Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
-   so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?
+   so I can tell whether the layout is actually hitting the page discount, or only partly?~~
+   **Answered 1 Oct from the published spec** — <https://mips.monad.xyz/MIPs/MIP-8>. A page is 128
+   consecutive slots; `LOAD 8 000 + BASE 100` cold, `BASE 100` warm, `WRITE 2 800` first write per
+   page, `STATE_GROWTH 17 000` on new occupancy. The ~98 % is the 8 100 → 100 ratio for the *second*
+   access to a page **within one transaction**, and `anchor()` writes one root per transaction — so
+   there is nothing to amortise and the layout is already capturing all of it (the 8 408-gas saving
+   is one page's I/O; see `experiments/README.md`). No pricing note needed; the question is closed.
+3. ~~**Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
+   so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?~~
+   **Answered 1 Oct.** Mera (<https://github.com/category-labs/mera>, Category Labs, Apache-2.0/MIT)
+   does exactly PRF → HKDF and is the precedent for this pattern in the ecosystem; FIRSTHAND needs
+   no dependency on it, since `WebAuthnPrfSource` + `KeyTree` already do it. On authenticators:
+   **Android with Google Password Manager** has the broadest support (PRF by default across Chrome,
+   Edge, Samsung Internet); **Apple** supports it with iCloud Keychain on iOS 18.4+/macOS 15+ but
+   passes **no PRF through the cross-device (QR) flow or to roaming authenticators**; **Windows
+   Hello** returns PRF since the Feb 2026 Win 11 24H2/25H2 update, though Chrome/Edge ≤ 146 do not
+   surface it at *creation*. That last point was a live bug here — enrolment gated on the
+   create-time flag — fixed in `ab2c79b`; the gate is now the first real derivation. **Still
+   outstanding: a run against a real authenticator.** Every passkey in this repo's gates is a Chrome
+   DevTools virtual one.
 4. ~~**Native x402 facilitator.** I'd like a testnet facilitator URL to run interop against.~~
    **Answered 23–24 Sep** — `https://x402-facilitator.molandak.org`, x402 v2, no auth. Interop runs
    every `pnpm --filter @firsthand/adapters test:testnet`; findings and the envelope disagreement
@@ -558,7 +575,14 @@ that does not exist separates the two. Live, against the hosted gateway: the pay
 `pnpm --filter @firsthand/adapters test:testnet`.
 
 **Still not built:** Envio handlers, the docs site, BTX (not on testnet), and the Cleanverse/CVI
-"Silver" tier, which the spec mentions (§7.2, §13) and nothing implements.
+"Silver" tier, which the spec mentions (§7.2, §13) and nothing implements. The Readme's status block
+and `docs/JUDGES.md` now name both BTX and Silver as specified-but-unbuilt, so §13's and §20's
+present tense ("the CVI tier offers verified-human namespaces") is not read as a claim. CVI itself
+is available — sandbox, API keys, and working integrations on this very chain — and the shape is an
+off-chain EIP-712 attestation read through an oracle; the reason it is not built is that the check
+belongs in `GrantManager.acceptTerms`, which is immutable by design, so it costs a constructor
+argument and a redeploy of a contract set whose anchors address is the EIP-712 `verifyingContract`
+for every passport already minted.
 
 ---
 

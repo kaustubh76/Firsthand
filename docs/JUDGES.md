@@ -2,7 +2,11 @@
 
 Readme §19 beat by beat, with what to tap and what lands on chain. Nothing to install: a
 passkey-capable browser (phone or laptop with Touch ID / Windows Hello / Android) and
-<https://firsthand-capture.vercel.app>. Every hash on screen opens on `testnet.monadexplorer.com`.
+<https://firsthand-capture.vercel.app>. **Enrol with a passkey the device in front of you holds** —
+Touch ID on that Mac, Windows Hello on that PC, the screen lock on that phone. Do not scan a QR
+code to use a passkey on a *second* device: Apple passes no PRF output through the cross-device
+flow, and every key in a locker derives from that output, so the app will tell you so and refuse
+rather than enrol something it cannot open. Every hash on screen opens on `testnet.monadexplorer.com`.
 Relayed steps take one to three seconds (Monad's 0.4 s blocks plus the relay's confirmation wait).
 
 | Beat (Readme §19) | Tap | What you see / what landed |
@@ -43,6 +47,15 @@ flow as a script in [`integrations/buyer-agent`](../integrations/buyer-agent/REA
   can run here on your own grant — it is the fallback that ships — but it does not win the race: S3
   measured its extraction success at 1.00 against the public mempool's 0.98. What it buys is the
   timestamp, not immunity.
+- **The Silver tier.** Readme §7.2 describes an optional rule — regulated namespaces requiring a
+  Cleanverse CVI attestation on the grantee — and §13 and §20 refer to it in the present tense.
+  **Nothing implements it**, as [`docs/PROGRESS.md`](PROGRESS.md) has said throughout. The sandbox
+  exists and the integration shape is known (an off-chain EIP-712 attestation read through an
+  oracle, already used by other projects on this chain), but the check belongs in
+  `GrantManager.acceptTerms`, which is immutable by design — adding it means a constructor
+  argument and a redeploy, and the anchors contract is the EIP-712 `verifyingContract` for every
+  passport already minted. That was not a trade worth making inside the build window. Read §13 and
+  §20 as "would offer", not "offers".
 - **A large live clip.** Hosted captures are capped at 4 MiB (Vercel's request-body ceiling; the
   gateway publishes the limit). A self-hosted gateway takes 8 MiB.
 - **Weekly epochs.** A locker attested in an earlier epoch needs *Attest this epoch* (offered on the

@@ -35,6 +35,25 @@ charges *more* in absolute terms for the same anchor (+19 % baseline, +12 % page
 choice matters more there, not less. Measured 2026-09-16 against the live deployment in
 `deployments/10143.json`; ADR-0010 carries the verdict.
 
+**Why 4.2 % and not the ~98 % headline — the MIP-8 spec answers it, and the answer is that the
+measurement is right.** [MIP-8](https://mips.monad.xyz/MIPs/MIP-8) (testnet 2026-08-12, mainnet
+2026-09-02, so the run above is post-activation) prices a **page of 128 consecutive 32-byte slots**
+(`page_index(slot) = slot >> 7`) with `BASE_COST` 100, `LOAD_COST` 8 000, `WRITE_COST` 2 800 and
+`STATE_GROWTH_COST` 17 000. The famous ratio is **8 100 → 100**: the first access to a page in a
+transaction pays cold, every other slot *of that page, in that same transaction* is warm. The
+discount is therefore an **intra-transaction amortisation**, and `PassportAnchors.anchor()` writes
+**one batch root per transaction** — there is no second access to amortise. What the clustered
+layout can still save is one page's worth of I/O, and that is what it saves: the paged arm is
+8 408 gas cheaper on Monad and 3 249 gas *dearer* on a vanilla EVM (it pays for an extra scattered
+`_pointer` slot), an 11 657-gas swing against one page's `LOAD + BASE + WRITE` = **10 900**. The
+17 000 state-growth charge that dominates a new anchor is charged on new slot occupancy and
+clustering does not avoid it. So the layout is capturing the whole discount available to this
+workload; the headline describes a different access pattern — one that reads or rewrites many
+clustered slots in a single transaction. The place that pattern *does* occur here is **verification**
+(`isAnchored` / `anchorBlock` over many roots, and access lists, which MIP-8 explicitly dedupes by
+page); measuring an `anchorMany` arm would show the same effect on the write path. Neither is
+measured yet, and neither is claimed.
+
 Caveat on the same run: `verifyMerkleMs` for on-chain arms (9.0 s / 7.3 s for 2 560 assets) is
 **not** comparable to the H3 figure below — on a live chain the verifier makes one `isAnchored` RPC
 round-trip per batch root, so that number is dominated by network latency, not hashing.
@@ -99,7 +118,12 @@ leaders — so `txpool_content` is unsupported and an RPC-level watcher has noth
 harness refuses the arm with that reason rather than reporting 50 blind trials as a result. So on
 Monad the public-mempool baseline cannot even be *staged* from a public endpoint: the realistic
 adversary is a leader or builder with privileged visibility, not a bot on an RPC. That narrows H2's
-threat model considerably and should be stated that way rather than as a win.
+threat model considerably and should be stated that way rather than as a win. This is Monad's own
+documented design, not an inference from a failed probe — [the differences
+page](https://docs.monad.xyz/developer-essentials/differences) states it plainly: *"There is no
+global mempool. For efficiency, transactions are forwarded to the next few leaders."* So the
+question BTX answers here is **leader visibility**, and an encrypted mempool's claim should be read
+against that adversary.
 
 **S4, 60 injected attacks × 3 classes (foreign lineage, forged content, replayed epoch) + 60
 genuine:** precision 1.0, recall 1.0 — the locker refused every unprovable deposit and no genuine one.

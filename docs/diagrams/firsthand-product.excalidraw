@@ -3365,7 +3365,7 @@
    "x": 1230,
    "y": 536,
    "width": 1100,
-   "height": 102.4,
+   "height": 141.60000000000002,
    "angle": 0,
    "strokeColor": "#495057",
    "backgroundColor": "#ffffff",
@@ -3413,7 +3413,7 @@
    "x": 1236,
    "y": 542,
    "width": 1088,
-   "height": 70.0,
+   "height": 105.0,
    "angle": 0,
    "strokeColor": "#1e1e1e",
    "backgroundColor": "transparent",
@@ -3435,13 +3435,13 @@
    "updated": 1758000000000,
    "link": null,
    "locked": false,
-   "text": "\u2022 Mera passkey provider: PRF exposure for HKDF derivation \u2192 unblocks the key tree\n\u2022 Monad BTX testnet availability \u2014 NOT deployed as of 2026-09 (Category Labs' batched threshold encryption) \u2192 unblocks the btx path\n\u2022 Monad MIP-8 storage-page spec \u2014 pricing unconfirmed on a vanilla EVM \u2192 decides the anchors layout (H1)\n\u2022 Cleanverse CVI sandbox \u2014 verified-human namespaces for the Silver tier",
+   "text": "\u2022 PRF for HKDF derivation \u2014 RESOLVED 2026-10: Android/GPM broadest; Apple yes locally, NOT over the cross-device QR flow; Windows Hello since Feb 2026. Mera (Category Labs) is the same pattern\n\u2022 Monad BTX testnet availability \u2014 STILL SHUT: on two nodes as of 2026-08, no developer endpoint. btx path stays probe-gated; commit-reveal ships\n\u2022 Monad MIP-8 storage-page spec \u2014 RESOLVED 2026-10 (mips.monad.xyz/MIPs/MIP-8): 128-slot pages, warm-access discount is intra-transaction, so one-root-per-tx anchoring captures one page's I/O and no more (H1 \u22124.2 % is the ceiling)\n\u2022 Cleanverse CVI sandbox \u2014 AVAILABLE, not integrated: the Silver tier of \u00a77.2/\u00a713 stays unbuilt (the check belongs in an immutable GrantManager)",
    "fontSize": 14,
    "fontFamily": 2,
    "textAlign": "left",
    "verticalAlign": "top",
    "containerId": "box-externals",
-   "originalText": "\u2022 Mera passkey provider: PRF exposure for HKDF derivation \u2192 unblocks the key tree\n\u2022 Monad BTX testnet availability \u2014 NOT deployed as of 2026-09 (Category Labs' batched threshold encryption) \u2192 unblocks the btx path\n\u2022 Monad MIP-8 storage-page spec \u2014 pricing unconfirmed on a vanilla EVM \u2192 decides the anchors layout (H1)\n\u2022 Cleanverse CVI sandbox \u2014 verified-human namespaces for the Silver tier",
+   "originalText": "\u2022 PRF for HKDF derivation \u2014 RESOLVED 2026-10: Android/GPM broadest; Apple yes locally, NOT over the cross-device QR flow; Windows Hello since Feb 2026. Mera (Category Labs) is the same pattern\n\u2022 Monad BTX testnet availability \u2014 STILL SHUT: on two nodes as of 2026-08, no developer endpoint. btx path stays probe-gated; commit-reveal ships\n\u2022 Monad MIP-8 storage-page spec \u2014 RESOLVED 2026-10 (mips.monad.xyz/MIPs/MIP-8): 128-slot pages, warm-access discount is intra-transaction, so one-root-per-tx anchoring captures one page's I/O and no more (H1 \u22124.2 % is the ceiling)\n\u2022 Cleanverse CVI sandbox \u2014 AVAILABLE, not integrated: the Silver tier of \u00a77.2/\u00a713 stays unbuilt (the check belongs in an immutable GrantManager)",
    "autoResize": false,
    "lineHeight": 1.25
   },
@@ -15450,9 +15450,9 @@
    "id": "arrow-g1",
    "type": "arrow",
    "x": 1780.0,
-   "y": 638.4,
+   "y": 677.6,
    "width": 1758.0,
-   "height": 791.6,
+   "height": 752.4,
    "angle": 0,
    "strokeColor": "#868e96",
    "backgroundColor": "transparent",
@@ -15484,23 +15484,23 @@
     ],
     [
      0.0,
-     183.80000000000007
+     144.60000000000002
     ],
     [
      -1758.0,
-     183.80000000000007
+     144.60000000000002
     ],
     [
      -1758.0,
-     585.6
+     546.4
     ],
     [
      -1450.0,
-     585.6
+     546.4
     ],
     [
      -1450.0,
-     791.6
+     752.4
     ]
    ],
    "startBinding": {
@@ -15557,9 +15557,9 @@
    "id": "arrow-g2",
    "type": "arrow",
    "x": 1780.0,
-   "y": 638.4,
+   "y": 677.6,
    "width": 596.0,
-   "height": 791.6,
+   "height": 752.4,
    "angle": 0,
    "strokeColor": "#868e96",
    "backgroundColor": "transparent",
@@ -15591,23 +15591,23 @@
     ],
     [
      0.0,
-     198.80000000000007
+     159.60000000000002
     ],
     [
      -16.0,
-     198.80000000000007
+     159.60000000000002
     ],
     [
      -16.0,
-     600.6
+     561.4
     ],
     [
      580.0,
-     600.6
+     561.4
     ],
     [
      580.0,
-     791.6
+     752.4
     ]
    ],
    "startBinding": {
@@ -15664,9 +15664,9 @@
    "id": "arrow-g3",
    "type": "arrow",
    "x": 1780.0,
-   "y": 638.4,
+   "y": 677.6,
    "width": 290.0,
-   "height": 2413.9999999999995,
+   "height": 2374.7999999999997,
    "angle": 0,
    "strokeColor": "#868e96",
    "backgroundColor": "transparent",
@@ -15698,23 +15698,23 @@
     ],
     [
      0.0,
-     108.80000000000007
+     69.60000000000002
     ],
     [
      -8.0,
-     108.80000000000007
+     69.60000000000002
     ],
     [
      -8.0,
-     2207.9999999999995
+     2168.7999999999997
     ],
     [
      -290.0,
-     2207.9999999999995
+     2168.7999999999997
     ],
     [
      -290.0,
-     2413.9999999999995
+     2374.7999999999997
     ]
    ],
    "startBinding": {

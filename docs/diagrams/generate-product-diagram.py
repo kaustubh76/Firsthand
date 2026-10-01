@@ -413,10 +413,10 @@ defcard("auditor", "people", 1, 1, "Auditor / regulator / compliance", "BUILT", 
     "Per-asset diligence and EU-AI-Act lineage without trusting the gateway",
 ])
 defcard("externals", "people", 2, 2, "External gates (§16 Phase 0)", "EXTERNAL GATE", [
-    "Mera passkey provider: PRF exposure for HKDF derivation → unblocks the key tree",
-    "Monad BTX testnet availability — NOT deployed as of 2026-09 (Category Labs' batched threshold encryption) → unblocks the btx path",
-    "Monad MIP-8 storage-page spec — pricing unconfirmed on a vanilla EVM → decides the anchors layout (H1)",
-    "Cleanverse CVI sandbox — verified-human namespaces for the Silver tier",
+    "PRF for HKDF derivation — RESOLVED 2026-10: Android/GPM broadest; Apple yes locally, NOT over the cross-device QR flow; Windows Hello since Feb 2026. Mera (Category Labs) is the same pattern",
+    "Monad BTX testnet availability — STILL SHUT: on two nodes as of 2026-08, no developer endpoint. btx path stays probe-gated; commit-reveal ships",
+    "Monad MIP-8 storage-page spec — RESOLVED 2026-10 (mips.monad.xyz/MIPs/MIP-8): 128-slot pages, warm-access discount is intra-transaction, so one-root-per-tx anchoring captures one page's I/O and no more (H1 −4.2 % is the ceiling)",
+    "Cleanverse CVI sandbox — AVAILABLE, not integrated: the Silver tier of §7.2/§13 stays unbuilt (the check belongs in an immutable GrantManager)",
 ])
 defcard("buyer", "people", 4, 1, "Buyer / AI agent", "BUILT", [
     "Holds a grantee card: cardId = keccak(owner, X25519 pubkey) (ERC-8004 lineage, §7.2)",

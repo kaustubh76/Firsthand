@@ -50,6 +50,11 @@
       "import": "./dist/schemas/index.js",
       "require": "./dist/schemas/index.cjs"
     },
+    "./attestation": {
+      "types": "./dist/attestation/index.d.ts",
+      "import": "./dist/attestation/index.js",
+      "require": "./dist/attestation/index.cjs"
+    },
     "./authority": {
       "types": "./dist/authority/index.d.ts",
       "import": "./dist/authority/index.js",

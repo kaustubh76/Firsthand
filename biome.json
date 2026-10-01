@@ -20,6 +20,7 @@
       "!experiments/results",
       "!packages/test-vectors/vectors",
       "!packages/indexer/generated",
+      "!android",
       "!pnpm-lock.yaml",
       "!deploy/gateway/api",
       "!deploy/capture/assets",

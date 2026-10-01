@@ -4,6 +4,7 @@ export default makeTsupConfig({
   entry: [
     "src/index.ts",
     "src/errors.ts",
+    "src/attestation/index.ts",
     "src/authority/index.ts",
     "src/split/index.ts",
     "src/merkle/index.ts",

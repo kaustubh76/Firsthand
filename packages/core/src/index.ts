@@ -1,3 +1,4 @@
+export * from "./attestation/index.js";
 export * from "./authority/index.js";
 export * from "./bytes.js";
 export * from "./caip.js";

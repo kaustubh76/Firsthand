@@ -34,3 +34,14 @@ deployments/31337.json
 dev-dist/
 e2e-out/
 .vercel/
+
+# android companion app (ADR-0015) — gradle outputs, local SDK paths, signing material
+android/.gradle/
+android/.cxx/
+android/local.properties
+android/**/build/
+*.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties

@@ -58,10 +58,10 @@ describe("createPacer", () => {
   });
 
   it("defaults to a rate inside Monad's ~15 requests/second window", async () => {
-    // Five starts at the 70 ms default is 280 ms of spacing — i.e. under 15/s, not over it.
+    // Five starts at the 80 ms default is 320 ms of spacing — 12.5/s, under the cap with headroom.
     const began = Date.now();
     await drive(createPacer(), 5, 0);
-    expect(Date.now() - began).toBeGreaterThanOrEqual(260);
+    expect(Date.now() - began).toBeGreaterThanOrEqual(300);
   });
 });
 

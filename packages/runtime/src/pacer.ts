@@ -24,15 +24,17 @@ export interface Pacer {
 
 export interface PacerOptions {
   /**
-   * Minimum gap between call starts, in ms. The default of 70 ms is ~14.3 requests/second, just
-   * inside Monad's ~15/s window; the ledger's historical default of 50 ms is 20/s, i.e. over it.
+   * Minimum gap between call starts, in ms. The default of 80 ms is 12.5 requests/second: a
+   * sliding second catches at most 13 starts, which stays under Monad's ~15 with headroom for
+   * whatever else shares the egress. (70 ms would allow 15 — at the cap, not under it. The
+   * ledger's historical 50 ms is 20/s, i.e. over.)
    */
   readonly minRequestIntervalMs?: number;
   /** Calls allowed in flight at once. */
   readonly maxInFlight?: number;
 }
 
-export const DEFAULT_PACE_MS = 70;
+export const DEFAULT_PACE_MS = 80;
 export const DEFAULT_MAX_IN_FLIGHT = 3;
 
 export function createPacer(options: PacerOptions = {}): Pacer {

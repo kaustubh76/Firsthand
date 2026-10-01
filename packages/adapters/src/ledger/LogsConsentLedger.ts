@@ -151,7 +151,7 @@ export class LogsConsentLedger implements ConsentLedger {
         return await fn();
       } catch (error) {
         lastError = error;
-        if (!/limited|rate|429|timeout/i.test((error as Error).message ?? "")) throw error;
+        if (!/limited|rate|429|timeout|-32007/i.test((error as Error).message ?? "")) throw error;
         await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
       }
     }

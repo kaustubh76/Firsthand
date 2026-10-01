@@ -581,7 +581,7 @@ function refusal(reason: VerifyFailure, grantId: Bytes32, passportId: Bytes32) {
  * may have been broadcast, so it is the only class of failure a *write* may safely repeat.
  */
 function isRateLimited(error: unknown): boolean {
-  return /rate limit|too many requests|requests limited|request limit|\b429\b/i.test(
+  return /rate limit|too many requests|requests limited|request limit|\b429\b|-32007/i.test(
     messagesOf(error).join(" | "),
   );
 }

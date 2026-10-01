@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JUDGES_URL } from "../lib/links.js";
-import { enrol, prfSupported } from "../lib/prf.js";
+import { enrol, type PrfCapability, prfCapability, prfSupported } from "../lib/prf.js";
 import { Button, Icon, Notice } from "../ui/index.js";
 
 /**
@@ -38,6 +38,17 @@ export function Enroll({
   const supported = prfSupported();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Asked before the tap, so a browser that cannot derive keys says so before a passkey exists.
+  const [capability, setCapability] = useState<PrfCapability>("unknown");
+  useEffect(() => {
+    let live = true;
+    void prfCapability().then((c) => {
+      if (live) setCapability(c);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const shown = problem ?? reported;
 
   async function handleEnrol() {
@@ -82,6 +93,13 @@ export function Enroll({
               : "WebAuthn is not available in this browser."}
           </span>
         </div>
+        {capability === "no" && !shown && (
+          <Notice tone="warn">
+            This browser reports no support for the WebAuthn PRF extension, which is what a locker's
+            keys derive from. Enrolling here will not produce a locker you can open — try a current
+            Chrome, Edge, Safari or Firefox on this device.
+          </Notice>
+        )}
         {shown && <Notice tone="bad">{shown}</Notice>}
       </div>
       <ol className="hero-verbs" data-testid="verbs">

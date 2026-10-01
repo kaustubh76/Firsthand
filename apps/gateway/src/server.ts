@@ -76,6 +76,7 @@ import {
 } from "@firsthand/core";
 import {
   createLogger,
+  createPacer,
   type Logger,
   MemoryTokenBucketLimiter,
   ShutdownRegistry,
@@ -546,6 +547,10 @@ export function createGateway(
     refillPerSecond: config.RATE_LIMIT_REFILL_PER_SECOND,
   });
 
+  // Agent lookups are the one public route whose cost is many chain reads per request, so they
+  // take turns: one at a time, with a gap, rather than however many viewers happen to arrive.
+  const agentReads = createPacer({ maxInFlight: 1, minRequestIntervalMs: 100 });
+
   const app = new Hono<{ Variables: X402Vars }>();
   app.onError(problemDetailsHandler(logger));
   app.use("*", async (c, next) => {
@@ -1005,15 +1010,25 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     const raw = c.req.param("agentId") ?? "";
     if (!/^\d{1,20}$/.test(raw)) throw new ValidationError("agent id must be a decimal integer");
     const agentId = BigInt(raw);
-    const view = await erc8004.agent(agentId);
-    if (!view)
+    const registry = erc8004;
+    // One lookup is seven chain reads (`ownerOf` + three in `agent`, plus two summaries that each
+    // list clients first), and this route is public and unauthenticated. Three viewers opening the
+    // Verify tab at once is twenty-one reads in a second, past Monad's window — so lookups are
+    // serialised against one another here rather than paced read-by-read, which would tax a single
+    // lookup for no benefit.
+    const { view, paid, all } = await agentReads.run(async () => {
+      const found = await registry.agent(agentId);
+      if (!found) return { view: null, paid: null, all: null };
+      const [p, a] = await Promise.all([
+        relayerAddress
+          ? registry.summary(agentId, [relayerAddress], FEEDBACK_TAG1, FEEDBACK_TAG2_PAID)
+          : Promise.resolve({ count: 0n, value: 0n, decimals: 0 }),
+        registry.summary(agentId, [], FEEDBACK_TAG1, ""),
+      ]);
+      return { view: found, paid: p, all: a };
+    });
+    if (!view || !paid || !all)
       return c.json({ code: "FH_NOT_FOUND", error: `agent ${raw} is not registered` }, 404);
-    const [paid, all] = await Promise.all([
-      relayerAddress
-        ? erc8004.summary(agentId, [relayerAddress], FEEDBACK_TAG1, FEEDBACK_TAG2_PAID)
-        : Promise.resolve({ count: 0n, value: 0n, decimals: 0 }),
-      erc8004.summary(agentId, [], FEEDBACK_TAG1, ""),
-    ]);
     return c.json(
       jsonSafe({
         ...view,

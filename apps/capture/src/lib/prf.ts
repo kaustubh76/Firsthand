@@ -31,6 +31,36 @@ export function prfSupported(): boolean {
   return WebAuthnPrfSource.isSupported();
 }
 
+/** What this *browser* says about PRF, before a passkey exists to ask. */
+export type PrfCapability = "yes" | "no" | "unknown";
+
+/**
+ * A pre-flight, not a gate.
+ *
+ * `getClientCapabilities()` answers for the client, not for whichever authenticator the person
+ * ends up choosing — a browser that supports PRF can still be handed a passkey that does not (over
+ * the cross-device QR flow Apple passes no PRF at all). So an explicit `false` is worth warning
+ * about before someone creates a credential they cannot use, and everything else is `unknown`:
+ * the spec is explicit that a missing key means *no assumption may be made*, not "false". The gate
+ * stays the first real derivation.
+ */
+export async function prfCapability(): Promise<PrfCapability> {
+  try {
+    const get = (
+      PublicKeyCredential as unknown as {
+        getClientCapabilities?: () => Promise<Record<string, boolean | undefined>>;
+      }
+    ).getClientCapabilities;
+    if (typeof get !== "function") return "unknown";
+    const caps = await get.call(PublicKeyCredential);
+    const prf = caps?.["extension:prf"];
+    return prf === true ? "yes" : prf === false ? "no" : "unknown";
+  } catch {
+    // Older browsers throw rather than omit the method, and it can reject on an invalid RP domain.
+    return "unknown";
+  }
+}
+
 /**
  * True when a failure means "this authenticator cannot derive a locker key" — as opposed to a
  * cancelled prompt, a timeout or an unreachable gateway. Only the SDK's PRF-absent error carries

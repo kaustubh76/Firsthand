@@ -1,3 +1,5 @@
+export type { Pacer, PacerOptions } from "@firsthand/runtime";
+export { createPacer, immediatePacer, pacedMap } from "@firsthand/runtime";
 export type { OnchainAnchorWriterOptions } from "./anchors/OnchainAnchorWriter.js";
 export { OnchainAnchorWriter } from "./anchors/OnchainAnchorWriter.js";
 export { FsBlobStore } from "./blobs/FsBlobStore.js";

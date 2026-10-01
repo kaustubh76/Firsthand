@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ConsentTimeline } from "../components/ConsentTimeline.js";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
+import { pacerForClient } from "../lib/chainPacer.js";
 import type { AppConfig } from "../lib/config.js";
 import { askDeviceRegistry, type DeviceReport } from "../lib/devices.js";
 import { explainFailure } from "../lib/failures.js";
@@ -88,7 +89,11 @@ export function Verify({
       // failed read is reported as a failed read and never softens either verdict.
       if (client.lens) {
         const manifest = LineageManifestSchema.parse(parsed);
-        setLens(await askLens(client.lens, manifest).catch(() => null));
+        setLens(
+          await askLens(client.lens, manifest, pacerForClient(client.publicClient)).catch(
+            () => null,
+          ),
+        );
       }
     });
 

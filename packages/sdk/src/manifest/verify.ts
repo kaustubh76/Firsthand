@@ -1,4 +1,7 @@
 import type { AnchorWriter } from "@firsthand/adapters";
+// The browser-safe subpath on purpose: `verify` ships in `@firsthand/sdk/browser`, and the
+// adapters' root entry pulls `fs/promises`, which breaks the capture app's bundle.
+import { type Pacer, pacedMap } from "@firsthand/adapters/client";
 import {
   AttestationClass,
   type Bytes32,
@@ -126,6 +129,14 @@ export interface ManifestVerifyContext {
   readonly headBlock: bigint;
   /** Supply one and receipts are proved against the chain; omit it and the verdict says so. */
   readonly receipts?: ManifestReceiptReader;
+  /**
+   * Bounds the receipt prefetch. A receipt id is unique per served query, so unlike roots they
+   * cannot be deduplicated — a corpus of N paid assets is N reads however it is sliced, and done
+   * one at a time on a live chain that is latency × N (measured ~285 ms a call against Monad, so
+   * about twelve minutes for 2 560 assets). Omit it and the reads stay sequential, exactly as
+   * before; supply one and they run concurrently inside whatever rate the pacer allows.
+   */
+  readonly pacer?: Pacer;
   readonly now?: () => number;
 }
 
@@ -189,6 +200,23 @@ export async function verifyManifest(
     signatures === "all" ||
     (typeof signatures === "number" && signatures > 0 && index % stride === 0);
 
+  // Receipts, fetched up front so the loop is not N sequential round trips. Only ids the file
+  // actually carries are read; an asset that fails earlier in the loop may therefore have been
+  // read for nothing, which is a bounded cost paid only by manifests that are already failing.
+  const receiptCache = new Map<Bytes32, ChainReceipt | null>();
+  if (ctx.receipts && ctx.pacer) {
+    const reader = ctx.receipts;
+    const ids = [
+      ...new Set(
+        manifest.assets
+          .map((a) => a.receipt?.receiptId)
+          .filter((id): id is Bytes32 => id !== undefined),
+      ),
+    ];
+    const found = await pacedMap(ids, (id) => reader.receipt(id), ctx.pacer);
+    ids.forEach((id, i) => receiptCache.set(id, found[i] ?? null));
+  }
+
   const assets: AssetVerdict[] = [];
   for (let index = 0; index < total; index++) {
     const asset = manifest.assets[index] as (typeof manifest.assets)[number];
@@ -219,11 +247,18 @@ export async function verifyManifest(
     // Same order as core's verifyPredicate: signature → root known → Merkle → liveness/finality.
     let root = rootCache.get(asset.batchRoot);
     if (root === undefined) {
-      root = {
-        anchored: await ctx.anchors.isAnchored(asset.batchRoot),
-        block: await ctx.anchors.anchorBlock(asset.batchRoot),
-        owner: ctx.anchors.anchorOf ? await ctx.anchors.anchorOf(asset.batchRoot) : null,
-      };
+      // One round trip per root instead of three. `anchorOf` already carries the block it was
+      // anchored in, so where a reader offers it the separate `anchorBlock` read is redundant —
+      // which matters on a live chain, where this loop is latency, not computation: the S1 corpus
+      // spent 8.5 s of its 9.0 s here waiting on 30 sequential calls.
+      // Called on the receiver, never hoisted: these readers keep state on `this`.
+      const [anchored, owner] = await Promise.all([
+        ctx.anchors.isAnchored(asset.batchRoot),
+        ctx.anchors.anchorOf?.(asset.batchRoot) ?? Promise.resolve(null),
+      ]);
+      const block =
+        owner !== null ? owner.blockNumber : await ctx.anchors.anchorBlock(asset.batchRoot);
+      root = { anchored, block, owner };
       rootCache.set(asset.batchRoot, root);
     }
     if (!root.anchored || root.block === null) {
@@ -257,7 +292,9 @@ export async function verifyManifest(
     if (asset.receipt) {
       carried++;
       if (ctx.receipts) {
-        const onChain = await ctx.receipts.receipt(asset.receipt.receiptId);
+        const onChain = receiptCache.has(asset.receipt.receiptId)
+          ? (receiptCache.get(asset.receipt.receiptId) ?? null)
+          : await ctx.receipts.receipt(asset.receipt.receiptId);
         if (onChain === null) {
           // No receipt means the read was never paid for — README §7.3 calls that "adverse".
           fail("RECEIPT_UNKNOWN");

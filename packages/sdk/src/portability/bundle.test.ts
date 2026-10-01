@@ -180,7 +180,11 @@ describe("locker bundle — exit, README §4/§12/§13", () => {
   });
 
   it("base64 round-trips large binaries without Buffer", () => {
-    const big = new Uint8Array(70_000).map((_, i) => i % 251);
+    // Filled with a loop rather than `.map`: identical bytes, but 70 000 fewer instrumented
+    // closure calls, which is the difference between this finishing inside the default timeout
+    // under `--coverage` and not. Raising the timeout instead would hide a real regression here.
+    const big = new Uint8Array(70_000);
+    for (let i = 0; i < big.length; i++) big[i] = i % 251;
     expect(fromBase64(toBase64(big))).toEqual(big);
   });
 });

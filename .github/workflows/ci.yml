@@ -65,9 +65,12 @@ jobs:
       - run: forge fmt --check
       - run: forge build --sizes
       - run: forge test -vv
+      # The filter is anchored on a path segment, not a substring: `(test|script)` alone also
+      # excluded any source file whose *name* contains those letters — `AndroidKeyAttestation.sol`
+      # among them — so the 100 % claim would have quietly stopped covering it.
       - name: Coverage gates — 100% lines on src/, 95% on src/libraries
         run: |
-          FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)'
+          FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(^|/)(test|script)/'
           node ../scripts/coverage-gate.mjs --lcov lcov.info --min 100 --min-branches 95 --include src/
           node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/
       - name: Deploy dry-run on anvil

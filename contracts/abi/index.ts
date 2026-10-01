@@ -8,6 +8,7 @@ export { GrantManagerAbi } from "./GrantManager.js";
 export { ReceiptLedgerAbi } from "./ReceiptLedger.js";
 export { RoyaltyRouterAbi } from "./RoyaltyRouter.js";
 export { FirsthandLensAbi } from "./FirsthandLens.js";
+export { HardwareDeviceRegistryAbi } from "./HardwareDeviceRegistry.js";
 export { SplitMathAbi } from "./SplitMath.js";
 export { MerkleLibAbi } from "./MerkleLib.js";
 export { PassportLibAbi } from "./PassportLib.js";

@@ -30,22 +30,26 @@ import {
   type Bytes32,
   buildTree,
   bytesToHex,
+  concat,
   domainSeparator,
   hashAttestation,
   hashLeaf,
   hashTerms,
   hexToBytes,
+  keccak256Hex,
   MAX_PRICE,
   MAX_RECIPIENTS,
   MERKLE_DEPTH,
   MONAD_TESTNET_CHAIN_ID,
   type Passport,
+  p256PublicKeyFromUncompressed,
   passportDigest,
   passportId,
   proveIndex,
   quoteToUnits,
   recoverSigner,
   Scope,
+  sha256,
   split,
   type Terms,
   tag,
@@ -56,6 +60,20 @@ import {
   ZERO_HASH,
   ZERO_HASHES,
 } from "../src/index.js";
+import {
+  buildCertificate,
+  certificate,
+  criticalExtension,
+  integer as derInteger,
+  extension,
+  keyDescription,
+  OID_ECDSA_SHA384,
+  OID_KEY_DESCRIPTION,
+  OID_RSA_ENCRYPTION,
+  OID_SECP384R1,
+  publicKeyOf,
+  seq as seqOf,
+} from "./derEncoder.js";
 
 const GENERATOR = "packages/core/scripts/gen-vectors.ts";
 
@@ -585,12 +603,403 @@ function genPassport(): VectorFile {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Android key attestation (ADR-0015)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Certificates for the attestation readers — the TypeScript one in `src/attestation/` and the
+ * Solidity one in `contracts/src/libraries/`, checked against the same bytes so they cannot drift.
+ *
+ * These cases are `hand` in the sense the suite means: the expected values are the encoder's
+ * *inputs* (a chosen security level, a chosen challenge, a keypair, a signature from noble), never
+ * anything a reader produced. Two independent code paths have to agree for a case to pass.
+ *
+ * TLV-level malformed inputs are deliberately absent. They are one or two bytes each, they read
+ * better as `hex"..."` literals beside the assertion that explains them, and the Solidity tests
+ * carry them — the same division `MerkleLib.t.sol` uses between a vector sweep and a targeted
+ * revert arm.
+ */
+function genAndroidAttestation(): VectorFile {
+  const leafSecret = hexToBytes(`0x${"11".repeat(32)}`);
+  const issuerSecret = hexToBytes(`0x${"22".repeat(32)}`);
+  const rootSecret = hexToBytes(`0x${"33".repeat(32)}`);
+
+  // The human's authority key. The registry resolves a principal id to this key, so the id in
+  // the attestation challenge has to be the one the key actually commits to — otherwise the
+  // fixture could never be registered and the end-to-end test would be testing a different
+  // certificate than the one the chain accepts.
+  const authorityScalar = `0x${"44".repeat(32)}` as Bytes32;
+  const authorityPoint = p256PublicKeyFromUncompressed(publicKeyOf(hexToBytes(authorityScalar)));
+  const principalId = keccak256Hex(
+    concat(hexToBytes(authorityPoint.x), hexToBytes(authorityPoint.y)),
+  );
+
+  // The challenge an Android app passes to `setAttestationChallenge`: the principal the key is
+  // being bound to, and the nonce registration will spend. The chain recomputes and compares it.
+  const nonce = `0x${"5c".repeat(32)}` as Bytes32;
+  const challenge = concat(hexToBytes(principalId), hexToBytes(nonce));
+
+  const leafKey = publicKeyOf(leafSecret);
+  const issuerKey = publicKeyOf(issuerSecret);
+  const leafPoint = p256PublicKeyFromUncompressed(leafKey);
+  const issuerPoint = p256PublicKeyFromUncompressed(issuerKey);
+
+  const description = keyDescription({
+    challenge,
+    securityLevel: 2,
+    tee: { origin: 0, bootState: 0 },
+  });
+  const leaf = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [extension(OID_KEY_DESCRIPTION, description)],
+  });
+  const intermediate = buildCertificate({
+    subject: "intermediate",
+    issuer: "root",
+    subjectKey: issuerKey,
+    issuerSecret: rootSecret,
+  });
+
+  const certCase = (
+    name: string,
+    built: ReturnType<typeof buildCertificate>,
+    point: { x: Bytes32; y: Bytes32 },
+    extra: Record<string, unknown>,
+    hand = true,
+  ): VectorCase => ({
+    name,
+    hand,
+    input: { certificate: bytesToHex(built.der) },
+    expected: {
+      tbsHash: bytesToHex(sha256(built.tbs)),
+      x: point.x,
+      y: point.y,
+      ...extra,
+    },
+  });
+
+  const cases: VectorCase[] = [
+    certCase("hand/leaf", leaf, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "2",
+      origin: "0",
+      verifiedBootState: "0",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+    }),
+    certCase("hand/intermediate", intermediate, issuerPoint, {
+      sha256Ecdsa: true,
+      hasKeyDescription: false,
+    }),
+  ];
+
+  // The same leaf with a high-s signature. Real CAs emit one about half the time and both the
+  // precompile and `verifyP256` reject it, so a reader that does not normalise sees a forgery.
+  const highS = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [extension(OID_KEY_DESCRIPTION, description)],
+    highS: true,
+  });
+  cases.push(
+    certCase("hand/leaf-high-s", highS, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "2",
+      origin: "0",
+      verifiedBootState: "0",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+    }),
+  );
+
+  // A v1 certificate: `[0] version` is OPTIONAL, so everything after it shifts by one.
+  const noVersion = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    noVersion: true,
+  });
+  cases.push(
+    certCase("hand/no-version", noVersion, leafPoint, {
+      sha256Ecdsa: true,
+      hasKeyDescription: false,
+    }),
+  );
+
+  // Refused shapes, too long to hand-write: a curve RIP-7212 cannot verify, and an algorithm
+  // this codebase does not claim to check.
+  const p384 = certificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    curve: OID_SECP384R1,
+  });
+  cases.push({
+    name: "hand/not-prime256v1",
+    hand: true,
+    input: { certificate: bytesToHex(p384) },
+    expected: { error: "NotPrime256v1" },
+  });
+
+  const sha384 = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    signatureOid: OID_ECDSA_SHA384,
+  });
+  cases.push(
+    certCase("hand/not-sha256", sha384, leafPoint, {
+      sha256Ecdsa: false,
+      hasKeyDescription: false,
+    }),
+  );
+
+  // A key that is not elliptic-curve at all, and a BIT STRING that is not an uncompressed point.
+  // Both are well-formed X.509 and both must be refused before a signature check could mistake
+  // them for a bad signature.
+  cases.push({
+    name: "hand/not-ec-key",
+    hand: true,
+    input: {
+      certificate: bytesToHex(
+        certificate({
+          subject: "device",
+          issuer: "intermediate",
+          subjectKey: leafKey,
+          issuerSecret,
+          keyAlgorithmOid: OID_RSA_ENCRYPTION,
+        }),
+      ),
+    },
+    expected: { error: "NotEc" },
+  });
+  cases.push({
+    name: "hand/compressed-point",
+    hand: true,
+    input: {
+      certificate: bytesToHex(
+        certificate({
+          subject: "device",
+          issuer: "intermediate",
+          subjectKey: leafKey,
+          issuerSecret,
+          rawSubjectKey: concat(Uint8Array.of(0x02), hexToBytes(leafPoint.x)),
+        }),
+      ),
+    },
+    expected: { error: "Point" },
+  });
+
+  // `critical` is DEFAULT FALSE, so an Extension has two elements or three. Both shapes must find
+  // the same value, or a certificate that marks the extension critical would read as having none.
+  const critical = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [criticalExtension(OID_KEY_DESCRIPTION, description)],
+  });
+  cases.push(
+    certCase("hand/critical-extension", critical, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "2",
+      origin: "0",
+      verifiedBootState: "0",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+    }),
+  );
+
+  // An extension that is not ours: the walk must pass over it and report no key description
+  // rather than reading whatever it finds.
+  const otherExtension = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [extension(Uint8Array.of(0x55, 0x1d, 0x13), Uint8Array.of(0x30, 0x00))],
+  });
+  cases.push(
+    certCase("hand/foreign-extension", otherExtension, leafPoint, {
+      sha256Ecdsa: true,
+      hasKeyDescription: false,
+    }),
+  );
+
+  // A device whose authorizations say nothing: no origin, no root of trust. The reader must
+  // report their absence rather than defaulting them to something that would pass a check.
+  const bare = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [
+      extension(
+        OID_KEY_DESCRIPTION,
+        keyDescription({ challenge, securityLevel: 1, tee: {}, software: {} }),
+      ),
+    ],
+  });
+  cases.push(
+    certCase("hand/no-authorizations", bare, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "1",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+      hasOrigin: false,
+      hasRootOfTrust: false,
+    }),
+  );
+
+  // A key description walk that has to pass over one extension to reach ours — with a single
+  // extension the loop never advances, and the advancing arm goes untested.
+  const twoExtensions = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [
+      extension(Uint8Array.of(0x55, 0x1d, 0x13), Uint8Array.of(0x30, 0x00)),
+      extension(OID_KEY_DESCRIPTION, description),
+    ],
+  });
+  cases.push(
+    certCase("hand/second-extension", twoExtensions, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "2",
+      origin: "0",
+      verifiedBootState: "0",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+    }),
+  );
+
+  // Two shapes that are well-formed DER and still have to be refused, because something is
+  // carrying bytes that belong to nobody.
+  cases.push({
+    name: "hand/signature-trailing",
+    hand: true,
+    input: {
+      certificate: bytesToHex(
+        certificate({
+          subject: "device",
+          issuer: "intermediate",
+          subjectKey: leafKey,
+          issuerSecret,
+          signatureOverride: concat(
+            seqOf(derInteger(1n), derInteger(1n)),
+            Uint8Array.of(0x05, 0x00),
+          ),
+        }),
+      ),
+    },
+    expected: { error: "Signature" },
+  });
+  cases.push({
+    name: "hand/key-description-trailing",
+    hand: true,
+    input: {
+      certificate: bytesToHex(
+        certificate({
+          subject: "device",
+          issuer: "intermediate",
+          subjectKey: leafKey,
+          issuerSecret,
+          extensions: [
+            extension(OID_KEY_DESCRIPTION, concat(description, Uint8Array.of(0x05, 0x00))),
+          ],
+        }),
+      ),
+    },
+    expected: { error: "Trailing", onKeyDescription: true },
+  });
+
+  // A leaf that claims the right issuer and was signed by somebody else. Names link, signature
+  // does not — the arm that only a real verification can tell apart from a valid chain.
+  cases.push({
+    name: "hand/wrong-signer",
+    hand: true,
+    input: {
+      certificate: bytesToHex(
+        certificate({
+          subject: "device",
+          issuer: "intermediate",
+          subjectKey: leafKey,
+          issuerSecret: rootSecret,
+          extensions: [extension(OID_KEY_DESCRIPTION, description)],
+        }),
+      ),
+    },
+    expected: { error: "WrongSigner", parses: true },
+  });
+
+  // A hardware-generated key that only reaches TrustedEnvironment. Without it the security-level
+  // floor is never actually exercised: a fixture with no origin fails the earlier check instead.
+  const teeOnly = buildCertificate({
+    subject: "device",
+    issuer: "intermediate",
+    subjectKey: leafKey,
+    issuerSecret,
+    extensions: [
+      extension(
+        OID_KEY_DESCRIPTION,
+        keyDescription({ challenge, securityLevel: 1, tee: { origin: 0, bootState: 0 } }),
+      ),
+    ],
+  });
+  cases.push(
+    certCase("hand/trusted-environment", teeOnly, leafPoint, {
+      sha256Ecdsa: true,
+      securityLevel: "1",
+      origin: "0",
+      verifiedBootState: "0",
+      challengeHash: keccak256Hex(challenge),
+      hasKeyDescription: true,
+    }),
+  );
+
+  return {
+    suite: "android-attestation",
+    version: 1,
+    generator: GENERATOR,
+    count: cases.length,
+    cases,
+    extra: {
+      // Leaf first, as Android and WebAuthn both return it.
+      chain: [bytesToHex(leaf.der), bytesToHex(intermediate.der)],
+      // What `HardwareDeviceRegistry` is deployed with: the commitment of the highest P-256
+      // certificate we verify down from.
+      anchorCommitment: keccak256Hex(concat(hexToBytes(issuerPoint.x), hexToBytes(issuerPoint.y))),
+      principalId,
+      nonce,
+      challenge: bytesToHex(challenge),
+      // Test material, and labelled as such: the scalar lets a Foundry test enrol the very
+      // principal this chain was issued to and sign the registration as that human.
+      authorityScalar,
+      authorityX: authorityPoint.x,
+      authorityY: authorityPoint.y,
+      deviceCommitment: keccak256Hex(concat(hexToBytes(leafPoint.x), hexToBytes(leafPoint.y))),
+      oidKeyDescription: bytesToHex(OID_KEY_DESCRIPTION),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 function main(): void {
   const check = process.argv.includes("--check");
   const suites: ReadonlyArray<[Suite, () => VectorFile]> = [
     ["split-math", genSplitMath],
     ["merkle", genMerkle],
     ["passport", genPassport],
+    ["android-attestation", genAndroidAttestation],
   ];
   let dirty = 0;
   for (const [suite, gen] of suites) {

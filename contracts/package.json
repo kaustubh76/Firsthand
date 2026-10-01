@@ -29,7 +29,7 @@
     "test": "forge test",
     "test:unit": "forge test",
     "test:testnet": "if [ -z \"$MONAD_RPC_URL\" ]; then echo 'contracts test:testnet: MONAD_RPC_URL is unset - skipping the fork tests'; else forge test --match-path 'test/fork/*' $(forge test --help | grep -q -- --odyssey && echo --odyssey) --rpc-url \"$MONAD_RPC_URL\"; fi",
-    "coverage": "FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(test|script)' && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 100 --min-branches 95 --include src/ && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/",
+    "coverage": "FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file lcov.info --no-match-coverage '(^|/)(test|script)/' && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 100 --min-branches 95 --include src/ && node ../scripts/coverage-gate.mjs --lcov lcov.info --min 95 --include src/libraries/",
     "lint": "forge fmt --check",
     "format": "forge fmt",
     "deploy:anvil": "forge script script/Deploy.s.sol --rpc-url anvil --broadcast",

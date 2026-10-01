@@ -23,6 +23,7 @@ const CONTRACTS = [
   "ReceiptLedger",
   "RoyaltyRouter",
   "FirsthandLens",
+  "HardwareDeviceRegistry",
   "SplitMath",
   "MerkleLib",
   "PassportLib",

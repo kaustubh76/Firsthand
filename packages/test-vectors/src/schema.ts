@@ -50,5 +50,6 @@ export const SUITES = [
   "keys",
   "envelope",
   "p256-signatures",
+  "android-attestation",
 ] as const;
 export type Suite = (typeof SUITES)[number];

@@ -1,5 +1,7 @@
+import { loadVectors } from "@firsthand/test-vectors";
 import { p256 } from "@noble/curves/nist.js";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { P256_N, p256PublicKeyFromUncompressed } from "../authority/p256.js";
 import { type Bytes32, bytesToHex, concat, hexToBytes, utf8 } from "../bytes.js";
 import { sha256 } from "../hash.js";
@@ -8,6 +10,7 @@ import {
   effectiveSecurityLevel,
   isHardwareGenerated,
   KeyOrigin,
+  keyDescriptionOf,
   OID_KEY_DESCRIPTION,
   parseKeyDescription,
   SecurityLevel,
@@ -938,5 +941,106 @@ describe("verifyCaptureWitness", () => {
 
   it("is total: a malformed signature is false, not a throw", () => {
     expect(verifyCaptureWitness(digest, "0xdead", publicKey)).toBe(false);
+  });
+});
+
+// ── the shared golden suite ───────────────────────────────────────────────────────────────────
+// The same certificates the Solidity reader is tested against. Two implementations agreeing on
+// bytes neither of them produced is the only thing that catches a shared misreading of DER.
+
+describe("android-attestation vectors", () => {
+  const vectors = loadVectors("android-attestation", {
+    input: z.object({ certificate: z.string() }),
+    expected: z.record(z.string(), z.unknown()),
+    extra: z.object({
+      anchorCommitment: z.string(),
+      chain: z.array(z.string()),
+      challenge: z.string(),
+      deviceCommitment: z.string(),
+      nonce: z.string(),
+      oidKeyDescription: z.string(),
+      principalId: z.string(),
+    }),
+  });
+
+  it("has hand-derived cases, so the two readers cannot be wrong together", () => {
+    expect(vectors.cases.filter((c) => c.hand).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(vectors.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+    const der = hexToBytes(c.input.certificate as `0x${string}`);
+    const e = c.expected as Record<string, string | boolean>;
+
+    // A case whose certificate parses and whose refusal belongs to the chain walk is the
+    // registry's to test, not a reader's.
+    if (e["parses"]) {
+      expect(() => parseCertificate(der)).not.toThrow();
+      return;
+    }
+    if (typeof e["error"] === "string") {
+      // Some shapes are a valid certificate carrying an invalid extension: the refusal belongs to
+      // whichever reader is actually looking at the malformed bytes.
+      if (e["onKeyDescription"]) expect(() => keyDescriptionOf(parseCertificate(der))).toThrow();
+      else expect(() => parseCertificate(der)).toThrow();
+      return;
+    }
+
+    const cert = parseCertificate(der);
+    expect(cert.publicKey.x).toBe(e["x"]);
+    expect(cert.publicKey.y).toBe(e["y"]);
+    expect(bytesToHex(sha256(cert.tbs))).toBe(e["tbsHash"]);
+    expect(cert.signedWithEcdsaSha256).toBe(e["sha256Ecdsa"]);
+
+    const description = keyDescriptionOf(cert);
+    expect(description !== null).toBe(e["hasKeyDescription"]);
+    if (description) {
+      expect(String(description.attestationSecurityLevel)).toBe(e["securityLevel"]);
+      expect(bytesToHex(description.attestationChallenge)).toBe(vectors.extra.challenge);
+      // A fixture destined for a public repository carries no device identifiers.
+      expect(deviceIdentifierTags(description)).toEqual([]);
+      // Absence is reported as absence. A default would be a value nobody attested.
+      expect(description.teeEnforced.origin !== null).toBe(e["hasOrigin"] ?? true);
+      expect(description.teeEnforced.rootOfTrust !== null).toBe(e["hasRootOfTrust"] ?? true);
+      if (e["origin"] !== undefined)
+        expect(String(description.teeEnforced.origin)).toBe(e["origin"]);
+      if (e["verifiedBootState"] !== undefined) {
+        expect(String(description.teeEnforced.rootOfTrust?.verifiedBootState)).toBe(
+          e["verifiedBootState"],
+        );
+      }
+    }
+  });
+
+  it("normalises the high-s leaf to the same signature as the low-s one", () => {
+    const of = (name: string) =>
+      parseCertificate(
+        hexToBytes(
+          (vectors.cases.find((c) => c.name === name)?.input.certificate ?? "0x") as `0x${string}`,
+        ),
+      );
+    expect(of("hand/leaf-high-s").signature).toBe(of("hand/leaf").signature);
+  });
+
+  it("verifies the chain to the pinned anchor and recovers the device commitment", () => {
+    const verified = verifyAttestationChain(
+      vectors.extra.chain.map((hex) => hexToBytes(hex as `0x${string}`)),
+      {
+        anchors: [vectors.extra.anchorCommitment as Bytes32],
+        expectedChallenge: hexToBytes(vectors.extra.challenge as `0x${string}`),
+        minimumSecurityLevel: SecurityLevel.STRONG_BOX,
+      },
+    );
+    expect(verified.keyCommitment).toBe(vectors.extra.deviceCommitment);
+    expect(verified.securityLevel).toBe(SecurityLevel.STRONG_BOX);
+    expect(verified.anchorIndex).toBe(1);
+  });
+
+  it("refuses the same chain under any other anchor", () => {
+    expect(() =>
+      verifyAttestationChain(
+        vectors.extra.chain.map((hex) => hexToBytes(hex as `0x${string}`)),
+        { anchors: [`0x${"99".repeat(32)}`] },
+      ),
+    ).toThrow(/does not reach a pinned trust anchor/);
   });
 });

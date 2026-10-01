@@ -32,6 +32,7 @@ import {
   ObjectBlobStore,
   ObjectPassportCatalog,
   OnchainAnchorWriter,
+  OnchainDeviceRegistryReader,
   OnchainErc8004Registry,
   OnchainGrantReader,
   OnchainLensReader,
@@ -68,6 +69,7 @@ import {
   ConfigError,
   DEFAULT_HALF_LIFE_SECONDS,
   type Eip712Domain,
+  NotFoundError,
   normalizeNetwork,
   parseSidecar,
   ValidationError,
@@ -364,6 +366,7 @@ export function createGateway(
   let erc8004: (Erc8004Registry & Erc8004Writer) | null = overrides.erc8004 ?? null;
   /** The on-chain twin of `verifyPredicate`, when the gateway is bound to a chain that has a Lens. */
   let lens: OnchainLensReader | null = null;
+  let devices: OnchainDeviceRegistryReader | null = null;
   let relayerAddress: Address | null = overrides.relayerAddress ?? null;
 
   if (config.DEPLOYMENTS_FILE || config.DEPLOYMENT_JSON) {
@@ -409,6 +412,15 @@ export function createGateway(
       publicClient: clients.publicClient,
       firsthandLens: d.FirsthandLens.toLowerCase() as Address,
     });
+    // Hardware capture attestation (ADR-0015). The deployment key is optional, so a document
+    // written before the registry existed still boots — and class 3 is then refused at ingest,
+    // which is the right answer rather than a silent pass.
+    if (d.HardwareDeviceRegistry) {
+      devices = new OnchainDeviceRegistryReader({
+        publicClient: clients.publicClient,
+        hardwareDeviceRegistry: d.HardwareDeviceRegistry.toLowerCase() as Address,
+      });
+    }
     // ERC-8004 reference registries, where the chain has them (Monad testnet/mainnet).
     const registries = new OnchainErc8004Registry({
       publicClient: clients.publicClient,
@@ -452,6 +464,10 @@ export function createGateway(
           passportAnchors,
           d.GrantManager.toLowerCase() as Address,
           d.Rescissions.toLowerCase() as Address,
+          // Registering and revoking a device are authorised the same way: by the principal's
+          // signature. Without this the browser would have to hold gas for the one verb that
+          // exists so a phone can be trusted, which is the opposite of the point.
+          ...(d.HardwareDeviceRegistry ? [d.HardwareDeviceRegistry.toLowerCase() as Address] : []),
           ...(config.RELAY_FAUCET_MINT ? [{ address: usdc, selectors: [MOCK_USDC_MINT] }] : []),
         ],
         abis: DEPLOYMENT_ABIS,
@@ -504,6 +520,8 @@ export function createGateway(
     domain,
     logger,
     ...(blockTime ? { blockTime } : {}),
+    ...(devices ? { devices } : {}),
+    requireVerifiedBoot: config.HARDWARE_REQUIRE_VERIFIED_BOOT,
     halfLifeSeconds:
       config.FRESHNESS_HALF_LIFE_S ??
       (deployment ? BigInt(deployment.epochLength) : DEFAULT_HALF_LIFE_SECONDS),
@@ -575,6 +593,11 @@ export function createGateway(
       },
       settlement: settlement.kind,
       blobs: config.BLOB_STORE,
+      // Why a class-3 deposit would be refused before anyone tries one.
+      hardware: {
+        registry: deployment?.HardwareDeviceRegistry ?? null,
+        requireVerifiedBoot: config.HARDWARE_REQUIRE_VERIFIED_BOOT,
+      },
       // Why the last paid query did or did not reach the agent's reputation. Silent before: the
       // feedback path runs after the response and could only log.
       reputation: serving.lastFeedback,
@@ -676,6 +699,10 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
             FirsthandLens: deployment.FirsthandLens,
             ReceiptLedger: deployment.ReceiptLedger,
             RoyaltyRouter: deployment.RoyaltyRouter,
+            // Absent until a chain has one; a client reads it as "no hardware tier here".
+            ...(deployment.HardwareDeviceRegistry
+              ? { HardwareDeviceRegistry: deployment.HardwareDeviceRegistry }
+              : {}),
           }
         : null,
       epochs: deployment
@@ -706,6 +733,7 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
         blob: "/v1/blobs/:id",
         wrap: "/v1/grants/:grantId/wrap",
         anchors: "/v1/anchors/:root",
+        device: "/v1/devices/:keyCommitment — what the chain records about one secure element",
         // The audit surface — the Consent Ledger a judge is pointed at — named here too, so a
         // client that reads only this document can find it.
         verify: "/v1/verify/:passportId?grant= — the predicate off chain and on, side by side",
@@ -869,6 +897,30 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
   app.get("/v1/anchors/:root", async (c) => {
     const root = parseId(c.req.param("root"), "root");
     return c.json({ root, anchored: await serving.isAnchored(root) });
+  });
+
+  /**
+   * What the chain records about one secure element (ADR-0015) — the hardware half of what a
+   * buyer checks before paying. A browser reads the registry directly, as it does the Lens; this
+   * is for the buyers that are not browsers.
+   */
+  app.get("/v1/devices/:keyCommitment", async (c) => {
+    const keyCommitment = parseId(c.req.param("keyCommitment"), "keyCommitment");
+    if (!devices) throw new NotFoundError("this gateway names no hardware device registry");
+    const device = await devices.device(keyCommitment);
+    if (!device) throw new NotFoundError("no device registered under that key commitment");
+    return c.json(
+      jsonSafe({
+        keyCommitment,
+        principalId: device.principalId,
+        // The level the certificate carried, not one anybody asked for: 1 TEE, 2 StrongBox.
+        securityLevel: device.securityLevel,
+        verifiedBootState: device.hasRootOfTrust ? device.verifiedBootState : null,
+        registeredAt: device.registeredAt,
+        revokedAt: device.revokedAt === 0n ? null : device.revokedAt,
+        live: device.revokedAt === 0n,
+      }),
+    );
   });
 
   // ── verified ingest ─────────────────────────────────────────────────────────────────────────

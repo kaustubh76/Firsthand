@@ -10,6 +10,8 @@ export type { OnchainAnchorWriterOptions } from "../anchors/OnchainAnchorWriter.
 export { OnchainAnchorWriter, prepareAnchorTx } from "../anchors/OnchainAnchorWriter.js";
 export type { ChainClients, ChainClientsOptions } from "../chain.js";
 export { anvil, createChainClients, monadTestnet } from "../chain.js";
+export type { OnchainDeviceRegistryReaderOptions } from "../devices/OnchainDeviceRegistryReader.js";
+export { OnchainDeviceRegistryReader } from "../devices/OnchainDeviceRegistryReader.js";
 export { CARD_METADATA_KEY, FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "../erc8004/abi.js";
 export type { Erc8004Addresses } from "../erc8004/addresses.js";
 export { erc8004Addresses } from "../erc8004/addresses.js";

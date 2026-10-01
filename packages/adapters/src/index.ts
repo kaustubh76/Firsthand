@@ -10,6 +10,8 @@ export type { ObjectPassportCatalogOptions } from "./catalog/ObjectPassportCatal
 export { ObjectPassportCatalog } from "./catalog/ObjectPassportCatalog.js";
 export type { ChainClients, ChainClientsOptions } from "./chain.js";
 export { anvil, createChainClients, monadTestnet } from "./chain.js";
+export type { OnchainDeviceRegistryReaderOptions } from "./devices/OnchainDeviceRegistryReader.js";
+export { OnchainDeviceRegistryReader } from "./devices/OnchainDeviceRegistryReader.js";
 export {
   CARD_METADATA_KEY,
   FEEDBACK_TAG1,

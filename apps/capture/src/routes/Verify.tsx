@@ -5,6 +5,7 @@ import { ConsentTimeline } from "../components/ConsentTimeline.js";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
 import { type AgentInfo, fetchAgent } from "../lib/agents.js";
 import type { AppConfig } from "../lib/config.js";
+import { askDeviceRegistry, type DeviceReport } from "../lib/devices.js";
 import { explainFailure } from "../lib/failures.js";
 import { blockTime, pluralise } from "../lib/format.js";
 import { describeScan, fetchTimeline, type TimelineScan } from "../lib/ledger.js";
@@ -20,7 +21,7 @@ import {
 } from "../lib/sidecars.js";
 import { Button, Card, EmptyState, Field, Hash, Icon, Notice, Pill } from "../ui/index.js";
 
-type Action = "verify" | "list" | "agent" | "lookup";
+type Action = "verify" | "list" | "agent" | "lookup" | "device";
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
@@ -43,6 +44,8 @@ export function Verify({
   const [listing, setListing] = useState<Listing | null>(null);
   const [agentId, setAgentId] = useState("");
   const [agent, setAgent] = useState<AgentInfo | null | "missing">(null);
+  const [deviceId, setDeviceId] = useState("");
+  const [device, setDevice] = useState<DeviceReport | null | "missing">(null);
   const [verdict, setVerdict] = useState<ManifestVerdict | null>(null);
   // The chain's own answer, in the present tense — see `lib/lens.ts` for why it is a different
   // question from the manifest's, and why both belong on screen.
@@ -137,6 +140,15 @@ export function Verify({
       if (!/^\d{1,20}$/.test(agentId.trim())) throw new Error("an ERC-8004 agent id is a number");
       const info = await fetchAgent(config.gatewayUrl, agentId.trim());
       setAgent(info ?? "missing");
+    });
+
+  const lookupDevice = () =>
+    actions.run("device", async () => {
+      setDevice(null);
+      if (!client.devices) throw new Error("this chain names no hardware device registry");
+      const id = deviceId.trim().toLowerCase();
+      if (!/^0x[0-9a-f]{64}$/.test(id)) throw new Error("a device id is a 32-byte key commitment");
+      setDevice((await askDeviceRegistry(client.devices, id as Bytes32)) ?? "missing");
     });
 
   // A shared locker link lists on arrival (once per link; the button re-lists on demand).
@@ -379,6 +391,77 @@ export function Verify({
           )}
         </Card>
       )}
+
+      <Card
+        id="verify-device"
+        icon="lock"
+        title="A device"
+        subtitle="A class-3 passport is witnessed by a secure element whose attestation chain this chain verified. This is that record, read from the registry rather than from a gateway — what the chain knows about the hardware, and whether the human has since revoked it."
+      >
+        <div className="field-row">
+          <Field label="Device key commitment">
+            {(id) => (
+              <input
+                id={id}
+                value={deviceId}
+                onChange={(e) => setDeviceId(e.target.value)}
+                placeholder="0x… (the attestation's deviceClass)"
+                data-testid="device-input"
+              />
+            )}
+          </Field>
+          <Button
+            icon="eye"
+            onClick={lookupDevice}
+            pending={actions.is("device")}
+            pendingLabel="Looking up…"
+            disabled={deviceId.trim() === "" || actions.busy !== null || offline}
+          >
+            Look up device
+          </Button>
+        </div>
+        {actions.errorFor("device") && <Notice tone="bad">{actions.errorFor("device")}</Notice>}
+        {!client.devices && !offline && (
+          <Notice tone="warn">
+            This chain names no hardware device registry, so no passport here can be class 3.
+          </Notice>
+        )}
+        {device === "missing" && (
+          <EmptyState
+            icon="lock"
+            title="No such device"
+            hint="Never registered on this chain — a witness from it would be refused at ingest."
+          />
+        )}
+        {device && device !== "missing" && (
+          <dl className="kv" data-testid="device-view">
+            <dt>principal</dt>
+            <dd>
+              <Hash value={device.principalId} n={6} copy />
+            </dd>
+            <dt>security level</dt>
+            <dd>{device.level} — measured, read out of the certificate the chain verified</dd>
+            <dt>verified boot</dt>
+            <dd>
+              {device.boot === null
+                ? "not attested"
+                : `${device.boot} — recorded by the chain, enforced by whichever gateway chooses to`}
+            </dd>
+            <dt>registered</dt>
+            <dd>{blockTime(device.registeredAt)}</dd>
+            <dt>consent</dt>
+            <dd>
+              {device.live ? (
+                <Pill tone="ok">live</Pill>
+              ) : (
+                <>
+                  <Pill tone="bad">revoked</Pill> {blockTime(device.revokedAt as bigint)}
+                </>
+              )}
+            </dd>
+          </dl>
+        )}
+      </Card>
 
       <Card
         id="verify-agent"

@@ -35,6 +35,7 @@ import {
   passportId,
   sidecarToWire,
   ValidationError,
+  VerifiedBootState,
   VerifyFailure,
   type VerifyResult,
   verifyCaptureWitness,
@@ -67,6 +68,12 @@ export interface ServingDeps {
    * business hosting a passport that says it is. Classes 0-2 are unaffected.
    */
   readonly devices?: DeviceRegistryReader;
+  /**
+   * Refuse a device whose recorded verified-boot state is not Verified. The chain stores that
+   * state without enforcing it (ADR-0015), so this is the only place the question is actually
+   * decided — and saying which side decides it beats implying the chain did.
+   */
+  readonly requireVerifiedBoot?: boolean;
   /** Half-life for the staleness curve, seconds; defaults to one epoch. */
   readonly halfLifeSeconds?: bigint;
   readonly now?: () => bigint;
@@ -260,6 +267,15 @@ export class Serving {
     const device = await (this.#d.devices as DeviceRegistryReader).device(attestation.deviceClass);
     if (!deviceIsLive(device, sidecar.principalId)) {
       refuse("the signing device is not registered to this principal, or has been revoked");
+    }
+    // The chain records the boot state and does not act on it. This is where it is acted on, or
+    // deliberately not — and which of the two is a gateway's published choice, not a silence.
+    const live = device as NonNullable<typeof device>;
+    if (
+      this.#d.requireVerifiedBoot &&
+      (!live.hasRootOfTrust || live.verifiedBootState !== VerifiedBootState.VERIFIED)
+    ) {
+      refuse("this gateway serves only devices whose verified-boot state is Verified");
     }
   }
 

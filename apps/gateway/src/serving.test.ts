@@ -705,8 +705,42 @@ describe("gateway serving path (memory mode)", () => {
 
 const domain = { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` } as const;
 
-async function harness(options: { devices?: MemoryDeviceRegistry } = {}) {
+/**
+ * Lockers and a device key, opened once for the whole suite.
+ *
+ * Deriving a key tree is the expensive part of a locker, and under `--coverage` nine of them is
+ * the difference between a five-second test and a timeout. The anchors are shared too, because a
+ * `Serving` can only confirm a root its own anchor writer saw; each test still gets its own
+ * `Serving` and its own device registry, which is what the tests actually vary.
+ */
+const shared = (async () => {
   const anchors = new MemoryAnchorWriter();
+  const locker = await Locker.open(prfSource(1), {
+    domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
+    epochs,
+    anchors,
+    blobs: new MemoryBlobStore(),
+    clock,
+    namespaces: [{ ns: 0, label: "captures" }],
+  });
+  // A software stand-in for the phone's secure element. It is a real P-256 key, so the witness is
+  // well formed; what it is not is *registered*, which is the whole point of the registry checks.
+  const device = (
+    await Locker.open(prfSource(9), {
+      domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
+      epochs,
+      anchors,
+      blobs: new MemoryBlobStore(),
+      clock,
+    })
+  ).authorityKey();
+  return { anchors, locker, device };
+})();
+
+async function harness(
+  options: { devices?: MemoryDeviceRegistry; requireVerifiedBoot?: boolean } = {},
+) {
+  const { anchors, locker, device } = await shared;
   const grants = new MemoryGrantReader();
   const serving = new Serving({
     anchors,
@@ -717,15 +751,7 @@ async function harness(options: { devices?: MemoryDeviceRegistry } = {}) {
     domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
     logger: noopLogger,
     ...(options.devices ? { devices: options.devices } : {}),
-  });
-
-  const locker = await Locker.open(prfSource(1), {
-    domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
-    epochs,
-    anchors,
-    blobs: new MemoryBlobStore(),
-    clock,
-    namespaces: [{ ns: 0, label: "captures" }],
+    ...(options.requireVerifiedBoot ? { requireVerifiedBoot: true } : {}),
   });
   grants.setEpoch(5n);
   grants.enroll(locker.principalId, 5n);
@@ -739,17 +765,6 @@ async function harness(options: { devices?: MemoryDeviceRegistry } = {}) {
     payees: [locker.depositKey(0).address],
     weights: [WAD],
   };
-  // A software stand-in for the phone's secure element. It is a real P-256 key, so the witness is
-  // well formed; what it is not is *registered*, which is the whole point of the registry checks.
-  const device = (
-    await Locker.open(prfSource(9), {
-      domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
-      epochs,
-      anchors,
-      blobs: new MemoryBlobStore(),
-      clock,
-    })
-  ).authorityKey();
 
   const attestation: Attestation = {
     class: AttestationClass.HARDWARE,
@@ -870,6 +885,31 @@ describe("gateway ingest — a class-3 passport is checked, not believed", () =>
       code: "FH_REFUSED_HARDWARE",
       message: expect.stringMatching(/does not verify over this passport/),
     });
+  });
+
+  it("applies verified-boot policy here, because the chain deliberately does not", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices, requireVerifiedBoot: true });
+    // Registered, live, correctly witnessed — and booted unverified. The chain recorded that and
+    // accepted the device; refusing it is this gateway's published choice, not the protocol's.
+    devices.register({
+      principalId: h.locker.principalId,
+      publicKey: h.device.publicKey,
+      verifiedBootState: 2,
+    });
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/verified-boot state is Verified/),
+    });
+
+    // A gateway that has not published that policy takes the same deposit.
+    const lenient = await harness({ devices });
+    devices.register({
+      principalId: lenient.locker.principalId,
+      publicKey: lenient.device.publicKey,
+      verifiedBootState: 2,
+    });
+    await expect(lenient.serving.ingestPassport(await lenient.sidecarOf())).resolves.toBeDefined();
   });
 
   it("rejects a witness attached to a passport that never claimed class 3", async () => {

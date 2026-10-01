@@ -18,6 +18,15 @@ export interface DeviceView {
    * asserting the one thing this registry exists to establish.
    */
   readonly securityLevel: number;
+  /**
+   * `VerifiedBootState` as the certificate recorded it: 0 Verified, 1 SelfSigned, 2 Unverified,
+   * 3 Failed. The chain stores it and does **not** enforce it — a handset with an unlocked
+   * bootloader reports Unverified, and refusing that on chain would produce a device nobody can
+   * register rather than a device nobody should trust. Acting on it is a gateway's choice.
+   */
+  readonly verifiedBootState: number;
+  /** False when the attestation carried no `rootOfTrust` at all, so the state above means nothing. */
+  readonly hasRootOfTrust: boolean;
   /** Unix seconds of registration. */
   readonly registeredAt: bigint;
   /** Unix seconds the principal revoked it; `0n` while live. */

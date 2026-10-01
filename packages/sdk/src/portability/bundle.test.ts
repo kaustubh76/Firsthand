@@ -186,5 +186,9 @@ describe("locker bundle — exit, README §4/§12/§13", () => {
     const big = new Uint8Array(70_000);
     for (let i = 0; i < big.length; i++) big[i] = i % 251;
     expect(fromBase64(toBase64(big))).toEqual(big);
-  });
+    // An explicit budget because the default five seconds was measuring the machine rather than
+    // the code: 70 KB through base64 under v8 coverage instrumentation is seconds of work on a
+    // busy laptop. Thirty still catches an algorithmic regression here, which is the only thing
+    // this test has an opinion about.
+  }, 30_000);
 });

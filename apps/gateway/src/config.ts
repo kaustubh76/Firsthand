@@ -122,6 +122,15 @@ export const GatewayConfigSchema = z.object({
     .positive()
     .default(8 * 1024 * 1024),
 
+  /**
+   * Refuse a class-3 deposit unless the device's recorded verified-boot state is Verified
+   * (ADR-0015). The chain records that state and deliberately does not enforce it, because a
+   * handset with an unlocked bootloader reports Unverified and refusing it on chain would make
+   * the device unregisterable rather than make it honest. This is where that policy lives. Off
+   * by default so a developer handset can still demonstrate the tier.
+   */
+  HARDWARE_REQUIRE_VERIFIED_BOOT: z.coerce.boolean().default(false),
+
   /** Half-life (s) of the freshness signal (README §7.3); defaults to one epoch. */
   FRESHNESS_HALF_LIFE_S: z.coerce.bigint().positive().optional(),
 

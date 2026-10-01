@@ -3,6 +3,7 @@ import {
   deviceKeyCommitment,
   type P256PublicKey,
   SecurityLevel,
+  VerifiedBootState,
 } from "@firsthand/core";
 import type { DeviceRegistryReader, DeviceView } from "../ports/DeviceRegistry.js";
 import { Recorder } from "./Recorder.js";
@@ -12,6 +13,9 @@ export interface MemoryDeviceInput {
   readonly publicKey: P256PublicKey;
   /** Defaults to StrongBox; set `TRUSTED_ENVIRONMENT` to exercise the level floor. */
   readonly securityLevel?: number;
+  /** Defaults to Verified; set 2 (Unverified) to exercise a gateway's boot-state policy. */
+  readonly verifiedBootState?: number;
+  readonly hasRootOfTrust?: boolean;
   readonly registeredAt?: bigint;
 }
 
@@ -41,6 +45,8 @@ export class MemoryDeviceRegistry extends Recorder implements DeviceRegistryRead
       principalId: input.principalId,
       publicKey: input.publicKey,
       securityLevel: input.securityLevel ?? SecurityLevel.STRONG_BOX,
+      verifiedBootState: input.verifiedBootState ?? VerifiedBootState.VERIFIED,
+      hasRootOfTrust: input.hasRootOfTrust ?? true,
       registeredAt: input.registeredAt ?? this.#now,
       revokedAt: 0n,
     });

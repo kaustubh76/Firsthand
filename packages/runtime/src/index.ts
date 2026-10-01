@@ -3,6 +3,14 @@ export { CircuitBreaker } from "./circuitBreaker.js";
 export { loadEnv } from "./env.js";
 export type { LogFields, Logger, LoggerOptions, LogLevel } from "./logger.js";
 export { createLogger, noopLogger, REDACT_KEYS, REDACTED, redact } from "./logger.js";
+export type { Pacer, PacerOptions } from "./pacer.js";
+export {
+  createPacer,
+  DEFAULT_MAX_IN_FLIGHT,
+  DEFAULT_PACE_MS,
+  immediatePacer,
+  pacedMap,
+} from "./pacer.js";
 export type { RateDecision, RateLimiter, TokenBucketOptions } from "./rateLimit.js";
 export { MemoryTokenBucketLimiter } from "./rateLimit.js";
 export type { RetryOptions } from "./retry.js";

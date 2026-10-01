@@ -43,6 +43,7 @@ export function sidecarFor(
     proof: found.proof,
     terms,
     ...(result.attestation ? { attestation: result.attestation } : {}),
+    ...(result.hardware ? { hardware: result.hardware } : {}),
     blobRef: result.blob.id,
     wrappedDekRef: result.wrappedDek.id,
   };
@@ -69,6 +70,7 @@ export function sidecarsForBatch(
       proof,
       terms,
       ...(r.attestation ? { attestation: r.attestation } : {}),
+      ...(r.hardware ? { hardware: r.hardware } : {}),
       blobRef: r.blob.id,
       wrappedDekRef: r.wrappedDek.id,
     };

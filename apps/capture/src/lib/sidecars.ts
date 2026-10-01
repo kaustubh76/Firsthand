@@ -20,7 +20,7 @@ export interface ListedPassport {
   readonly batchRoot: Bytes32;
   readonly termsHash: Bytes32;
   readonly price: string;
-  /** Attestation class (0 unattested · 1 import · 2 device_capture); null on older sidecars. */
+  /** Attestation class (0 unattested · 1 import · 2 device_capture · 3 hardware); null on older sidecars. */
   readonly class: number | null;
   readonly capturedAt: string | null;
   readonly sourceTag: Bytes32 | null;
@@ -38,7 +38,7 @@ export interface Listing {
   readonly freshness: Record<string, Freshness>;
 }
 
-export const CLASS_NAMES = ["unattested", "import", "device capture"] as const;
+export const CLASS_NAMES = ["unattested", "import", "device capture", "hardware"] as const;
 
 export function className(klass: number | null): string {
   return klass === null ? "class unknown" : (CLASS_NAMES[klass] ?? `class ${klass}`);

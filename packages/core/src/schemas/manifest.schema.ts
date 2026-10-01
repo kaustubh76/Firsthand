@@ -3,6 +3,7 @@ import {
   AttestationSchema,
   BatchProofSchema,
   Eip712DomainSchema,
+  HardwareWitnessSchema,
   PassportSchema,
   SignedPassportSchema,
 } from "./passport.schema.js";
@@ -36,6 +37,13 @@ export const ManifestAssetSchema = z.object({
    * must equal `passport.attest`; the verifier checks).
    */
   attestation: AttestationSchema.optional(),
+  /**
+   * The secure element's signature over this asset (ADR-0015). Checked cryptographically and
+   * nothing more: whether the device is still registered is a question about *now*, answered
+   * beside the verdict, because revoking a stolen phone must not retroactively invalidate a
+   * compliance file that was true when it was written.
+   */
+  hardware: HardwareWitnessSchema.optional(),
   receipt: ManifestReceiptSchema.optional(),
 });
 

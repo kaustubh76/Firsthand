@@ -8,6 +8,13 @@ export const AttestationClass = {
   UNATTESTED: 0,
   IMPORT: 1,
   DEVICE_CAPTURE: 2,
+  /**
+   * Co-signed by a secure element whose attestation chain is registered on chain (ADR-0015).
+   * Proves the signing key was generated inside certified hardware and that *this* passport was
+   * signed by it — transplantation resistance. It does not prove what a sensor saw: a secure
+   * element signs a digest handed to it by app code (§14 limitation 3).
+   */
+  HARDWARE: 3,
 } as const;
 export type AttestationClass = (typeof AttestationClass)[keyof typeof AttestationClass];
 

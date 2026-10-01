@@ -1,9 +1,13 @@
 import type { BlobRef } from "@firsthand/adapters";
 import {
   type Attestation,
+  AttestationClass,
   type Bytes32,
   contentHash,
   type Datum,
+  deviceKeyCommitment,
+  type HardwareWitness,
+  hardwareCaptureDigest,
   hashAttestation,
   hashTerms,
   type Passport,
@@ -13,6 +17,7 @@ import {
   type SignedPassport,
   type Terms,
   ValidationError,
+  verifyCaptureWitness,
   verifyPassportSignature,
 } from "@firsthand/core";
 import { generateDek, sealBlob, signPassportDigest, wrapDek } from "@firsthand/crypto";
@@ -32,8 +37,23 @@ export interface DepositInput {
   readonly plaintext?: Uint8Array;
   readonly terms: Terms;
   readonly attestation: Attestation;
+  /** Required when `attestation.class` is `HARDWARE`: the secure element's witness (ADR-0015). */
+  readonly hardware?: HardwareWitness;
   /** Override the epoch (tests / imports); defaults to the locker's current epoch. */
   readonly epoch?: bigint;
+}
+
+/**
+ * The attestation preimage, and the witness when there is one.
+ *
+ * The refusal gate needs this because a `Passport` carries only `attest`, the *hash* — there is no
+ * way to tell a class-3 passport from a class-0 one by looking at it. A caller that cannot supply
+ * the preimage gets the origin checks and nothing more, and the gateway refuses the deposit at
+ * ingest, where the sidecar always carries it.
+ */
+export interface AttestationClaim {
+  readonly attestation: Attestation;
+  readonly hardware?: HardwareWitness;
 }
 
 export interface DepositResult {
@@ -45,6 +65,8 @@ export interface DepositResult {
   readonly anchored: AnchoredBatch | null;
   /** The attestation preimage, when this locker minted the passport (it travels in the sidecar). */
   readonly attestation?: Attestation;
+  /** The secure-element witness, when this was a class-3 deposit (it travels in the sidecar too). */
+  readonly hardware?: HardwareWitness;
 }
 
 /** Sidecar record the locker keeps per passport (public data + ciphertext locators). */
@@ -93,7 +115,12 @@ export function mintPassport(locker: Locker, input: DepositInput): SignedPasspor
  * signature verifies under this deployment's domain AND its origin is a deposit key this locker
  * can derive for the passport's epoch. Anything else is `FH_REFUSED_ORIGIN`.
  */
-export function refuseUnlessProvable(locker: Locker, signed: SignedPassport, ns: number): Bytes32 {
+export function refuseUnlessProvable(
+  locker: Locker,
+  signed: SignedPassport,
+  ns: number,
+  claim?: AttestationClaim,
+): Bytes32 {
   const id = passportId(signed.passport);
   if (!verifyPassportSignature(signed.passport, signed.signature, locker.domain)) {
     throw new RefusalError("FH_REFUSED_ORIGIN", "passport signature does not verify", {
@@ -114,7 +141,51 @@ export function refuseUnlessProvable(locker: Locker, signed: SignedPassport, ns:
       },
     );
   }
+  if (claim) refuseUnlessWitnessed(locker, signed, claim, id);
   return id;
+}
+
+/**
+ * The class-3 half of the gate: a passport may only *say* hardware if a secure element signed it.
+ *
+ * Checks the claim is the preimage the passport committed to (otherwise a class-2 claim could be
+ * waved past a class-3 passport), that the witness key is the device the attestation names, and
+ * that the signature verifies over `hardwareCaptureDigest` — which binds the origin and nonce, so
+ * a witness lifted from another locker's deposit cannot be replayed here.
+ */
+function refuseUnlessWitnessed(
+  locker: Locker,
+  signed: SignedPassport,
+  claim: AttestationClaim,
+  id: Bytes32,
+): void {
+  if (hashAttestation(claim.attestation) !== signed.passport.attest) {
+    throw new ValidationError("attestation claim is not the preimage this passport commits to", {
+      context: { passportId: id },
+    });
+  }
+  if (claim.attestation.class !== AttestationClass.HARDWARE) return;
+
+  const refuse = (message: string): never => {
+    throw new RefusalError("FH_REFUSED_HARDWARE", message, { context: { passportId: id } });
+  };
+  const witness = claim.hardware;
+  if (!witness) refuse("a class-3 passport carries no secure-element witness");
+  const w = witness as HardwareWitness;
+  if (deviceKeyCommitment(w.publicKey) !== claim.attestation.deviceClass) {
+    refuse("the witness key is not the device this attestation names");
+  }
+  const digest = hardwareCaptureDigest({
+    chainId: locker.domain.chainId,
+    origin: signed.passport.origin,
+    contentHash: signed.passport.h,
+    capturedAt: claim.attestation.capturedAt,
+    nonce: signed.passport.nonce,
+    deviceClass: claim.attestation.deviceClass,
+  });
+  if (!verifyCaptureWitness(digest, w.signature, w.publicKey)) {
+    refuse("the secure-element witness does not verify over this passport");
+  }
 }
 
 export async function deposit(
@@ -129,8 +200,13 @@ export async function deposit(
     signed,
     input.ns,
     input.plaintext ?? datumBytes(input.datum),
+    { attestation: input.attestation, ...(input.hardware ? { hardware: input.hardware } : {}) },
   );
-  return { ...result, attestation: input.attestation };
+  return {
+    ...result,
+    attestation: input.attestation,
+    ...(input.hardware ? { hardware: input.hardware } : {}),
+  };
 }
 
 /**
@@ -143,8 +219,9 @@ export async function acceptSigned(
   signed: SignedPassport,
   ns: number,
   plaintext: Uint8Array,
+  claim?: AttestationClaim,
 ): Promise<DepositResult> {
-  const id = refuseUnlessProvable(locker, signed, ns);
+  const id = refuseUnlessProvable(locker, signed, ns, claim);
   if (batcher.has(id)) {
     throw new RefusalError("FH_REFUSED_DUPLICATE", "passport already deposited", {
       context: { passportId: id },

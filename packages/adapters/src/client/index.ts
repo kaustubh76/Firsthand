@@ -39,6 +39,8 @@ export type {
   ConsentEventKind,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
+export type { DeviceRegistryReader, DeviceView } from "../ports/DeviceRegistry.js";
+export { deviceIsLive } from "../ports/DeviceRegistry.js";
 export type {
   AgentView,
   Erc8004Registry,

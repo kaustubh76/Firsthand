@@ -9,7 +9,8 @@ pragma solidity 0.8.30;
 enum AttestationClass {
     UNATTESTED,
     IMPORT,
-    DEVICE_CAPTURE
+    DEVICE_CAPTURE,
+    HARDWARE
 }
 
 /// @dev README §11.

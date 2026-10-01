@@ -5,7 +5,13 @@ import { type Logger, noopLogger } from "@firsthand/runtime";
 import { Batcher } from "../batch/Batcher.js";
 import { Locker, type NamespaceInfo } from "../locker/Locker.js";
 import { type AttestPlan, planAttest, sendAttest } from "../verbs/attest.js";
-import { acceptSigned, type DepositInput, type DepositResult, deposit } from "../verbs/deposit.js";
+import {
+  type AttestationClaim,
+  acceptSigned,
+  type DepositInput,
+  type DepositResult,
+  deposit,
+} from "../verbs/deposit.js";
 import { type EnrollPlan, planEnroll, type SentTx, sendEnroll } from "../verbs/enroll.js";
 import { type GrantInput, type GrantPlan, planGrant, sendGrant } from "../verbs/grant.js";
 import { type PublishTarget, publishDeposit, publishWrap } from "../verbs/publish.js";
@@ -123,8 +129,9 @@ export class LockerSession {
     signed: Parameters<typeof acceptSigned>[2],
     ns: number,
     plaintext: Uint8Array,
+    claim?: AttestationClaim,
   ): Promise<DepositResult> {
-    return acceptSigned(this.locker, this.batcher, signed, ns, plaintext);
+    return acceptSigned(this.locker, this.batcher, signed, ns, plaintext, claim);
   }
 
   flush() {

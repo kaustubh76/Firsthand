@@ -1,10 +1,12 @@
 import { z } from "zod";
+import type { HardwareWitness } from "../attestation/hardwareDigest.js";
 import type { Bytes32 } from "../bytes.js";
 import type { BatchProof } from "../merkle/merkle.js";
 import type { Attestation, SignedPassport, Terms } from "../passport/types.js";
 import {
   AttestationSchema,
   BatchProofSchema,
+  HardwareWitnessSchema,
   SignedPassportSchema,
   TermsSchema,
 } from "./passport.schema.js";
@@ -26,6 +28,8 @@ export const PassportSidecarSchema = z.object({
   proof: BatchProofSchema,
   terms: TermsSchema,
   attestation: AttestationSchema.optional(),
+  /** Present on class 3 only; what makes "hardware" a fact rather than a label. */
+  hardware: HardwareWitnessSchema.optional(),
   /** `keccak256(blob)` — id in the BlobStore. */
   blobRef: Bytes32Schema,
   wrappedDekRef: Bytes32Schema,
@@ -43,19 +47,21 @@ export interface PassportSidecar {
   readonly terms: Terms;
   /** The preimage of `passport.attest`; absent on sidecars published before it was carried. */
   readonly attestation?: Attestation;
+  /** The secure element's signature over this passport; required when `attestation.class` is 3. */
+  readonly hardware?: HardwareWitness;
   readonly blobRef: Bytes32;
   readonly wrappedDekRef: Bytes32;
 }
 
 export function parseSidecar(input: unknown): PassportSidecar {
-  const { attestation, ...rest } = PassportSidecarSchema.parse(input);
-  // `exactOptionalPropertyTypes`: an absent attestation is absent, never `undefined`.
-  return attestation ? { ...rest, attestation } : rest;
+  const { attestation, hardware, ...rest } = PassportSidecarSchema.parse(input);
+  // `exactOptionalPropertyTypes`: an absent optional is absent, never `undefined`.
+  return { ...rest, ...(attestation ? { attestation } : {}), ...(hardware ? { hardware } : {}) };
 }
 
 /** Serialises a sidecar to its wire form (bigints → decimal strings). */
 export function sidecarToWire(sidecar: PassportSidecar): PassportSidecarWire {
-  const { attestation: _attestation, ...rest } = sidecar;
+  const { attestation: _attestation, hardware: _hardware, ...rest } = sidecar;
   return {
     ...rest,
     signed: {
@@ -76,6 +82,9 @@ export function sidecarToWire(sidecar: PassportSidecar): PassportSidecarWire {
           },
         }
       : {}),
+    // No bigints in a witness, so it travels unchanged — but it still has to be spread
+    // conditionally, or `exactOptionalPropertyTypes` sees an explicit `undefined`.
+    ...(sidecar.hardware ? { hardware: sidecar.hardware } : {}),
     proof: { index: sidecar.proof.index, siblings: [...sidecar.proof.siblings] },
   };
 }

@@ -95,6 +95,7 @@ const CLASS = {
   unattested: AttestationClass.UNATTESTED,
   import: AttestationClass.IMPORT,
   device_capture: AttestationClass.DEVICE_CAPTURE,
+  hardware: AttestationClass.HARDWARE,
 } as const;
 
 function text(payload: unknown) {
@@ -190,7 +191,9 @@ interface Freshness {
   staleness: number;
 }
 
-const CLASS_NAMES = ["unattested", "import", "device_capture"] as const;
+// Index-sensitive: read ordinal→name here and name→ordinal by `indexOf`, so the order *is* the
+// protocol's numbering. Append only.
+const CLASS_NAMES = ["unattested", "import", "device_capture", "hardware"] as const;
 
 /** Supply, discoverable: what a principal has published on this gateway. */
 async function listPassports(

@@ -985,12 +985,15 @@ cannot read what it serves, and it re-runs <code>verify()</code> against the cha
     }
     // Up to the catalog's index size in one page: a locker bundle (exit) lists everything at once.
     const limit = Math.min(500, Math.max(1, Number(c.req.query("limit") ?? "100") || 100));
-    // `?class=` filters on the attestation class (0 unattested · 1 import · 2 device_capture) —
-    // README §13's "buyers filter by class"; sidecars that predate the preimage never match.
+    // `?class=` filters on the attestation class (0 unattested · 1 import · 2 device_capture ·
+    // 3 hardware) — README §13's "buyers filter by class"; sidecars that predate the preimage
+    // never match.
     const classRaw = c.req.query("class");
     const klass = classRaw === undefined ? undefined : Number(classRaw);
-    if (klass !== undefined && ![0, 1, 2].includes(klass)) {
-      throw new ValidationError("class must be 0 (unattested), 1 (import) or 2 (device_capture)");
+    if (klass !== undefined && ![0, 1, 2, 3].includes(klass)) {
+      throw new ValidationError(
+        "class must be 0 (unattested), 1 (import), 2 (device_capture) or 3 (hardware)",
+      );
     }
     const listed = await serving.passportsOf(principalId, {
       ...(ns === undefined ? {} : { ns }),

@@ -1,11 +1,16 @@
 import type { AnchorWriter } from "@firsthand/adapters";
 import {
+  AttestationClass,
   type Bytes32,
+  deviceKeyCommitment,
+  hardwareCaptureDigest,
   hashAttestation,
   type LineageManifest,
   LineageManifestSchema,
+  type ManifestAsset,
   MERKLE_DEPTH,
   passportId,
+  verifyCaptureWitness,
   verifyPassportInBatch,
   verifyPassportSignature,
 } from "@firsthand/core";
@@ -25,6 +30,8 @@ export type AssetFailure =
   | "ROOT_UNKNOWN"
   | "NOT_FINAL"
   | "ATTESTATION_MISMATCH"
+  /** Class 3 without a witness, or a witness that does not verify over this asset (ADR-0015). */
+  | "HARDWARE_PROOF_INVALID"
   /** The anchored root belongs to a different principal or namespace than this manifest claims. */
   | "SCOPE_MISMATCH"
   /** The file's `anchorBlock` is not the block the chain anchored that root in. */
@@ -122,6 +129,27 @@ export interface ManifestVerifyContext {
   readonly now?: () => number;
 }
 
+/**
+ * True when an asset's hardware claim holds up. An asset that is neither class 3 nor carrying a
+ * witness passes trivially — most assets are neither.
+ */
+function hardwareProofOk(asset: ManifestAsset, chainId: bigint): boolean {
+  const isHardware = asset.attestation?.class === AttestationClass.HARDWARE;
+  if (!isHardware && !asset.hardware) return true;
+  // A witness with no preimage cannot be checked, and an unverifiable proof is not a proof.
+  if (!asset.attestation || !asset.hardware) return false;
+  if (deviceKeyCommitment(asset.hardware.publicKey) !== asset.attestation.deviceClass) return false;
+  const digest = hardwareCaptureDigest({
+    chainId,
+    origin: asset.signed.passport.origin,
+    contentHash: asset.signed.passport.h,
+    capturedAt: asset.attestation.capturedAt,
+    nonce: asset.signed.passport.nonce,
+    deviceClass: asset.attestation.deviceClass,
+  });
+  return verifyCaptureWitness(digest, asset.hardware.signature, asset.hardware.publicKey);
+}
+
 export async function verifyManifest(
   input: LineageManifest | unknown,
   ctx: ManifestVerifyContext,
@@ -179,6 +207,13 @@ export async function verifyManifest(
     // "device capture" a buyer filtered on is a label, not a fact.
     if (asset.attestation && hashAttestation(asset.attestation) !== asset.signed.passport.attest) {
       fail("ATTESTATION_MISMATCH");
+      continue;
+    }
+    // Cryptographic only, deliberately: whether the device is still registered is a question about
+    // *now*, and a file that was true when it was written must not fail its audit because the
+    // seller later revoked a stolen phone. Registration is reported beside the verdict instead.
+    if (!hardwareProofOk(asset, domain.chainId)) {
+      fail("HARDWARE_PROOF_INVALID");
       continue;
     }
     // Same order as core's verifyPredicate: signature → root known → Merkle → liveness/finality.

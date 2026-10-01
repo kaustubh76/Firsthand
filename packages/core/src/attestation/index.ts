@@ -40,5 +40,6 @@ export {
   deviceKeyCommitment,
   HARDWARE_CAPTURE_DOMAIN,
   type HardwareCaptureInput,
+  type HardwareWitness,
   hardwareCaptureDigest,
 } from "./hardwareDigest.js";

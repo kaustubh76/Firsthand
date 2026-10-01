@@ -1,6 +1,8 @@
 export { MemoryAnchorWriter } from "./MemoryAnchorWriter.js";
 export { blobId, MemoryBlobStore, refId } from "./MemoryBlobStore.js";
 export { MemoryConsentLedger } from "./MemoryConsentLedger.js";
+export type { MemoryDeviceInput } from "./MemoryDeviceRegistry.js";
+export { MemoryDeviceRegistry } from "./MemoryDeviceRegistry.js";
 export type { MemoryFeedback } from "./MemoryErc8004Registry.js";
 export { MemoryErc8004Registry } from "./MemoryErc8004Registry.js";
 export type { MemoryFacilitatorOptions } from "./MemoryFacilitator.js";

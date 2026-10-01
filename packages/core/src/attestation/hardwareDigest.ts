@@ -6,6 +6,7 @@ import {
   type Bytes32,
   bytesToHex,
   concat,
+  type Hex,
   hexToBytes,
   u64be,
   u256be,
@@ -47,6 +48,20 @@ export interface HardwareCaptureInput {
   readonly nonce: Bytes32;
   /** `Attestation.deviceClass` — for class 3, `deviceKeyCommitment(hardwareKey)`. */
   readonly deviceClass: Bytes32;
+}
+
+/**
+ * A secure element's signature over `hardwareCaptureDigest`, as it travels in a sidecar and in a
+ * Lineage Manifest.
+ *
+ * It carries the public key and nothing else about the device. The security level is deliberately
+ * **absent**: a level a depositor asserts about its own hardware is not evidence, and
+ * `HardwareDeviceRegistry` is the only thing entitled to answer that question.
+ */
+export interface HardwareWitness {
+  readonly publicKey: P256PublicKey;
+  /** 64-byte `r ‖ s`, low-s. */
+  readonly signature: Hex;
 }
 
 /** `sha256(domain ‖ chainId ‖ origin ‖ h ‖ capturedAt ‖ nonce ‖ deviceClass)`. */

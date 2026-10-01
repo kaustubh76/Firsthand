@@ -18,13 +18,17 @@ import {
   bytesToHex,
   contentHash,
   depositKeysRoot,
+  deviceKeyCommitment,
   enrollStructHash,
   GrantStatus,
   grantIdOf,
+  type HardwareWitness,
+  hardwareCaptureDigest,
   hashTerms,
   LICENSE_FH_1_0,
   MONAD_TESTNET_CHAIN_ID,
   type PassportSidecar,
+  parseSidecar,
   passportDigest,
   passportId,
   RefusalError,
@@ -45,6 +49,7 @@ import {
   openBlob,
   SecretBytes,
   StaticPrfSource,
+  signAuthorityDigest,
   signPassportDigest,
   unwrapDek,
   unwrapVaultKey,
@@ -60,6 +65,7 @@ import { exportManifest, serialiseManifest } from "./manifest/export.js";
 import { manifestFromQueries, manifestFromSidecars } from "./manifest/fromSidecars.js";
 import { verifyManifest } from "./manifest/verify.js";
 import { planAttest } from "./verbs/attest.js";
+import type { AttestationClaim } from "./verbs/deposit.js";
 import {
   acceptSigned,
   type DepositResult,
@@ -288,6 +294,220 @@ describe("deposit — the locker that turns data away (S4 in miniature)", () => 
       }),
     ).toThrow(/terms.ns/);
     expect(() => new Batcher(locker, locker.anchors, 0)).toThrow(ValidationError);
+  });
+});
+
+describe("deposit — class 3 is a fact or it is refused (ADR-0015)", () => {
+  // A locker's own authority key stands in for a secure element: a P-256 keypair the test can sign
+  // with, which is all a witness is. The real one lives in a phone and its certificate chain is
+  // what `HardwareDeviceRegistry` checks — none of which this gate's job.
+  const deviceA = makeLocker(7).authorityKey();
+  const deviceB = makeLocker(8).authorityKey();
+
+  const hardwareAttestation = (device = deviceA): Attestation => ({
+    class: AttestationClass.HARDWARE,
+    capturedAt: 1_700_000_000n,
+    sourceTag: `0x${"0a".repeat(32)}`,
+    deviceClass: deviceKeyCommitment(device.publicKey),
+    metaHash: ZERO_HASH,
+  });
+
+  /**
+   * What the phone would compute. It needs the origin and nonce the locker is *about* to use,
+   * which is the point: a witness is bound to one locker's deposit of one datum.
+   */
+  function witness(
+    locker: Locker,
+    signer: typeof deviceA,
+    ns: number,
+    bytes: Uint8Array,
+    attestation: Attestation,
+  ): HardwareWitness {
+    const h = contentHash({ kind: "bytes", bytes });
+    const digest = hardwareCaptureDigest({
+      chainId: locker.domain.chainId,
+      origin: locker.depositKey(ns).address,
+      contentHash: h,
+      capturedAt: attestation.capturedAt,
+      nonce: locker.keys.passportNonce(ns, locker.currentEpoch(), h),
+      deviceClass: attestation.deviceClass,
+    });
+    return { publicKey: signer.publicKey, signature: signAuthorityDigest(signer.scalar, digest) };
+  }
+
+  it("accepts a capture the named device actually signed, and carries the witness to the sidecar", async () => {
+    const anchors = new MemoryAnchorWriter();
+    const locker = makeLocker(1, anchors);
+    const batcher = new Batcher(locker, anchors, 1);
+    const bytes = new TextEncoder().encode("a photo taken on the phone");
+    const att = hardwareAttestation();
+    const t = terms(0, locker.depositKey(0).address);
+
+    const result = await deposit(locker, batcher, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: t,
+      attestation: att,
+      hardware: witness(locker, deviceA, 0, bytes, att),
+    });
+
+    expect(result.hardware?.publicKey).toEqual(deviceA.publicKey);
+    const sidecar = sidecarFor(locker, batcher, result, t);
+    expect(sidecar.hardware?.signature).toBe(result.hardware?.signature);
+    // And it survives the wire round trip the gateway sees.
+    expect(parseSidecar(sidecarToWire(sidecar)).hardware).toEqual(result.hardware);
+  });
+
+  it.each([
+    ["no witness at all", () => undefined, /no secure-element witness/],
+    [
+      "a witness from a different device",
+      (w: HardwareWitness) => ({ ...w, publicKey: deviceB.publicKey }),
+      /not the device this attestation names/,
+    ],
+    [
+      "a witness over something else",
+      (w: HardwareWitness) => ({ ...w, signature: `0x${"11".repeat(64)}` as const }),
+      /does not verify over this passport/,
+    ],
+  ])("refuses %s", async (_label, mangle, message) => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("a photo taken on the phone");
+    const att = hardwareAttestation();
+    const good = witness(locker, deviceA, 0, bytes, att);
+    const mangled = mangle(good);
+
+    await expect(
+      deposit(locker, batcher, {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, locker.depositKey(0).address),
+        attestation: att,
+        ...(mangled ? { hardware: mangled } : {}),
+      }),
+    ).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(message),
+    });
+  });
+
+  it("refuses a witness lifted from another locker — this is the transplantation claim", async () => {
+    const bytes = new TextEncoder().encode("the very same bytes");
+    const att = hardwareAttestation();
+    const alice = makeLocker(1);
+    const mallory = makeLocker(2);
+
+    // Alice's phone signs Alice's deposit. The datum is identical, the device is identical, the
+    // attestation is identical — only the origin key and the deterministic nonce differ, and
+    // `hwDigest` binds both.
+    const forAlice = witness(alice, deviceA, 0, bytes, att);
+    await expect(
+      deposit(mallory, new Batcher(mallory), {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, mallory.depositKey(0).address),
+        attestation: att,
+        hardware: forAlice,
+      }),
+    ).rejects.toBeInstanceOf(RefusalError);
+
+    // The same witness is fine where it belongs.
+    await expect(
+      deposit(alice, new Batcher(alice), {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, alice.depositKey(0).address),
+        attestation: att,
+        hardware: forAlice,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a claim that is not the preimage the passport commits to", async () => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("a photo");
+    const att = hardwareAttestation();
+    const signed = mintPassport(locker, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: terms(0, locker.depositKey(0).address),
+      attestation: att,
+    });
+    // Class 2 claimed over a passport that committed to class 3: without this check the gate could
+    // be stepped around by simply describing the deposit differently.
+    const lie: AttestationClaim = {
+      attestation: { ...att, class: AttestationClass.DEVICE_CAPTURE },
+    };
+    await expect(acceptSigned(locker, batcher, signed, 0, bytes, lie)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it("carries the class into a seller-built manifest, and rejects a tampered witness", async () => {
+    const anchors = new MemoryAnchorWriter();
+    const locker = makeLocker(1, anchors);
+    const batcher = new Batcher(locker, anchors, 1);
+    const bytes = new TextEncoder().encode("the photo in the compliance file");
+    const att = hardwareAttestation();
+    const t = terms(0, locker.depositKey(0).address);
+    const result = await deposit(locker, batcher, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: t,
+      attestation: att,
+      hardware: witness(locker, deviceA, 0, bytes, att),
+    });
+
+    // Before this, `exportManifest` emitted no attestation at all: a buyer could filter on class 3
+    // and then audit a file that never mentioned a class. `manifestFromSidecars` always carried it,
+    // so the two paths disagreed about the same corpus.
+    const manifest = exportManifest({
+      domain,
+      principalId: locker.principalId,
+      ns: 0,
+      batches: batcher.flushed(),
+      attestations: new Map([
+        [result.passportId, { attestation: att, hardware: result.hardware as HardwareWitness }],
+      ]),
+      headBlock: anchors.head,
+    });
+    expect(manifest.assets[0]?.attestation?.class).toBe(AttestationClass.HARDWARE);
+    expect(manifest.assets[0]?.hardware?.publicKey).toEqual(deviceA.publicKey);
+
+    const verdict = await verifyManifest(JSON.parse(serialiseManifest(manifest)), {
+      anchors,
+      headBlock: anchors.head,
+    });
+    expect(verdict.ok).toBe(true);
+
+    // One byte of the witness, and the asset stops verifying — with its own reason, not a vague one.
+    const tampered = JSON.parse(serialiseManifest(manifest));
+    tampered.assets[0].hardware.signature = `0x${"33".repeat(64)}`;
+    const broken = await verifyManifest(tampered, { anchors, headBlock: anchors.head });
+    expect(broken.ok).toBe(false);
+    expect(broken.assets[0]?.reason).toBe("HARDWARE_PROOF_INVALID");
+
+    // And a class-3 asset that simply drops its witness is not quietly downgraded to "fine".
+    const stripped = JSON.parse(serialiseManifest(manifest));
+    stripped.assets[0].hardware = undefined;
+    const naked = await verifyManifest(stripped, { anchors, headBlock: anchors.head });
+    expect(naked.assets[0]?.reason).toBe("HARDWARE_PROOF_INVALID");
+  });
+
+  it("leaves classes 0-2 exactly as they were", async () => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("an import");
+    await expect(
+      deposit(locker, batcher, {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, locker.depositKey(0).address),
+        attestation,
+      }),
+    ).resolves.toBeDefined();
   });
 });
 

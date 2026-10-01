@@ -4,6 +4,7 @@ import { AttestationClass } from "../passport/types.js";
 import {
   AddressSchema,
   Bytes32Schema,
+  Signature64Schema,
   Signature65Schema,
   Uint8Schema,
   Uint32Schema,
@@ -32,6 +33,16 @@ export const AttestationSchema = z.object({
   sourceTag: Bytes32Schema,
   deviceClass: Bytes32Schema,
   metaHash: Bytes32Schema,
+});
+
+/**
+ * The secure-element witness a class-3 passport carries (ADR-0015). Verified, never trusted: the
+ * key commitment must equal `Attestation.deviceClass` and the signature must verify over
+ * `hardwareCaptureDigest`, which binds values the passport already commits to.
+ */
+export const HardwareWitnessSchema = z.object({
+  publicKey: z.object({ x: Bytes32Schema, y: Bytes32Schema }),
+  signature: Signature64Schema,
 });
 
 export const PassportSchema = z.object({

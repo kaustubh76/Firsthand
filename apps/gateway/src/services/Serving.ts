@@ -1,6 +1,7 @@
 import type {
   AnchorWriter,
   BlobStore,
+  DeviceRegistryReader,
   Erc8004Registry,
   Erc8004Writer,
   GrantReader,
@@ -11,17 +12,21 @@ import type {
 } from "@firsthand/adapters";
 import {
   classifySendError,
+  deviceIsLive,
   FEEDBACK_TAG1,
   FEEDBACK_TAG2_PAID,
   messagesOf,
 } from "@firsthand/adapters";
 import {
-  type AttestationClass,
+  AttestationClass,
   type Bytes32,
+  deviceKeyCommitment,
   type Eip712Domain,
+  FirsthandError,
   type Freshness,
   freshnessOf,
   GrantError,
+  hardwareCaptureDigest,
   hashAttestation,
   hashTerms,
   NotFoundError,
@@ -32,6 +37,7 @@ import {
   ValidationError,
   VerifyFailure,
   type VerifyResult,
+  verifyCaptureWitness,
   verifyPassportInBatch,
   verifyPassportSignature,
   verifyPredicate,
@@ -55,6 +61,12 @@ export interface ServingDeps {
    * namespace dates its last deposit. Absent on gateways without a chain (memory mode).
    */
   readonly blockTime?: (blockNumber: bigint) => Promise<bigint | null>;
+  /**
+   * `HardwareDeviceRegistry`, for class-3 ingest (ADR-0015). **Absence refuses class 3** rather
+   * than waving it through: a gateway that cannot ask whether a key is hardware-backed has no
+   * business hosting a passport that says it is. Classes 0-2 are unaffected.
+   */
+  readonly devices?: DeviceRegistryReader;
   /** Half-life for the staleness curve, seconds; defaults to one epoch. */
   readonly halfLifeSeconds?: bigint;
   readonly now?: () => bigint;
@@ -164,6 +176,7 @@ export class Serving {
         context: { passportId: id },
       });
     }
+    await this.#refuseUnlessWitnessed(sidecar, id);
     if (!(await this.#d.anchors.isAnchored(sidecar.batchRoot))) {
       throw new ProofError("FH_MERKLE_INVALID", "batch root is not anchored", {
         context: { batchRoot: sidecar.batchRoot },
@@ -199,6 +212,57 @@ export class Serving {
   }
 
   /** Stores grant wrap bytes only if their hash equals the on-chain wrap reference. */
+  /**
+   * The class-3 gate (ADR-0015). This is the enforcement point that matters: a locker checks its
+   * own deposits, but a buyer trusts the gateway, and the sidecar is the first place the
+   * attestation preimage and the witness are both in hand.
+   *
+   * What is checked: the witness exists, its key is the device the attestation names, the
+   * signature verifies over `hardwareCaptureDigest` — which binds origin and nonce, so a witness
+   * lifted from another locker's deposit cannot be replayed here — and the chain says that device
+   * is registered to this principal and not revoked.
+   */
+  async #refuseUnlessWitnessed(sidecar: PassportSidecar, id: Bytes32): Promise<void> {
+    const attestation = sidecar.attestation;
+    if (attestation?.class !== AttestationClass.HARDWARE) {
+      // A witness without a class-3 attestation is not an error, but it is not evidence either;
+      // saying so beats storing it where a reader might mistake it for a checked one.
+      if (sidecar.hardware) {
+        throw new ValidationError("a hardware witness on a passport that does not claim class 3", {
+          context: { passportId: id },
+        });
+      }
+      return;
+    }
+    const refuse = (message: string): never => {
+      throw new FirsthandError("FH_REFUSED_HARDWARE", message, { context: { passportId: id } });
+    };
+    const witness = sidecar.hardware;
+    if (!witness) refuse("a class-3 passport carries no secure-element witness");
+    const w = witness as NonNullable<typeof witness>;
+    if (deviceKeyCommitment(w.publicKey) !== attestation.deviceClass) {
+      refuse("the witness key is not the device this attestation names");
+    }
+    const digest = hardwareCaptureDigest({
+      chainId: this.#d.domain.chainId,
+      origin: sidecar.signed.passport.origin,
+      contentHash: sidecar.signed.passport.h,
+      capturedAt: attestation.capturedAt,
+      nonce: sidecar.signed.passport.nonce,
+      deviceClass: attestation.deviceClass,
+    });
+    if (!verifyCaptureWitness(digest, w.signature, w.publicKey)) {
+      refuse("the secure-element witness does not verify over this passport");
+    }
+    if (!this.#d.devices) {
+      refuse("this gateway cannot reach a device registry, so it will not host a class-3 passport");
+    }
+    const device = await (this.#d.devices as DeviceRegistryReader).device(attestation.deviceClass);
+    if (!deviceIsLive(device, sidecar.principalId)) {
+      refuse("the signing device is not registered to this principal, or has been revoked");
+    }
+  }
+
   async ingestWrap(grantId: Bytes32, bytes: Uint8Array): Promise<Bytes32> {
     const g = await this.#d.grants.grantState(grantId);
     if (!g) throw new NotFoundError(`unknown grant ${grantId}`);

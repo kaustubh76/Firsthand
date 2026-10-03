@@ -202,7 +202,7 @@ firsthand/                      # pnpm workspaces + Turborepo
 │   ├── mcp/                    # firsthand-mcp: the verbs as agent tools
 │   ├── capture/                # PWA: phone capture → passport, relayed on chain
 │   └── demo/                   # `pnpm demo` — the first recall, end to end
-├── experiments/                # S1–S4: race window, gas, refusal (§15) + raw results
+├── experiments/                # S1–S5: race window, gas, refusal, transplantation (§15) + raw results
 ├── docs/                       # ADRs, SECURITY.md, spec appendix, diagrams, PROGRESS.md
 ├── deployments/                # addresses + NOTES.md (judge credentials, testnet notes)
 ├── integrations/ demo/         # partner templates; demo assets
@@ -264,9 +264,9 @@ Regimes: `ACTIVE / FROZEN` per principal; grant states per §7.5. All gating (`v
 
 **Baselines:** (B1) naive ACL locker (no passports) on Monad; (B2) FIRSTHAND with rescission over the public mempool.
 
-**Scenarios:** S1 deposit-at-scale (10k passports, batch=256); S2 buyer loop (grant→100 paid queries→manifest export); S3 adversarial rescission: an observer bot with mempool visibility attempts maximum-speed extraction on rescind broadcast, 50 trials per arm; S4 refusal: 1k unprovable deposits injected.
+**Scenarios:** S1 deposit-at-scale (10k passports, batch=256); S2 buyer loop (grant→100 paid queries→manifest export); S3 adversarial rescission: an observer bot with mempool visibility attempts maximum-speed extraction on rescind broadcast, 50 trials per arm; S4 refusal: 1k unprovable deposits injected; S5 transplantation resistance: a genuine secure-element witness replayed onto a second locker's deposit of the same bytes (ADR-0015).
 
-**Metrics:** verify() gas; anchor cost /1k passports (MIP-8 vs naive SSTORE baseline); manifest proof size + off-chain verification time; `Δ_race` distribution and extraction success rate per arm; refusal precision (target 100% on S4); royalty-split invariant over 1e6 fuzz runs.
+**Metrics:** verify() gas; anchor cost /1k passports (MIP-8 vs naive SSTORE baseline); manifest proof size + off-chain verification time; `Δ_race` distribution and extraction success rate per arm; refusal precision (target 100% on S4 and S5); royalty-split invariant over 1e6 fuzz runs.
 
 **Hypotheses:**
 - **H1:** per-asset anchoring + verification lands under 1¢-equivalent per datum at batch=256 (MIP-8 delta reported vs baseline).

@@ -17,6 +17,7 @@
     "s2": "tsx src/cli.ts s2",
     "s3": "tsx src/cli.ts s3",
     "s4": "tsx src/cli.ts s4",
+    "s5": "tsx src/cli.ts s5",
     "report": "tsx src/cli.ts report"
   },
   "dependencies": {

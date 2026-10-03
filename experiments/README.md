@@ -9,6 +9,7 @@ Harness for README §15. Arms are adapter selections (ADR-0006); results are raw
 | S2 buyer loop | H1 (settlement gas), H3 (manifest with receipts) | yes (memory, `anchors-baseline`) | `… s2 -- --n 100` · `… s2 -- --arm anchors-baseline --n 100` |
 | S3 rescission race | H2 | anvil only — see the Monad note below | `… s3 -- --arm B2-public-mempool --n 50` · `… --arm commit-reveal` · `… --arm btx-blind` |
 | S4 refusal | refusal precision | yes | `… s4 -- --n 1000` |
+| S5 transplantation resistance | refusal precision (ADR-0015) | yes | `… s5 -- --n 500` |
 
 ## Findings so far (memory arm, this machine)
 
@@ -72,6 +73,22 @@ an enrolled principal:** 20 refused by the contract (`InvalidDepositSignature`),
 never-enrolled principal is refused with `EpochNotAttested`. **Re-run on Monad testnet 2026-09-16:
 identical — 200/200 client-side refusals (precision 1.0, recall 1.0) and 20/20 forged anchors
 refused on chain.**
+
+**S5 transplantation resistance (memory arm), 500 class-3 deposits and 2 000 injected
+witnesses:** 500/500 genuine deposits admitted, **2 000/2 000 refused** (refusal rate 1.0), nothing
+wrongly refused. Four attacks per deposit: a *genuine* secure-element signature replayed onto a
+second locker's deposit of the same bytes — different origin and nonce, so a different `hwDigest`
+— plus a witness from the wrong device, a class-3 passport carrying none at all, and one with a
+byte of the signature changed. The gate costs 13.3 ms p50 / 33.5 ms p95, which is the whole
+class-3 admission path and not just the P-256 verify.
+
+The device is a software P-256 key, deliberately: this scenario measures the **gate**, which is
+identical whichever side of a secure element the scalar sits on. That the key provably never left
+one is a different claim, and it is measured on a chain by
+`packages/sdk/test/anvil/device.roundtrip.test.ts`, where `HardwareDeviceRegistry` verifies the
+certificate chain through RIP-7212 and then refuses the same witness after revocation. Not
+reported here, because no handset is attached: StrongBox signing latency and a real attestation's
+security level and chain size.
 
 **S2 on Monad testnet, 1 grant → 25 paid queries:** **348,087 gas per `RoyaltyRouter.settle`**
 (vs 241,741 on a vanilla EVM, +44 %), query latency p50 **3.47 s** / p95 3.57 s end to end — real

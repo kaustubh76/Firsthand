@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** One measured run of a scenario under one arm. Serialised into results/<scenario>-<arm>.json. */
 export const TrialResultSchema = z.object({
-  scenario: z.enum(["s1", "s2", "s3", "s4"]),
+  scenario: z.enum(["s1", "s2", "s3", "s4", "s5"]),
   arm: z.string(),
   hypothesis: z.enum(["H1", "H2", "H3", "refusal"]),
   startedAt: z.string(),

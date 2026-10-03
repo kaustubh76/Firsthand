@@ -2,6 +2,7 @@ import s1 from "../../../../experiments/results/s1.json";
 import s2 from "../../../../experiments/results/s2.json";
 import s3 from "../../../../experiments/results/s3.json";
 import s4 from "../../../../experiments/results/s4.json";
+import s5 from "../../../../experiments/results/s5.json";
 
 /**
  * The measured claims, straight from `experiments/results/*.json` at build time — the same files
@@ -213,6 +214,36 @@ export interface S4Card {
   readonly recall: number | null;
   readonly forged: number | null;
   readonly forgedRefused: number | null;
+}
+
+export interface S5Card {
+  readonly chain: string;
+  readonly deposits: number | null;
+  readonly admitted: number | null;
+  readonly injected: number | null;
+  readonly refused: number | null;
+  readonly refusalRate: number | null;
+  readonly gateP50Ms: number | null;
+}
+
+/**
+ * S5 — transplantation resistance (ADR-0015). The memory arm is the honest one here: the gate is
+ * pure cryptography over a digest and is identical whichever side of a secure element the key
+ * sits on. That the key never left one is a separate claim, proved by the registry verifying a
+ * certificate chain on a chain, not by this number.
+ */
+export function s5Card(): S5Card | null {
+  const t = latest(trials(s5), "memory", false);
+  if (!t) return null;
+  return {
+    chain: chainOf(t),
+    deposits: m(t, "deposits"),
+    admitted: m(t, "genuineAdmitted"),
+    injected: m(t, "injected"),
+    refused: m(t, "refused"),
+    refusalRate: m(t, "refusalRate"),
+    gateP50Ms: m(t, "witnessGateP50Ms"),
+  };
 }
 
 export function s4Card(): S4Card | null {

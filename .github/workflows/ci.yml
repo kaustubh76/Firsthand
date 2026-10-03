@@ -141,7 +141,7 @@ jobs:
           DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
           RELAYER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
         run: pnpm test:anvil
-      - name: Experiments on-chain arms (S1 both layouts, S4, S2, S3 race arms) — dry run
+      - name: Experiments on-chain arms (S1 both layouts, S4, S2, S5, S3 race arms) — dry run
         env:
           ANVIL_RPC_URL: http://127.0.0.1:8545
           DEPLOYMENTS_FILE: ${{ github.workspace }}/deployments/31337.json
@@ -151,6 +151,9 @@ jobs:
           pnpm --filter @firsthand/experiments s1 -- --arm anchors-paged --n 300 --dry-run
           pnpm --filter @firsthand/experiments s4 -- --arm anchors-baseline --n 30 --dry-run
           pnpm --filter @firsthand/experiments s2 -- --arm anchors-baseline --n 5 --dry-run
+          # S5 runs on the memory arm by design: it measures the class-3 gate, which is the same
+          # cryptography wherever the key lives. The chain's half is in test:anvil above.
+          pnpm --filter @firsthand/experiments s5 -- --arm memory --n 25 --dry-run
           # S3 last: it drives anvil's mining for the race window and restores automine afterwards.
           pnpm --filter @firsthand/experiments s3 -- --arm B2-public-mempool --n 3 --dry-run
           pnpm --filter @firsthand/experiments s3 -- --arm commit-reveal --n 3 --dry-run

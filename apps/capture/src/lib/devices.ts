@@ -1,4 +1,8 @@
-import type { DeviceView, OnchainDeviceRegistryReader } from "@firsthand/adapters/client";
+import type {
+  DevicePolicy,
+  DeviceView,
+  OnchainDeviceRegistryReader,
+} from "@firsthand/adapters/client";
 import {
   type Bytes32,
   bytesToHex,
@@ -24,6 +28,28 @@ export interface DeviceReport {
   readonly registeredAt: bigint;
   readonly revokedAt: bigint | null;
   readonly live: boolean;
+}
+
+/**
+ * The anchor the golden suite's **generated** chain reaches
+ * (`packages/test-vectors/vectors/android-attestation.v1.json`, `extra.anchorCommitment`).
+ *
+ * A registry pinned to it trusts a certificate this repository made up, so no real handset can
+ * register against it and a registration there proves the plumbing, not a device. It is listed
+ * here only so the app can *recognise* one — the question is always answered by reading the
+ * registry's own `anchors()`, never by configuration, so the warning cannot be forgotten and
+ * disappears on its own the moment the registry is redeployed against a real attestation
+ * intermediate.
+ */
+export const GENERATED_TEST_ANCHOR =
+  "0xff068cebf11af4a3ea44919461c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b" as Bytes32;
+
+/** True when every anchor this registry trusts is one this repository generated. */
+export function trustsGeneratedAnchor(policy: DevicePolicy): boolean {
+  return (
+    policy.anchors.length > 0 &&
+    policy.anchors.every((a) => a.toLowerCase() === GENERATED_TEST_ANCHOR)
+  );
 }
 
 /** 1 TrustedEnvironment, 2 StrongBox; anything lower is not hardware and the registry refuses it. */

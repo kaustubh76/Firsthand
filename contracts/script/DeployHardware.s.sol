@@ -15,6 +15,11 @@ import {PrincipalRegistry} from "../src/PrincipalRegistry.sol";
 ///         Env: `DEPLOYER_PRIVATE_KEY`, `HARDWARE_TRUST_ANCHOR` (the pinned P-256 certificate's
 ///         key commitment), `HARDWARE_MIN_SECURITY_LEVEL` (1 TrustedEnvironment, 2 StrongBox;
 ///         defaults to 1).
+///
+///         Run it with `--broadcast`. A bare simulation still executes `vm.writeJson`, so it
+///         would record an address that was never deployed. Afterwards run
+///         `biome check --write deployments/` — forge writes the document without a trailing
+///         newline and `pnpm lint` fails on it.
 contract DeployHardware is Script {
     function run() external returns (address registry) {
         string memory path = string.concat("../deployments/", vm.toString(block.chainid), ".json");
@@ -29,7 +34,14 @@ contract DeployHardware is Script {
         registry = address(new HardwareDeviceRegistry(PrincipalRegistry(principals), minimum, anchors));
         vm.stopBroadcast();
 
-        vm.writeJson(vm.toString(registry), path, ".HardwareDeviceRegistry");
+        // Seeded with the document as it stands, so every key this script knows nothing about
+        // survives untouched. `vm.writeJson(value, path, key)` is the obvious call here and it is
+        // wrong: it can only *replace* a key, and silently no-ops on a document that lacks one —
+        // which is precisely the document this script exists to upgrade. It cost one deployment
+        // to find that out.
+        string memory root = "deployment";
+        vm.serializeJson(root, existing);
+        vm.writeJson(vm.serializeAddress(root, "HardwareDeviceRegistry", registry), path);
         console.log("merged HardwareDeviceRegistry into", path);
     }
 }

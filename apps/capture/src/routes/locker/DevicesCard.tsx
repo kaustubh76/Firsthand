@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { challengeOf, describeBoot, describeLevel, parseChainText } from "../../lib/devices.js";
+import { useEffect, useState } from "react";
+import {
+  challengeOf,
+  describeBoot,
+  describeLevel,
+  parseChainText,
+  trustsGeneratedAnchor,
+} from "../../lib/devices.js";
 import { updateJournal } from "../../lib/journal.js";
 import { Button, Card, EmptyState, Field, Hash, Notice, Pill, Tx } from "../../ui/index.js";
 import type { LockerCtx } from "./types.js";
@@ -18,8 +24,30 @@ import type { LockerCtx } from "./types.js";
 export function DevicesCard({ ctx }: { ctx: LockerCtx }) {
   const { session, config, client, journal, actions } = ctx;
   const [text, setText] = useState("");
+  const [generatedAnchor, setGeneratedAnchor] = useState(false);
   const devices = journal.devices ?? [];
   const registry = config.hardwareDeviceRegistry !== `0x${"00".repeat(20)}`;
+
+  // Which certificates this registry trusts is read from the registry, never configured — so a
+  // deployment pinned to a certificate this repository generated says so on its own, and stops
+  // saying so the moment it is redeployed against a real attestation intermediate. Two cached
+  // reads: `policy()` memoises, because the anchors are constructor arguments with no setter.
+  useEffect(() => {
+    const reader = client.devices;
+    if (!reader) return;
+    let live = true;
+    void reader
+      .policy()
+      .then((policy) => {
+        if (live) setGeneratedAnchor(trustsGeneratedAnchor(policy));
+      })
+      .catch(() => {
+        // A registry we cannot read is already reported by the register path; do not double up.
+      });
+    return () => {
+      live = false;
+    };
+  }, [client.devices]);
 
   const register = () =>
     actions.run("device:register", async () => {
@@ -85,6 +113,17 @@ export function DevicesCard({ ctx }: { ctx: LockerCtx }) {
         )
       }
     >
+      {registry && generatedAnchor && (
+        <Notice tone="warn">
+          This registry is pinned to a certificate <strong>this repository generated</strong>, not
+          to a real attestation root. Its private key is published in the test vectors, so on this
+          deployment <strong>anyone can forge a class-3 device</strong> — a registration here proves
+          the on-chain verifier and the plumbing, and nothing at all about hardware. No real handset
+          can register either, because its chain reaches a different anchor. Read from the
+          registry&rsquo;s own <code>anchors()</code>, so it disappears by itself once this is
+          redeployed against a real attestation intermediate (ADR-0015).
+        </Notice>
+      )}
       {!registry ? (
         <Notice tone="warn">
           This chain names no <code>HardwareDeviceRegistry</code>, so class 3 is unavailable here.

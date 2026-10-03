@@ -3,7 +3,15 @@ import { type Bytes32, bytesToHex } from "@firsthand/core";
 import { loadVectors } from "@firsthand/test-vectors";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { challengeOf, describeBoot, describeLevel, parseChainText, reportFor } from "./devices.js";
+import {
+  challengeOf,
+  describeBoot,
+  describeLevel,
+  GENERATED_TEST_ANCHOR,
+  parseChainText,
+  reportFor,
+  trustsGeneratedAnchor,
+} from "./devices.js";
 
 const COMMITMENT = `0x${"ab".repeat(32)}` as Bytes32;
 const PRINCIPAL = `0x${"cd".repeat(32)}` as Bytes32;
@@ -64,6 +72,7 @@ const vectors = loadVectors("android-attestation", {
   input: z.object({ certificate: z.string() }),
   expected: z.record(z.string(), z.unknown()),
   extra: z.object({
+    anchorCommitment: z.string(),
     chain: z.array(z.string()),
     nonce: z.string(),
     principalId: z.string(),
@@ -113,5 +122,34 @@ describe("the challenge, read back out of the leaf", () => {
   it("refuses a certificate carrying no key attestation", () => {
     // The intermediate is a real certificate with no KeyDescription extension.
     expect(() => challengeOf(bytes(hexChain[1] as `0x${string}`))).toThrow(/no key attestation/);
+  });
+});
+
+describe("telling a test-anchored registry from a real one", () => {
+  it("recognises the anchor the golden suite's generated chain reaches", () => {
+    // Pinned against the vector rather than restated, so regenerating the suite cannot leave the
+    // app quietly trusting a constant nothing reaches any more.
+    expect(GENERATED_TEST_ANCHOR).toBe(vectors.extra.anchorCommitment);
+    expect(
+      trustsGeneratedAnchor({ anchors: [GENERATED_TEST_ANCHOR], minimumSecurityLevel: 1 }),
+    ).toBe(true);
+  });
+
+  it("says nothing about a registry pinned to something else", () => {
+    expect(
+      trustsGeneratedAnchor({ anchors: [`0x${"ab".repeat(32)}`], minimumSecurityLevel: 1 }),
+    ).toBe(false);
+    // A registry that trusts the test anchor *and* a real one is not a test registry, and
+    // warning about it would cry wolf over a deployment that works.
+    expect(
+      trustsGeneratedAnchor({
+        anchors: [GENERATED_TEST_ANCHOR, `0x${"ab".repeat(32)}`],
+        minimumSecurityLevel: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("says nothing about a registry with no anchors — the constructor forbids one anyway", () => {
+    expect(trustsGeneratedAnchor({ anchors: [], minimumSecurityLevel: 1 })).toBe(false);
   });
 });

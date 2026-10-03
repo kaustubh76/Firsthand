@@ -29,7 +29,13 @@ import {
   TagClass,
   unsignedInteger,
 } from "./der.js";
-import { deviceKeyCommitment, hardwareCaptureDigest } from "./hardwareDigest.js";
+import {
+  deviceKeyCommitment,
+  HARDWARE_CAPTURE_DOMAIN,
+  HARDWARE_CAPTURE_PREIMAGE_BYTES,
+  hardwareCaptureDigest,
+  hardwareCapturePreimage,
+} from "./hardwareDigest.js";
 
 // ── a minimal DER encoder, so every fixture below is a real signed certificate ────────────────
 // Building these by hand rather than committing opaque hex keeps the negative cases honest: each
@@ -878,6 +884,28 @@ describe("hardwareCaptureDigest", () => {
   it("is stable for the same inputs", () => {
     expect(hardwareCaptureDigest(base)).toBe(hardwareCaptureDigest({ ...base }));
     expect(hardwareCaptureDigest(base)).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  it("is sha256 of the preimage the phone is actually given", () => {
+    // The whole Android bridge rests on this equality. A Keystore key built with DIGEST_SHA256
+    // will not sign a pre-hashed value, so the element is handed the preimage and runs
+    // SHA256withECDSA over it. If these two ever diverge, every device signature verifies
+    // nowhere, and it would look like a broken curve rather than a broken payload.
+    expect(bytesToHex(sha256(hardwareCapturePreimage(base)))).toBe(hardwareCaptureDigest(base));
+  });
+
+  it("has the length the companion app asserts", () => {
+    // 23 domain + 32 chainId + 20 origin + 32 h + 8 capturedAt + 32 nonce + 32 deviceClass.
+    expect(hardwareCapturePreimage(base)).toHaveLength(HARDWARE_CAPTURE_PREIMAGE_BYTES);
+    expect(HARDWARE_CAPTURE_PREIMAGE_BYTES).toBe(179);
+  });
+
+  it("begins with the domain separator, so bytes from another scheme cannot collide", () => {
+    expect(hardwareCapturePreimage(base).slice(0, 23)).toEqual(utf8(HARDWARE_CAPTURE_DOMAIN));
+  });
+
+  it("validates before building the preimage, not only before hashing", () => {
+    expect(() => hardwareCapturePreimage({ ...base, origin: "0x00" })).toThrow(/origin/);
   });
 
   it.each([

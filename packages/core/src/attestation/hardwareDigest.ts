@@ -64,26 +64,39 @@ export interface HardwareWitness {
   readonly signature: Hex;
 }
 
-/** `sha256(domain ‖ chainId ‖ origin ‖ h ‖ capturedAt ‖ nonce ‖ deviceClass)`. */
-export function hardwareCaptureDigest(input: HardwareCaptureInput): Bytes32 {
+/** Byte length of the preimage: 23 + 32 + 20 + 32 + 8 + 32 + 32. */
+export const HARDWARE_CAPTURE_PREIMAGE_BYTES = 179;
+
+/**
+ * `domain ‖ chainId ‖ origin ‖ h ‖ capturedAt ‖ nonce ‖ deviceClass`, unhashed.
+ *
+ * This exists because of a hard Android constraint, not as a convenience. A Keystore key created
+ * with `DIGEST_SHA256` refuses an input that is already hashed, and signing a bare digest needs
+ * `NONEwithECDSA`, which requires `DIGEST_NONE` — a mode StrongBox commonly will not grant. So the
+ * bridge hands the phone **these bytes** and the element runs `SHA256withECDSA` over them, whose
+ * internal hash is `hardwareCaptureDigest(input)` by construction. One preimage, one digest, no
+ * conversion step between the two implementations to get wrong.
+ */
+export function hardwareCapturePreimage(input: HardwareCaptureInput): Uint8Array {
   assertAddress(input.origin, "origin");
   assertBytes32(input.contentHash, "contentHash");
   assertBytes32(input.nonce, "nonce");
   assertBytes32(input.deviceClass, "deviceClass");
 
-  return bytesToHex(
-    sha256(
-      concat(
-        utf8(HARDWARE_CAPTURE_DOMAIN),
-        u256be(input.chainId),
-        hexToBytes(input.origin),
-        hexToBytes(input.contentHash),
-        u64be(input.capturedAt),
-        hexToBytes(input.nonce),
-        hexToBytes(input.deviceClass),
-      ),
-    ),
+  return concat(
+    utf8(HARDWARE_CAPTURE_DOMAIN),
+    u256be(input.chainId),
+    hexToBytes(input.origin),
+    hexToBytes(input.contentHash),
+    u64be(input.capturedAt),
+    hexToBytes(input.nonce),
+    hexToBytes(input.deviceClass),
   );
+}
+
+/** `sha256(domain ‖ chainId ‖ origin ‖ h ‖ capturedAt ‖ nonce ‖ deviceClass)`. */
+export function hardwareCaptureDigest(input: HardwareCaptureInput): Bytes32 {
+  return bytesToHex(sha256(hardwareCapturePreimage(input)));
 }
 
 /**

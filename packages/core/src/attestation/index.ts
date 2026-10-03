@@ -39,7 +39,9 @@ export { DerError } from "./der.js";
 export {
   deviceKeyCommitment,
   HARDWARE_CAPTURE_DOMAIN,
+  HARDWARE_CAPTURE_PREIMAGE_BYTES,
   type HardwareCaptureInput,
   type HardwareWitness,
   hardwareCaptureDigest,
+  hardwareCapturePreimage,
 } from "./hardwareDigest.js";

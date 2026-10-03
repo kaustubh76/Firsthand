@@ -987,6 +987,12 @@ function genAndroidAttestation(): VectorFile {
       authorityX: authorityPoint.x,
       authorityY: authorityPoint.y,
       deviceCommitment: keccak256Hex(concat(hexToBytes(leafPoint.x), hexToBytes(leafPoint.y))),
+      // The attested key's private half, so a test can produce a capture witness the registry
+      // will verify — the on-chain half of the transplantation claim needs a *genuine* signature
+      // to contrast the transplanted one against. Test material, like `authorityScalar` above.
+      deviceScalar: bytesToHex(leafSecret),
+      deviceX: leafPoint.x,
+      deviceY: leafPoint.y,
       oidKeyDescription: bytesToHex(OID_KEY_DESCRIPTION),
     },
   };

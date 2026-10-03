@@ -56,6 +56,21 @@ flow as a script in [`integrations/buyer-agent`](../integrations/buyer-agent/REA
   argument and a redeploy, and the anchors contract is the EIP-712 `verifyingContract` for every
   passport already minted. That was not a trade worth making inside the build window. Read §13 and
   §20 as "would offer", not "offers".
+- **A class-3 capture on this testnet.** The hardware tier (ADR-0015) is written and tested —
+  `Der.sol`, `AndroidKeyAttestation.sol` and `HardwareDeviceRegistry.sol` at 100% line and branch
+  coverage, verifying an Android key-attestation chain on chain through Monad's RIP-7212
+  precompile; a TypeScript reader cross-checked against the same golden certificates; an Android
+  companion app in [`android/`](../android) whose instrumented test asserts the whole round trip on
+  a handset. **What is missing is the handset.** The registry pins its trust anchors as constructor
+  arguments with no setter (§22 forbids an upgradable anchor), so it cannot be deployed until a real
+  chain says which certificate to pin — and the certificates it has been tested against are
+  generated, not pulled off a phone. Until then `deployments/10143.json` names no registry, the
+  gateway's `/healthz` says so, and **every class-3 deposit is refused** rather than quietly
+  downgraded. What you *can* see here: the Locker's **Devices** card explaining that this chain has
+  no registry, and the Verify tab checking a `hardware` witness cryptographically on any sidecar
+  that carries one. What it would prove even when live is **transplantation resistance** — the
+  witness cannot move between devices or lockers — and *not* that a camera saw anything, which is
+  README §14 limitation 3 and is not going away.
 - **A large live clip.** Hosted captures are capped at 4 MiB (Vercel's request-body ceiling; the
   gateway publishes the limit). A self-hosted gateway takes 8 MiB.
 - **Weekly epochs.** A locker attested in an earlier epoch needs *Attest this epoch* (offered on the

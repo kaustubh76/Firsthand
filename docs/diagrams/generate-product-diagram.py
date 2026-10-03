@@ -626,14 +626,14 @@ defcard("silver", "delivery", 2, 1, "Silver track (stretch; go/no-go Oct 3)", "S
     "Quality-score v0 as a separate, opt-in layer",
 ])
 defcard("roadmap", "delivery", 3, 2, "Post-hackathon extensions (§23)", "ROADMAP", [
-    "Hardware capture attestation (StrongBox / Secure Enclave co-signing) — closes the laundering gap",
+    "Hardware capture attestation — BUILT early as class 3 (ADR-0015), undeployed: it resists transplantation, it does NOT close the laundering gap. Still roadmap: Secure Enclave, RSA/P-384 root on chain",
     "ZK manifest membership: 'licensed from some verified-human corpus ≥ N'",
     "Quality / consistency scoring (autorater doctrine: calibrated judge, frozen anchors, canaries)",
     "Marketplace partnerships (Troveo-class pilots) + basis-points royalty routing; standards path: passport interchange spec, receipts → ERC-8004 reputation",
 ])
 defcard("nongoals", "delivery", 5, 1, "Must NOT contain (§22)", "NON-GOAL", [
     "Marketplace UI / discovery · quality scoring or autorater · injection screening",
-    "ZK selective disclosure · TEE attestation · cross-chain anything",
+    "ZK selective disclosure · TEE attestation (= running the protocol in an enclave; reading a device's cert is ADR-0015, not this) · cross-chain anything",
     "Token · admin keys / upgradability · mainnet",
 ])
 

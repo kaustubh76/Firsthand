@@ -899,3 +899,55 @@ timing verification should not wait for blocks it is not measuring.
 (visible now, not silent). Envio's handlers remain the one genuine shell, deferred by ADR-0013 in
 favour of `LogsConsentLedger`. The Phase 5 quickstart gate — under ten minutes to a first recall, by a
 non-author — is unmeasured, and both submission videos are unrecorded.
+
+## The hardware tier, built against a phone that was never plugged in (3 Oct)
+
+§20 predicts the question — *"can't AI-generated junk be laundered through a real passkey?"* — and
+the README answered it in four places with *"hardware capture attestation is the roadmap"*. It is
+not the roadmap any more, except for the one part that matters most.
+
+What exists now: `AttestationClass.HARDWARE = 3` through every layer; `Der.sol`,
+`AndroidKeyAttestation.sol` and `HardwareDeviceRegistry.sol` at 100% line and branch coverage,
+verifying an Android key-attestation chain **on chain** through RIP-7212; a TypeScript reader
+cross-checked against the same sixteen golden certificates, so a shared misreading of DER would
+have to happen twice; an on-chain reader, a gateway route, a boot-state policy flag; register and
+revoke as authority verbs; a Locker card that pastes a chain and a Verify tab that checks a
+witness; and an Android companion app that compiles, with an instrumented test that asserts the
+round trip on real hardware.
+
+What does not exist: **the output of that test.** The handset enumerated as an MTP-only composite
+the whole time — `ioreg` saw `SAMSUNG_Android`, adb saw nothing, which is the signature of USB
+debugging being off rather than of a cable or a driver. So everything here was written, compiled
+and tested without the device it is for, and the registry stays undeployed, because its trust
+anchors are constructor arguments with no setter and nothing can say which certificate to pin until
+a real chain arrives. `deployments/10143.json` names no registry; the gateway refuses every class-3
+deposit; `docs/JUDGES.md` says so under *what cannot be shown*. That is the honest state and it is
+printed rather than implied.
+
+Three things the contract taught the spec, all found by reading rather than running:
+
+**`sign(digest32)` could never have worked.** The plan had the bridge hand the phone a 32-byte
+digest. A Keystore key built with `DIGEST_SHA256` refuses a pre-hashed input, and `NONEwithECDSA`
+needs `DIGEST_NONE`, which StrongBox commonly will not grant. The element is handed the 179-byte
+**preimage** instead and runs `SHA256withECDSA` over it. `hardwareCaptureDigest` is now defined as
+`sha256` of `hardwareCapturePreimage`, with a test pinning the equality — if those two ever drifted
+it would look like a broken curve rather than a broken payload, which is the kind of bug that eats
+a day.
+
+**The phone cannot choose its own nonce.** `_requireAttested` checks
+`keccak256(challenge) == keccak256(abi.encodePacked(principalId, nonce))`, so the challenge is
+exactly 64 raw bytes fixed at key-generation time inside a certificate that cannot be re-issued.
+`planRegisterDevice` therefore *accepts* a nonce rather than generating one — and the Locker card
+reads it back out of the leaf, so the paste needs one field instead of two.
+
+**The TypeScript digest twins were missing.** `AuthorityDigests.sol` has had `registerDevice` and
+`revokeDevice` since Phase 2; `packages/core/src/authority/digests.ts` had neither, which meant the
+browser could not have signed either verb at all. Phase 2 had been green the whole time, because
+nothing on the TypeScript side had yet tried.
+
+Two smaller things fell out. `biome ci` had been red on this branch since the verifier's
+round-trip work — a `forEach` callback returning the Map it had just written to — and nothing had
+run the gate since. And `README.md` §23 claimed hardware attestation *"closes the laundering
+gap"*. It does not: it makes a witness non-transplantable, which is a different and smaller claim.
+That line is struck rather than quietly reworded, because the whole argument here is that the
+project says what it measured.

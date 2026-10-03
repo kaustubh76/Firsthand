@@ -73,7 +73,8 @@
     "test:testnet": "echo 'no testnet tests'",
     "coverage": "vitest run --coverage",
     "gen": "tsx scripts/gen-vectors.ts",
-    "gen:check": "tsx scripts/gen-vectors.ts --check"
+    "gen:check": "tsx scripts/gen-vectors.ts --check",
+    "spike:android": "tsx scripts/android-spike.ts"
   },
   "dependencies": {
     "@noble/curves": "catalog:",

@@ -14,6 +14,7 @@ export type { Suite, VectorCase, VectorFile } from "./schema.js";
 export { SUITES, VectorCaseSchema, VectorFileSchema } from "./schema.js";
 
 const VECTORS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "vectors");
+const RECORDINGS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "recordings");
 
 /** Absolute path of a suite's JSON file. Exposed so generators write to exactly one place. */
 export function vectorPath(suite: Suite, version = 1): string {
@@ -95,4 +96,25 @@ function sortKeysDeep(value: unknown): unknown {
 /** Suites that must exist on disk — used by the self-test so a missing file is caught early. */
 export function allSuites(): readonly Suite[] {
   return SUITES;
+}
+
+/**
+ * Bytes that came from somewhere real — a handset, a published endpoint — committed verbatim.
+ *
+ * Kept apart from the generated suites because `vectors:check` regenerates those and fails on any
+ * difference; a recording cannot be regenerated, which is the entire point of it. Every recording
+ * carries its provenance inline and is asserted by a test rather than trusted. See
+ * `recordings/README.md`.
+ */
+export function recordingPath(name: string, version = 1): string {
+  return join(RECORDINGS_DIR, `${name}.v${version}.json`);
+}
+
+/** Reads a recording and narrows it with the caller's schema. Throws with the file path on failure. */
+export function loadRecording<T>(name: string, schema: z.ZodType<T>, version = 1): T {
+  const path = recordingPath(name, version);
+  const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+  if (!parsed.success)
+    throw new Error(`${path} is not the recording it claims: ${parsed.error.message}`);
+  return parsed.data;
 }

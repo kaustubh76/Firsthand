@@ -1,4 +1,4 @@
-import { loadVectors } from "@firsthand/test-vectors";
+import { loadRecording, loadVectors } from "@firsthand/test-vectors";
 import { p256 } from "@noble/curves/nist.js";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -1070,5 +1070,51 @@ describe("android-attestation vectors", () => {
         { anchors: [`0x${"99".repeat(32)}`] },
       ),
     ).toThrow(/does not reach a pinned trust anchor/);
+  });
+});
+
+// ── the recording: why the pin is where it is ─────────────────────────────────────────────────
+
+describe("Google's published attestation roots (recorded 2026-10-03)", () => {
+  const recording = loadRecording(
+    "google-attestation-roots",
+    z.object({
+      recordedAt: z.string(),
+      source: z.string(),
+      measured: z.array(z.object({ publicKey: z.string(), verifiableByRip7212: z.boolean() })),
+      certificates: z.array(z.object({ pem: z.string() })),
+    }),
+  );
+
+  const der = (pem: string): Uint8Array => {
+    const body = pem.replace(/-----[A-Z ]+-----/g, "").replace(/\s+/g, "");
+    const binary = atob(body);
+    return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  };
+
+  it("records two roots, from Google's own endpoint", () => {
+    expect(recording.certificates).toHaveLength(2);
+    expect(recording.source).toBe("https://android.googleapis.com/attestation/root");
+  });
+
+  /**
+   * This is the whole reason `HardwareDeviceRegistry` pins the highest P-256 certificate in a
+   * chain rather than its root, and the reason SECURITY.md prints that as a limitation rather
+   * than rounding it off. `parseCertificate` refuses a subject key that is not P-256, so the
+   * refusal *is* the assertion — and if Google ever publishes a P-256 root this test fails, which
+   * is exactly when the pin should move up.
+   */
+  it("refuses both, because neither is P-256 and RIP-7212 verifies nothing else", () => {
+    for (const certificate of recording.certificates) {
+      expect(() => parseCertificate(der(certificate.pem))).toThrow();
+    }
+    expect(recording.measured.every((m) => !m.verifiableByRip7212)).toBe(true);
+  });
+
+  it("names what each key actually is, so the note cannot drift from the bytes", () => {
+    const keys = recording.measured.map((m) => m.publicKey).join(" ");
+    expect(keys).toContain("rsaEncryption");
+    expect(keys).toContain("P-384");
+    expect(keys).not.toContain("P-256");
   });
 });

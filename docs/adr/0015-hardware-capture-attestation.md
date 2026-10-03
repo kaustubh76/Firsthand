@@ -68,11 +68,24 @@ it happened to be StrongBox-signed.
 ### Anchors are constructor arguments, with no setter
 
 §22 forbids an upgradable trust anchor and this honours it literally: `HardwareDeviceRegistry` takes
-its anchors at deployment and can never be pointed somewhere else. It also sidesteps the question
-of the root's curve — no commercial attestation root is P-256 (Google's is RSA or P-384), so what is
-pinned is the **highest P-256 certificate** in the chain. The link above it is verified once, off
-chain, and the pin records that result. That is a real limitation and `docs/SECURITY.md` prints it
-rather than rounding it off.
+its anchors at deployment and can never be pointed somewhere else.
+
+What gets pinned is the **highest P-256 certificate** in the chain, not the root, and that is
+forced rather than chosen. Both roots Google publishes at
+`https://android.googleapis.com/attestation/root` were fetched on **2026-10-03** and are committed
+verbatim at `packages/test-vectors/recordings/google-attestation-roots.v1.json`:
+
+| Root | Key | Signature | Reachable by RIP-7212 |
+|---|---|---|---|
+| `serialNumber=f92009e853b6b045` (2022-03-20 → 2042-03-15) | RSA 4096 | `sha256WithRSAEncryption` | No |
+| `CN=Key Attestation CA1` (2025-07-17 → 2035-07-15) | EC **secp384r1** | `ecdsa-with-SHA384` | No |
+
+RIP-7212 verifies `secp256r1` and nothing else, so neither top link can be checked on chain. It is
+verified once, off chain, and the pin records that result. The RSA root could in principle be
+verified through `modexp` (`0x05`) — a pure upgrade to the claim, deferred past freeze. A test over
+that recording asserts both refusals through the real reader, so if Google ever publishes a P-256
+root it fails, which is exactly when the pin should move up. `docs/SECURITY.md` prints the
+limitation rather than rounding it off.
 
 ### What a witness is signed over
 

@@ -58,8 +58,23 @@ APIs, and the spike screen is a `TextView`.
 ## Run the spike
 
 The phone needs **Developer options → USB debugging**, and the *"Allow USB debugging?"* prompt
-accepted. Until then `adb devices` lists nothing at all — an unauthorised device would still
-appear, as `unauthorized`.
+accepted. Until then `adb devices` lists nothing at all — a plugged-in phone with debugging off
+enumerates as an MTP-only composite and never appears, whereas an *unauthorised* one would still
+show up and say so.
+
+Then, from the repository root:
+
+```bash
+pnpm spike:android
+```
+
+That is the whole spike: install, run, wait, pull, parse every certificate with the same reader the
+contract mirrors, print the measured security level and boot state, **refuse to write anything if
+the chain carries a device identifier**, commit the chain as a provenanced recording, and print the
+anchor commitment to deploy `HardwareDeviceRegistry` with. It names the six taps above if no device
+is ready, so there is nothing to remember.
+
+By hand, if you would rather watch it happen:
 
 ```bash
 export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"
@@ -105,7 +120,14 @@ for f in cert-*.pem; do
 done
 ```
 
-The **last certificate's `Signature Algorithm`** is the decision:
+**Half of this is already answered.** Google's two published roots were fetched on 2026-10-03 and
+are committed at `packages/test-vectors/recordings/google-attestation-roots.v1.json`: one is
+RSA-4096/`sha256WithRSAEncryption`, the other EC `secp384r1`/`ecdsa-with-SHA384`. Neither is P-256,
+so whichever one this chain terminates at, **the top link cannot be verified by RIP-7212** and the
+anchor has to be an intermediate. What the run below still decides is *which* intermediate — that
+is batch-specific, and it is the one thing no amount of reading can supply.
+
+The **last certificate's `Signature Algorithm`** then says which root this device chains to:
 
 | It says | Branch | What the README may then claim |
 |---|---|---|

@@ -2,7 +2,7 @@
   "name": "firsthand",
   "version": "0.1.0",
   "private": true,
-  "description": "FIRSTHAND — a passkey-rooted data-provenance and consent-settlement protocol on Monad",
+  "description": "FIRSTHAND \u2014 a passkey-rooted data-provenance and consent-settlement protocol on Monad",
   "license": "MIT",
   "packageManager": "pnpm@10.18.2",
   "engines": {
@@ -33,7 +33,8 @@
     "demo": "pnpm --filter firsthand-demo dev",
     "deploy:hosted": "node scripts/deploy-hosted.mjs",
     "deploy:gateway": "node scripts/deploy-hosted.mjs gateway",
-    "deploy:capture": "node scripts/deploy-hosted.mjs capture"
+    "deploy:capture": "node scripts/deploy-hosted.mjs capture",
+    "spike:android": "pnpm --filter @firsthand/core spike:android"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

@@ -15,11 +15,15 @@ import {
   GRANT_TYPEHASH,
   grantIdOf,
   grantStructHash,
+  REGISTER_DEVICE_TYPEHASH,
   RESCIND_COMMIT_TYPEHASH,
   RESCIND_TYPEHASH,
+  REVOKE_DEVICE_TYPEHASH,
+  registerDeviceStructHash,
   rescindCommitStructHash,
   rescindStructHash,
   rescissionCommitment,
+  revokeDeviceStructHash,
 } from "./digests.js";
 
 const b = (n: number): Bytes32 => `0x${n.toString(16).padStart(64, "0")}`;
@@ -46,6 +50,12 @@ describe("authority digests", () => {
     );
     expect(ANCHOR_TYPEHASH).toBe(
       "0x06d14469a38beb1fb1e25c0c1e5ad3f5da1946b38e960cc539c1264b6ac9dcd7",
+    );
+    expect(REGISTER_DEVICE_TYPEHASH).toBe(
+      "0x3a2836158bff70d98bf5bb705be358a63cedf669effb921b6885557fddb1d13b",
+    );
+    expect(REVOKE_DEVICE_TYPEHASH).toBe(
+      "0x97bde1b4799439792aade80038cd270bfa51df2d0cad4bb93961e9ff22633444",
     );
   });
 
@@ -96,5 +106,23 @@ describe("authority digests", () => {
     expect(d).not.toBe(
       authorityDigest(b(7), { chainId: 1n, verifyingContract: `0x${"dd".repeat(20)}` }),
     );
+  });
+
+  it("device struct hashes bind the principal, the device and the nonce (ADR-0015)", () => {
+    const register = registerDeviceStructHash(b(1), b(2), b(3));
+    expect(register).toMatch(/^0x[0-9a-f]{64}$/);
+
+    // Register and revoke share a field list, so a type string copied carelessly would let a
+    // revocation signature authorise a registration. Different typehash, different digest.
+    expect(revokeDeviceStructHash(b(1), b(2), b(3))).not.toBe(register);
+
+    // Each field is actually mixed in, rather than one of them being dropped on the floor.
+    expect(registerDeviceStructHash(b(9), b(2), b(3))).not.toBe(register);
+    expect(registerDeviceStructHash(b(1), b(9), b(3))).not.toBe(register);
+    expect(registerDeviceStructHash(b(1), b(2), b(9))).not.toBe(register);
+
+    // The field order is positional, so swapping two arguments must change the hash — otherwise a
+    // caller could authorise device X under principal Y by transposing them.
+    expect(registerDeviceStructHash(b(2), b(1), b(3))).not.toBe(register);
   });
 });

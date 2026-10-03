@@ -14,10 +14,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./vectors/*": "./vectors/*"
+    "./vectors/*": "./vectors/*",
+    "./recordings/*": "./recordings/*"
   },
   "files": [
     "dist",
+    "recordings",
     "vectors"
   ],
   "scripts": {

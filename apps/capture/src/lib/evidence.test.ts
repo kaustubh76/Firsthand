@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { h1, h2, h3, s2Cards, s4Card } from "./evidence.js";
+import { h1, h2, h3, s2Cards, s4Card, s5Card } from "./evidence.js";
 
 /** The screen must say what experiments/README.md says — same files, same numbers. */
 describe("evidence reduction", () => {
@@ -45,6 +45,23 @@ describe("evidence reduction", () => {
       forged: 20,
       forgedRefused: 20,
     });
+  });
+
+  it("S5 refuses every transplanted witness and admits every genuine one", () => {
+    const s5 = s5Card();
+    expect(s5).toMatchObject({
+      deposits: 500,
+      admitted: 500,
+      injected: 2_000,
+      refused: 2_000,
+      refusalRate: 1,
+    });
+    // A rate of 1 over zero attacks would also read as 1. Four attacks per deposit, by
+    // construction, is what makes the ratio mean something.
+    expect(s5?.injected).toBe((s5?.deposits ?? 0) * 4);
+    // The memory arm is the honest one here; a "Monad" label on this number would be a claim the
+    // scenario did not make.
+    expect(s5?.chain).not.toMatch(/Monad/);
   });
 });
 

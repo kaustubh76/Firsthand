@@ -60,7 +60,11 @@ export class WebAuthnPrfSource implements PrfSource {
     const results = assertion.getClientExtensionResults() as PrfExtensionResults;
     const first = results.prf?.results?.first;
     if (!first)
-      throw new CryptoError("passkey did not return a PRF output (prf extension unsupported?)");
+      throw new CryptoError("passkey did not return a PRF output (prf extension unsupported?)", {
+        // The one failure that means "this authenticator cannot root a locker", as opposed to a
+        // cancelled prompt or a timeout. Callers gate enrolment on it; see `registerPasskey`.
+        context: { prf: "absent" },
+      });
     const out = new Uint8Array(first);
     if (out.length !== PRF_OUTPUT_LENGTH)
       throw new CryptoError(`unexpected PRF length ${out.length}`);
@@ -68,6 +72,16 @@ export class WebAuthnPrfSource implements PrfSource {
   }
 }
 
+/**
+ * Creates the passkey and asks the authenticator to associate a PRF key with it.
+ *
+ * `prfEnabled` is the authenticator's *advertisement* at creation time and is **not** a reliable
+ * gate: the PRF extension only returns a secret during an assertion, several platforms that do
+ * support it never set `enabled` on create (Chrome/Edge ≤ 146 with Windows Hello, measured), and
+ * the WebAuthn guidance is explicitly not to treat a missing flag as a hard error. Use it as a
+ * hint; gate on an actual `evaluate()`, which throws with `context.prf === "absent"` when the
+ * authenticator genuinely cannot derive.
+ */
 export interface RegisterPasskeyOptions {
   readonly rpId: string;
   readonly rpName: string;

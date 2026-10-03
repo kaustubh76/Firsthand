@@ -1,4 +1,4 @@
-import type { OnchainLensReader } from "@firsthand/adapters/client";
+import { type OnchainLensReader, type Pacer, pacedMap } from "@firsthand/adapters/client";
 import type { Bytes32, LineageManifest } from "@firsthand/core";
 
 /**
@@ -35,26 +35,35 @@ export interface LensReport {
 export async function askLens(
   lens: OnchainLensReader,
   manifest: LineageManifest,
+  pacer: Pacer,
 ): Promise<LensReport> {
-  const rows: LensRow[] = [];
+  // One `eth_call` per asset that carries a receipt, and irreducibly so: the Lens verifies *this*
+  // passport's inclusion under that grant, so two assets sharing a grant still need two calls.
+  // A pasted manifest sets the length, so the reads are paced rather than fired all at once —
+  // this runs on the public Verify tab, where the input is a stranger's file.
   let unasked = 0;
-  for (const asset of manifest.assets) {
-    const grantId = asset.receipt?.grantId;
-    if (grantId === undefined) {
-      unasked += 1;
-      continue;
-    }
-    // A read that fails is reported as a read that failed, never as a refusal by the chain.
-    const verdict = await lens
-      .verify(asset, grantId)
-      .catch((e: unknown) => ({ ok: false, reason: `unreadable: ${(e as Error).message}` }));
-    rows.push({
-      passportId: asset.signed.passport.h,
-      grantId,
-      ok: verdict.ok,
-      reason: verdict.reason,
-    });
-  }
+  const asked = manifest.assets.filter((asset) => {
+    if (asset.receipt?.grantId !== undefined) return true;
+    unasked += 1;
+    return false;
+  });
+  const rows: LensRow[] = await pacedMap(
+    asked,
+    async (asset) => {
+      const grantId = asset.receipt?.grantId as Bytes32;
+      // A read that fails is reported as a read that failed, never as a refusal by the chain.
+      const verdict = await lens
+        .verify(asset, grantId)
+        .catch((e: unknown) => ({ ok: false, reason: `unreadable: ${(e as Error).message}` }));
+      return {
+        passportId: asset.signed.passport.h,
+        grantId,
+        ok: verdict.ok,
+        reason: verdict.reason,
+      };
+    },
+    pacer,
+  );
   return {
     rows,
     unasked,

@@ -2,6 +2,9 @@ import type { ConsentEvent } from "@firsthand/adapters/client";
 import { type Bytes32, GrantStatus } from "@firsthand/core";
 import type { GrantEntry } from "./journal.js";
 
+/** A grant whose outcome is already settled cannot change, so it is never worth a chain read. */
+export const isTerminal = (g: GrantEntry): boolean => g.rescindTx !== undefined;
+
 /** A grant's state in the words the Locker uses; "withdrawn" is the one the browser tier reads. */
 export type GrantChainStatus = "live" | "withdrawn" | "expired" | "frozen" | "unknown";
 
@@ -53,19 +56,43 @@ export function grantView(
  */
 export async function fetchGrantStatuses(
   statusOf: (grantId: Bytes32) => Promise<GrantStatus>,
-  ids: readonly Bytes32[],
-): Promise<Map<Bytes32, GrantChainStatus>> {
-  const out = new Map<Bytes32, GrantChainStatus>();
+  grants: readonly GrantEntry[],
+): Promise<{ statuses: Map<Bytes32, GrantChainStatus>; rateLimited: boolean }> {
+  const statuses = new Map<Bytes32, GrantChainStatus>();
+  // A grant this browser withdrew is settled; the chain cannot contradict it, so do not ask.
+  const ask = grants.filter((g) => !isTerminal(g));
+  for (const g of grants) if (isTerminal(g)) statuses.set(g.grantId, "withdrawn");
+  let rateLimited = false;
+  // Fanned out freely: the reader underneath paces the wire, so this queues rather than bursts.
   await Promise.all(
-    ids.map(async (id) => {
+    ask.map(async (g) => {
       try {
-        out.set(id, grantStatusLabel(await statusOf(id)));
-      } catch {
-        out.set(id, "unknown");
+        statuses.set(g.grantId, grantStatusLabel(await statusOf(g.grantId)));
+      } catch (error) {
+        // A refused read is not a state. Reporting it as "unknown" rendered a rate limit as if the
+        // chain had answered, which is the one thing a consent ledger must never do.
+        if (isRateLimited(error)) rateLimited = true;
+        else statuses.set(g.grantId, "unknown");
       }
     }),
   );
-  return out;
+  return { statuses, rateLimited };
+}
+
+/**
+ * Monad answers over its per-second window with a JSON-RPC error inside a 200, so this is message
+ * shape, not status code. `-32007` is its code; the words are matched too because the code is not
+ * always carried up through viem's error wrapping.
+ */
+export function isRateLimited(error: unknown): boolean {
+  const text = [
+    (error as { message?: unknown })?.message,
+    (error as { details?: unknown })?.details,
+    (error as { shortMessage?: unknown })?.shortMessage,
+  ]
+    .filter((m): m is string => typeof m === "string")
+    .join(" | ");
+  return /rate limit|too many requests|requests limited|request limit|\b429\b|-32007/i.test(text);
 }
 
 /**
@@ -76,13 +103,23 @@ export async function fetchGrantStatuses(
  */
 export async function fetchGrantExpiries(
   stateOf: (grantId: Bytes32) => Promise<{ epochStart: bigint; term: bigint } | null>,
-  ids: readonly Bytes32[],
+  grants: readonly GrantEntry[],
 ): Promise<Map<Bytes32, bigint>> {
   const out = new Map<Bytes32, bigint>();
+  // This browser chose the window when it granted, so for its own grants the answer is already
+  // written down — four `eth_call`s each, saved. The chain is only asked about the rest.
+  const ask: GrantEntry[] = [];
+  for (const g of grants) {
+    if (g.epochStart !== undefined && g.term !== undefined) {
+      out.set(g.grantId, BigInt(g.epochStart) + BigInt(g.term));
+    } else if (!isTerminal(g)) {
+      ask.push(g);
+    }
+  }
   await Promise.all(
-    ids.map(async (id) => {
-      const g = await stateOf(id).catch(() => null);
-      if (g) out.set(id, g.epochStart + g.term);
+    ask.map(async (g) => {
+      const state = await stateOf(g.grantId).catch(() => null);
+      if (state) out.set(g.grantId, state.epochStart + state.term);
     }),
   );
   return out;

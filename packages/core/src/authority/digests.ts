@@ -24,6 +24,10 @@ export const ACCEPT_TERMS_TYPE =
   "AcceptTerms(bytes32 granteeCard,bytes32 principalId,uint32 ns,bytes32 termsHash,bytes32 nonce)";
 export const RESCIND_TYPE = "Rescind(bytes32 grantId,uint64 epoch,bytes32 nonce)";
 export const RESCIND_COMMIT_TYPE = "RescindCommit(bytes32 commitment,bytes32 nonce)";
+export const REGISTER_DEVICE_TYPE =
+  "RegisterDevice(bytes32 principalId,bytes32 keyCommitment,bytes32 nonce)";
+export const REVOKE_DEVICE_TYPE =
+  "RevokeDevice(bytes32 principalId,bytes32 keyCommitment,bytes32 nonce)";
 export const ANCHOR_TYPE =
   "Anchor(bytes32 principalId,uint32 ns,uint64 epoch,bytes32 batchRoot,bytes32 termsHash,bytes32 nonce)";
 
@@ -33,6 +37,8 @@ export const GRANT_TYPEHASH = keccak256Utf8(GRANT_TYPE);
 export const ACCEPT_TERMS_TYPEHASH = keccak256Utf8(ACCEPT_TERMS_TYPE);
 export const RESCIND_TYPEHASH = keccak256Utf8(RESCIND_TYPE);
 export const RESCIND_COMMIT_TYPEHASH = keccak256Utf8(RESCIND_COMMIT_TYPE);
+export const REGISTER_DEVICE_TYPEHASH = keccak256Utf8(REGISTER_DEVICE_TYPE);
+export const REVOKE_DEVICE_TYPEHASH = keccak256Utf8(REVOKE_DEVICE_TYPE);
 export const ANCHOR_TYPEHASH = keccak256Utf8(ANCHOR_TYPE);
 
 function w(hex: Bytes32): Uint8Array {
@@ -104,6 +110,34 @@ export function rescindStructHash(grantId: Bytes32, epoch: bigint, nonce: Bytes3
 
 export function rescindCommitStructHash(commitment: Bytes32, nonce: Bytes32): Bytes32 {
   return keccak256Hex(concat(w(RESCIND_COMMIT_TYPEHASH), w(commitment), w(nonce)));
+}
+
+/**
+ * Binds one secure element to one principal (ADR-0015) — twin of `AuthorityDigests.registerDevice`.
+ *
+ * `keyCommitment` is derived by the contract from `chain[0]`, never taken from the caller, so what
+ * the human signs here is the device the certificate named rather than one a relayer asserted
+ * alongside somebody else's chain.
+ */
+export function registerDeviceStructHash(
+  principalId: Bytes32,
+  keyCommitment: Bytes32,
+  nonce: Bytes32,
+): Bytes32 {
+  return keccak256Hex(
+    concat(w(REGISTER_DEVICE_TYPEHASH), w(principalId), w(keyCommitment), w(nonce)),
+  );
+}
+
+/** Ends a device's ability to witness captures — what a stolen phone needs. */
+export function revokeDeviceStructHash(
+  principalId: Bytes32,
+  keyCommitment: Bytes32,
+  nonce: Bytes32,
+): Bytes32 {
+  return keccak256Hex(
+    concat(w(REVOKE_DEVICE_TYPEHASH), w(principalId), w(keyCommitment), w(nonce)),
+  );
 }
 
 export interface AnchorFields {

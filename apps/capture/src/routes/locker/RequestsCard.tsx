@@ -73,6 +73,8 @@ export function RequestsCard({
           termsHash,
           txHash: sent.txHash,
           at: Date.now(),
+          epochStart: plan.epochStart.toString(),
+          term: plan.term.toString(),
           ...(known?.verified && r.agentId
             ? { agentId: r.agentId, ...(known.info?.name ? { agentName: known.info.name } : {}) }
             : {}),

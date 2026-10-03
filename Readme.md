@@ -8,6 +8,11 @@
 *Monad Metropolis 2026 · Track 04: Trust, Identity & AI Infrastructure · Build window Sep 1 – Oct 13, judging Oct 14–27, winners Nov 3 · Solo: Kaushtubh (Cipher)*
 
 > **Status (Sep 2026).** This document is the frozen spec; the build is live. **Try it:** <https://firsthand-capture.vercel.app> (passkey → capture → paid query → withdraw consent, on Monad testnet) · gateway <https://firsthand-gateway.vercel.app> · the measured evidence is the app's *Evidence* tab and [`experiments/README.md`](experiments/README.md) · judges start at [`docs/JUDGES.md`](docs/JUDGES.md), developers at [`QUICKSTART.md`](QUICKSTART.md), progress and honest gaps in [`docs/PROGRESS.md`](docs/PROGRESS.md). Two track integrations are live and measured, not declared: paid queries are verified by **Monad's native x402 facilitator** (x402 v2 — ADR-0014; settlement stays in `RoyaltyRouter.settle`, the facilitator never settles), and every settled query files **ERC-8004** `firsthand/paid-query` feedback for the buyer agent.
+> Two things this document specifies are **not built**, and are named here so the spec is not read
+> as a claim: the **BTX rescission path** (Monad's encrypted mempool is not deployed — the transport
+> ships probe-gated and refuses rather than downgrading, and commit-reveal is the fallback that does
+> ship) and the **Silver tier** of §7.2/§13/§20 (Cleanverse CVI on the grantee — read those as
+> "would offer", not "offers"). [`docs/PROGRESS.md`](docs/PROGRESS.md) carries the full list.
 
 ---
 
@@ -197,7 +202,7 @@ firsthand/                      # pnpm workspaces + Turborepo
 │   ├── mcp/                    # firsthand-mcp: the verbs as agent tools
 │   ├── capture/                # PWA: phone capture → passport, relayed on chain
 │   └── demo/                   # `pnpm demo` — the first recall, end to end
-├── experiments/                # S1–S4: race window, gas, refusal (§15) + raw results
+├── experiments/                # S1–S5: race window, gas, refusal, transplantation (§15) + raw results
 ├── docs/                       # ADRs, SECURITY.md, spec appendix, diagrams, PROGRESS.md
 ├── deployments/                # addresses + NOTES.md (judge credentials, testnet notes)
 ├── integrations/ demo/         # partner templates; demo assets
@@ -251,7 +256,7 @@ Regimes: `ACTIVE / FROZEN` per principal; grant states per §7.5. All gating (`v
 
 1. Rescission governs **future** access and timestamps the end of consent; it **cannot un-read delivered plaintext or un-train a model.**
 2. A buyer can cache and re-use delivered data; FIRSTHAND provides **accountability (provable license breach via receipts), not prevention.** The per-query market prices *continuing access to an evolving stream*, and we say exactly that.
-3. A passport proves **origin key, attestation class, consent, and integrity — not truth, quality, or strict one-human-one-passkey.** Commodity-phone capture attestation is heuristic; hardware attestation is roadmap.
+3. A passport proves **origin key, attestation class, consent, and integrity — not truth, quality, or strict one-human-one-passkey.** Commodity-phone capture attestation (class 2) is heuristic — nothing checks it. Hardware attestation (class 3, ADR-0015) *is* checked on chain, but it proves the **key** was born in a certified secure element, not that a sensor saw anything: a camera pointed at a screen still produces a class-3 capture.
 4. No injection/poisoning screening ships in core; provenance tags are the shipped defense layer (screening literature cited in SECURITY.md, not denied).
 5. BTX advantage holds only where BTX is live; fallback narrows but does not eliminate the race — measured, not asserted.
 
@@ -259,9 +264,9 @@ Regimes: `ACTIVE / FROZEN` per principal; grant states per §7.5. All gating (`v
 
 **Baselines:** (B1) naive ACL locker (no passports) on Monad; (B2) FIRSTHAND with rescission over the public mempool.
 
-**Scenarios:** S1 deposit-at-scale (10k passports, batch=256); S2 buyer loop (grant→100 paid queries→manifest export); S3 adversarial rescission: an observer bot with mempool visibility attempts maximum-speed extraction on rescind broadcast, 50 trials per arm; S4 refusal: 1k unprovable deposits injected.
+**Scenarios:** S1 deposit-at-scale (10k passports, batch=256); S2 buyer loop (grant→100 paid queries→manifest export); S3 adversarial rescission: an observer bot with mempool visibility attempts maximum-speed extraction on rescind broadcast, 50 trials per arm; S4 refusal: 1k unprovable deposits injected; S5 transplantation resistance: a genuine secure-element witness replayed onto a second locker's deposit of the same bytes (ADR-0015).
 
-**Metrics:** verify() gas; anchor cost /1k passports (MIP-8 vs naive SSTORE baseline); manifest proof size + off-chain verification time; `Δ_race` distribution and extraction success rate per arm; refusal precision (target 100% on S4); royalty-split invariant over 1e6 fuzz runs.
+**Metrics:** verify() gas; anchor cost /1k passports (MIP-8 vs naive SSTORE baseline); manifest proof size + off-chain verification time; `Δ_race` distribution and extraction success rate per arm; refusal precision (target 100% on S4 and S5); royalty-split invariant over 1e6 fuzz runs.
 
 **Hypotheses:**
 - **H1:** per-asset anchoring + verification lands under 1¢-equivalent per datum at batch=256 (MIP-8 delta reported vs baseline).
@@ -309,7 +314,7 @@ Default: **solo** (explicitly welcomed by rules; "a team of one is a team"). Own
 ## 20. Likely Judge Questions (with honest answers)
 
 - *"A buyer caches everything after one query — why is query #2 paid?"* → It isn't, for static data; the market sells continuing access to an evolving stream plus provable license accountability via receipts — stated in our docs, priced by freshness.
-- *"Can't AI-generated junk be laundered through a real passkey?"* → Yes, and we never claim otherwise: passports certify origin key + attestation class + consent; buyers filter by attestation class; hardware capture attestation is the roadmap answer, and the limitation is printed in SECURITY.md.
+- *"Can't AI-generated junk be laundered through a real passkey?"* → Yes, and we never claim otherwise: passports certify origin key + attestation class + consent; buyers filter by attestation class. Class 3 (ADR-0015) narrows it — a secure element co-signs, and Monad's RIP-7212 precompile verifies the device's attestation chain on chain — but it buys **transplantation resistance**, not sensor provenance, and the gap is printed in SECURITY.md §6.3 rather than rounded off.
 - *"Rescission can't un-train a model — so what does it buy?"* → A cryptographically timestamped end of consent that no counterparty can pre-empt — exactly the artifact the litigation-and-compliance era prices.
 - *"Why won't Troveo/Human Native crush you?"* → They're customers, not competitors: contract-based clearance can't reach individual scale; a neutral per-asset standard makes their catalogs deeper.
 - *"What if BTX isn't live on testnet?"* → Commit-reveal fallback ships either way; the race-window experiment reports both arms honestly.
@@ -326,9 +331,11 @@ Related work acknowledged in-repo: licensed marketplaces (Troveo, Human Native A
 
 **Must NOT contain (explicit non-goals):** marketplace UI/discovery · quality scoring or autorater · injection screening · ZK selective disclosure · TEE attestation · cross-chain anything · token · admin keys/upgradability · mainnet.
 
+> **One deviation, recorded:** class 3 (ADR-0015) reads a device's key-attestation certificate. *"TEE attestation"* above means **running the protocol inside a trusted enclave** — holding keys or executing the locker there — and nothing here does that. The anchor it pins is a constructor argument with no setter, so the *"no upgradability"* non-goal holds literally too.
+
 ## 23. Post-Hackathon Extensions
 
-- Hardware capture attestation (StrongBox/Secure Enclave co-signing) — closes the laundering gap; medium complexity, device-fragmented.
+- ~~Hardware capture attestation (StrongBox/Secure Enclave co-signing)~~ — **built early, as ADR-0015.** It does *not* close the laundering gap, which is why the line above was wrong: it makes a witness non-transplantable, and that is a different claim. Still roadmap: Secure Enclave (iOS), and verifying the RSA/P-384 root above the pinned certificate on chain.
 - ZK manifest membership ("licensed from *some* verified human corpus ≥ N") — high complexity, clear spec written.
 - Quality/consistency scoring as a separate, opt-in layer (the autorater doctrine: calibrated judge, frozen anchors, canaries) — the ACR lineage, kept out of the trust core.
 - Marketplace partnerships (Troveo-class pilots) + basis-points royalty routing as the business model; DeltaV/residency continuation.

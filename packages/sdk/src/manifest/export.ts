@@ -10,6 +10,7 @@ import {
 } from "@firsthand/core";
 
 import type { AnchoredBatch } from "../batch/Batcher.js";
+import type { AttestationClaim } from "../verbs/deposit.js";
 import { DEFAULT_MANIFEST_FINALITY, honestFinalityDepth } from "./finality.js";
 
 /**
@@ -23,6 +24,16 @@ export interface ExportInput {
   readonly batches: readonly AnchoredBatch[];
   /** Receipts keyed by passport id; assets without a receipt are still listed (unpaid lineage). */
   readonly receipts?: ReadonlyMap<Bytes32, ReceiptView>;
+  /**
+   * Attestation preimages (and hardware witnesses) keyed by passport id.
+   *
+   * `AnchoredBatch` carries only `SignedPassport`, so this path had no way to say *what kind* of
+   * origin an asset has and silently emitted none — leaving every seller-built file class-blind
+   * while `manifestFromSidecars` carried the class all along. A buyer that filtered on class and
+   * then audited the file got two different answers. Optional, so a caller that genuinely has no
+   * preimages still produces a valid, if less informative, manifest.
+   */
+  readonly attestations?: ReadonlyMap<Bytes32, AttestationClaim>;
   /** See `SidecarManifestInput.headBlock`: with the chain's head, the file claims the depth it has. */
   readonly headBlock?: bigint;
   readonly finalityDepth?: number;
@@ -64,6 +75,7 @@ export function exportManifest(input: ExportInput): LineageManifest {
         const proof = batch.proofs.get(id);
         if (!proof) throw new Error(`batch ${batch.root} has no proof for ${id}`);
         const receipt = input.receipts?.get(id);
+        const claim = input.attestations?.get(id);
         return {
           signed: {
             passport: { ...signed.passport, epoch: signed.passport.epoch.toString() },
@@ -72,6 +84,15 @@ export function exportManifest(input: ExportInput): LineageManifest {
           batchRoot: batch.root,
           proof: { index: proof.index, siblings: [...proof.siblings] },
           anchorBlock: batch.anchor.blockNumber.toString(),
+          ...(claim
+            ? {
+                attestation: {
+                  ...claim.attestation,
+                  capturedAt: claim.attestation.capturedAt.toString(),
+                },
+                ...(claim.hardware ? { hardware: claim.hardware } : {}),
+              }
+            : {}),
           ...(receipt
             ? {
                 receipt: {

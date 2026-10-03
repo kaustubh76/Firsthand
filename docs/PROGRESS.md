@@ -109,11 +109,28 @@ forged anchors were refused by the contract itself.
    need the method name and whether the seal step is client-side. Happy to be an early tester.
    Related: with no global mempool on Monad, is the intended threat model for BTX *leader*
    visibility rather than mempool visibility? That changes what H2 should even be claiming.
-2. **MIP-8 storage pages.** My clustered layout measures 4.2 % cheaper than the flat one on testnet,
+2. ~~**MIP-8 storage pages.** My clustered layout measures 4.2 % cheaper than the flat one on testnet,
    which is the right direction but smaller than the ~98 % headline. Is there a spec or pricing note
-   so I can tell whether the layout is actually hitting the page discount, or only partly?
-3. **Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
-   so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?
+   so I can tell whether the layout is actually hitting the page discount, or only partly?~~
+   **Answered 1 Oct from the published spec** — <https://mips.monad.xyz/MIPs/MIP-8>. A page is 128
+   consecutive slots; `LOAD 8 000 + BASE 100` cold, `BASE 100` warm, `WRITE 2 800` first write per
+   page, `STATE_GROWTH 17 000` on new occupancy. The ~98 % is the 8 100 → 100 ratio for the *second*
+   access to a page **within one transaction**, and `anchor()` writes one root per transaction — so
+   there is nothing to amortise and the layout is already capturing all of it (the 8 408-gas saving
+   is one page's I/O; see `experiments/README.md`). No pricing note needed; the question is closed.
+3. ~~**Passkey PRF (Mera or equivalent).** I need a provider that exposes the WebAuthn PRF extension
+   so keys can be derived externally via HKDF. Which providers are known to expose it on mobile?~~
+   **Answered 1 Oct.** Mera (<https://github.com/category-labs/mera>, Category Labs, Apache-2.0/MIT)
+   does exactly PRF → HKDF and is the precedent for this pattern in the ecosystem; FIRSTHAND needs
+   no dependency on it, since `WebAuthnPrfSource` + `KeyTree` already do it. On authenticators:
+   **Android with Google Password Manager** has the broadest support (PRF by default across Chrome,
+   Edge, Samsung Internet); **Apple** supports it with iCloud Keychain on iOS 18.4+/macOS 15+ but
+   passes **no PRF through the cross-device (QR) flow or to roaming authenticators**; **Windows
+   Hello** returns PRF since the Feb 2026 Win 11 24H2/25H2 update, though Chrome/Edge ≤ 146 do not
+   surface it at *creation*. That last point was a live bug here — enrolment gated on the
+   create-time flag — fixed in `ab2c79b`; the gate is now the first real derivation. **Still
+   outstanding: a run against a real authenticator.** Every passkey in this repo's gates is a Chrome
+   DevTools virtual one.
 4. ~~**Native x402 facilitator.** I'd like a testnet facilitator URL to run interop against.~~
    **Answered 23–24 Sep** — `https://x402-facilitator.molandak.org`, x402 v2, no auth. Interop runs
    every `pnpm --filter @firsthand/adapters test:testnet`; findings and the envelope disagreement
@@ -558,7 +575,14 @@ that does not exist separates the two. Live, against the hosted gateway: the pay
 `pnpm --filter @firsthand/adapters test:testnet`.
 
 **Still not built:** Envio handlers, the docs site, BTX (not on testnet), and the Cleanverse/CVI
-"Silver" tier, which the spec mentions (§7.2, §13) and nothing implements.
+"Silver" tier, which the spec mentions (§7.2, §13) and nothing implements. The Readme's status block
+and `docs/JUDGES.md` now name both BTX and Silver as specified-but-unbuilt, so §13's and §20's
+present tense ("the CVI tier offers verified-human namespaces") is not read as a claim. CVI itself
+is available — sandbox, API keys, and working integrations on this very chain — and the shape is an
+off-chain EIP-712 attestation read through an oracle; the reason it is not built is that the check
+belongs in `GrantManager.acceptTerms`, which is immutable by design, so it costs a constructor
+argument and a redeploy of a contract set whose anchors address is the EIP-712 `verifyingContract`
+for every passport already minted.
 
 ---
 
@@ -875,3 +899,55 @@ timing verification should not wait for blocks it is not measuring.
 (visible now, not silent). Envio's handlers remain the one genuine shell, deferred by ADR-0013 in
 favour of `LogsConsentLedger`. The Phase 5 quickstart gate — under ten minutes to a first recall, by a
 non-author — is unmeasured, and both submission videos are unrecorded.
+
+## The hardware tier, built against a phone that was never plugged in (3 Oct)
+
+§20 predicts the question — *"can't AI-generated junk be laundered through a real passkey?"* — and
+the README answered it in four places with *"hardware capture attestation is the roadmap"*. It is
+not the roadmap any more, except for the one part that matters most.
+
+What exists now: `AttestationClass.HARDWARE = 3` through every layer; `Der.sol`,
+`AndroidKeyAttestation.sol` and `HardwareDeviceRegistry.sol` at 100% line and branch coverage,
+verifying an Android key-attestation chain **on chain** through RIP-7212; a TypeScript reader
+cross-checked against the same sixteen golden certificates, so a shared misreading of DER would
+have to happen twice; an on-chain reader, a gateway route, a boot-state policy flag; register and
+revoke as authority verbs; a Locker card that pastes a chain and a Verify tab that checks a
+witness; and an Android companion app that compiles, with an instrumented test that asserts the
+round trip on real hardware.
+
+What does not exist: **the output of that test.** The handset enumerated as an MTP-only composite
+the whole time — `ioreg` saw `SAMSUNG_Android`, adb saw nothing, which is the signature of USB
+debugging being off rather than of a cable or a driver. So everything here was written, compiled
+and tested without the device it is for, and the registry stays undeployed, because its trust
+anchors are constructor arguments with no setter and nothing can say which certificate to pin until
+a real chain arrives. `deployments/10143.json` names no registry; the gateway refuses every class-3
+deposit; `docs/JUDGES.md` says so under *what cannot be shown*. That is the honest state and it is
+printed rather than implied.
+
+Three things the contract taught the spec, all found by reading rather than running:
+
+**`sign(digest32)` could never have worked.** The plan had the bridge hand the phone a 32-byte
+digest. A Keystore key built with `DIGEST_SHA256` refuses a pre-hashed input, and `NONEwithECDSA`
+needs `DIGEST_NONE`, which StrongBox commonly will not grant. The element is handed the 179-byte
+**preimage** instead and runs `SHA256withECDSA` over it. `hardwareCaptureDigest` is now defined as
+`sha256` of `hardwareCapturePreimage`, with a test pinning the equality — if those two ever drifted
+it would look like a broken curve rather than a broken payload, which is the kind of bug that eats
+a day.
+
+**The phone cannot choose its own nonce.** `_requireAttested` checks
+`keccak256(challenge) == keccak256(abi.encodePacked(principalId, nonce))`, so the challenge is
+exactly 64 raw bytes fixed at key-generation time inside a certificate that cannot be re-issued.
+`planRegisterDevice` therefore *accepts* a nonce rather than generating one — and the Locker card
+reads it back out of the leaf, so the paste needs one field instead of two.
+
+**The TypeScript digest twins were missing.** `AuthorityDigests.sol` has had `registerDevice` and
+`revokeDevice` since Phase 2; `packages/core/src/authority/digests.ts` had neither, which meant the
+browser could not have signed either verb at all. Phase 2 had been green the whole time, because
+nothing on the TypeScript side had yet tried.
+
+Two smaller things fell out. `biome ci` had been red on this branch since the verifier's
+round-trip work — a `forEach` callback returning the Map it had just written to — and nothing had
+run the gate since. And `README.md` §23 claimed hardware attestation *"closes the laundering
+gap"*. It does not: it makes a witness non-transplantable, which is a different and smaller claim.
+That line is struck rather than quietly reworded, because the whole argument here is that the
+project says what it measured.

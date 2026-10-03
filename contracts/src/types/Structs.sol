@@ -9,7 +9,8 @@ pragma solidity 0.8.30;
 enum AttestationClass {
     UNATTESTED,
     IMPORT,
-    DEVICE_CAPTURE
+    DEVICE_CAPTURE,
+    HARDWARE
 }
 
 /// @dev README §11.
@@ -109,6 +110,22 @@ struct AnchorRecord {
     uint64 blockNumber;
     uint32 ns;
     uint32 batchIndex;
+}
+
+/// @dev One attested secure element, as `HardwareDeviceRegistry` records it (ADR-0015).
+///      `securityLevel` and `verifiedBootState` are *measurements* read out of a signed
+///      certificate, never values a depositor asserted — and the boot state is recorded rather
+///      than enforced, because a developer handset with an unlocked bootloader reports UNVERIFIED
+///      and refusing it on chain would make the device unusable rather than make it honest.
+struct DeviceRecord {
+    uint256 x;
+    uint256 y;
+    bytes32 principalId;
+    uint64 registeredAt; // 0 when this commitment was never registered
+    uint64 revokedAt; // 0 while live
+    uint8 securityLevel; // 1 TrustedEnvironment, 2 StrongBox
+    uint8 verifiedBootState; // 0 Verified, 1 SelfSigned, 2 Unverified, 3 Failed
+    bool hasRootOfTrust;
 }
 
 /// @dev Grantee card commitment: `cardId = keccak256(abi.encode(owner, encryptionPubKey))` (ADR-0011).

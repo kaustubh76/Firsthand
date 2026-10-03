@@ -10,7 +10,7 @@ export function renderReport(runner: Runner): string {
     "Generated from `experiments/results/*.json`. Memory-arm runs are marked *sim*.",
     "",
   ];
-  for (const scenario of ["s1", "s2", "s3", "s4"] as const) {
+  for (const scenario of ["s1", "s2", "s3", "s4", "s5"] as const) {
     const file = runner.load(scenario);
     lines.push(`## ${scenario.toUpperCase()}`, "");
     if (file.trials.length === 0) {

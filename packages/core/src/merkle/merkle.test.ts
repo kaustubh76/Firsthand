@@ -91,7 +91,11 @@ describe("merkle properties", () => {
       ),
       { numRuns: 60 },
     );
-  }, 30_000);
+    // The budget is for a loaded machine, not for the algorithm: `pnpm coverage` runs every
+    // package's instrumented suite at once, and sixty Merkle properties are the slowest thing
+    // in the repo when they lose the CPU race. The run count is what the test claims; the
+    // timeout is only how long it may wait to be scheduled.
+  }, 60_000);
 
   it("padding slots can never be proved as passports", () => {
     const tree = buildTree([hashLeaf(`0x${"aa".repeat(32)}`)]);

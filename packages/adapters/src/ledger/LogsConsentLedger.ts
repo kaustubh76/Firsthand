@@ -1,4 +1,5 @@
 import type { Address, Bytes32 } from "@firsthand/core";
+import { createPacer, type Pacer } from "@firsthand/runtime";
 import { type Chain, type PublicClient, parseAbiItem, type Transport } from "viem";
 import type {
   AnchorView,
@@ -79,12 +80,17 @@ interface Scanned<T> {
 
 export class LogsConsentLedger implements ConsentLedger {
   readonly #o: LogsConsentLedgerOptions;
-  #inFlight = 0;
-  #nextStart = 0;
-  readonly #waiters: (() => void)[] = [];
+  /** One scheduler for the whole instance: pacing each scan separately still blows a global cap. */
+  readonly #pacer: Pacer;
 
   constructor(options: LogsConsentLedgerOptions) {
     this.#o = options;
+    this.#pacer = createPacer({
+      // Kept at the ledger's historical defaults so a scan's shape does not change here; the
+      // hosted gateway sets both explicitly (LEDGER_MIN_REQUEST_INTERVAL_MS / LEDGER_MAX_IN_FLIGHT).
+      minRequestIntervalMs: options.minRequestIntervalMs ?? 50,
+      maxInFlight: options.maxInFlight ?? 4,
+    });
   }
 
   /**
@@ -102,7 +108,7 @@ export class LogsConsentLedger implements ConsentLedger {
     const deadline =
       scan?.budgetMs === undefined ? Number.POSITIVE_INFINITY : started + scan.budgetMs;
     // cacheTime 0: viem caches block numbers for ~4 s, which would hide a rescission that just landed.
-    const head = await this.#paced(() => this.#o.publicClient.getBlockNumber({ cacheTime: 0 }));
+    const head = await this.#pacer.run(() => this.#o.publicClient.getBlockNumber({ cacheTime: 0 }));
     const lookback = this.#o.lookbackBlocks ?? 500n;
     const from = scan?.fromBlock ?? this.#o.fromBlock ?? (head > lookback ? head - lookback : 0n);
     const max = this.#o.maxRange ?? 100n;
@@ -122,9 +128,11 @@ export class LogsConsentLedger implements ConsentLedger {
         break;
       }
       pending.push(
-        this.#paced(() => this.#withRetry(() => query(a, b))).then((rows) => {
-          chunks.push(rows);
-        }),
+        this.#pacer
+          .run(() => this.#withRetry(() => query(a, b)))
+          .then((rows) => {
+            chunks.push(rows);
+          }),
       );
       coveredFrom = a;
     }
@@ -143,34 +151,11 @@ export class LogsConsentLedger implements ConsentLedger {
         return await fn();
       } catch (error) {
         lastError = error;
-        if (!/limited|rate|429|timeout/i.test((error as Error).message ?? "")) throw error;
+        if (!/limited|rate|429|timeout|-32007/i.test((error as Error).message ?? "")) throw error;
         await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));
       }
     }
     throw lastError;
-  }
-
-  /**
-   * One scheduler for the whole instance: pacing each scan separately still blows a global cap.
-   * Starts are spaced `minRequestIntervalMs` apart and at most `maxInFlight` calls run at once.
-   */
-  async #paced<T>(fn: () => Promise<T>): Promise<T> {
-    const gap = this.#o.minRequestIntervalMs ?? 50;
-    const maxInFlight = Math.max(1, this.#o.maxInFlight ?? 4);
-    while (this.#inFlight >= maxInFlight) {
-      await new Promise<void>((resolve) => this.#waiters.push(resolve));
-    }
-    this.#inFlight++;
-    try {
-      const now = Date.now();
-      const start = Math.max(now, this.#nextStart);
-      this.#nextStart = start + gap;
-      if (start > now) await new Promise((r) => setTimeout(r, start - now));
-      return await fn();
-    } finally {
-      this.#inFlight--;
-      this.#waiters.shift()?.();
-    }
   }
 
   async receiptsForGrant(grantId: Bytes32, scan?: LedgerScan): Promise<readonly ReceiptView[]> {
@@ -356,7 +341,7 @@ export class LogsConsentLedger implements ConsentLedger {
     const unique = [...new Set(blockNumbers)];
     const blocks = await Promise.all(
       unique.map((blockNumber) =>
-        this.#paced(() =>
+        this.#pacer.run(() =>
           this.#o.publicClient
             .getBlock({ blockNumber })
             .then((b) => [blockNumber, b.timestamp] as const)

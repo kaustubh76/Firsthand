@@ -1,4 +1,4 @@
-import { h1, h2, h3, s2Cards, s4Card } from "../lib/evidence.js";
+import { h1, h2, h3, s2Cards, s4Card, s5Card } from "../lib/evidence.js";
 import { JUDGES_URL, METHOD_URL, RESULTS_URL } from "../lib/links.js";
 import { Card, Icon, Pill, StatTile } from "../ui/index.js";
 
@@ -15,6 +15,7 @@ export function Evidence() {
   const H3 = h3();
   const S2 = s2Cards();
   const S4 = s4Card();
+  const S5 = s5Card();
   return (
     <section data-testid="evidence" id="evidence">
       <div className="screen-head">
@@ -192,6 +193,24 @@ export function Evidence() {
         <p className="hint">
           The refusal is also one button on the Capture tab, and the whole loop — deposit, paid
           query, withdrawal, refusal — runs against the same contracts from this app.
+        </p>
+      </Card>
+
+      <Card icon="lock" title="S5 — a witness cannot be moved to another locker" className="claim">
+        {S5 && (
+          <p data-testid="s5">
+            {S5.chain}: {n(S5.admitted)} of {n(S5.deposits)} genuine class-3 deposits admitted ·{" "}
+            {n(S5.injected)} witnesses injected where they did not belong, {n(S5.refused)} refused ·
+            refusal rate {S5.refusalRate} · gate {S5.gateP50Ms?.toFixed(1)} ms p50
+          </p>
+        )}
+        <p className="hint">
+          The hard case is a <em>genuine</em> secure-element signature replayed onto a second
+          locker&rsquo;s deposit of the same bytes: a different origin and nonce give a different
+          digest, so the signature stops covering it. That is all class 3 claims — it is not
+          evidence a camera saw anything (README §14). Whether the key ever lived in certified
+          hardware is a different question, answered on chain by <code>HardwareDeviceRegistry</code>{" "}
+          verifying the device&rsquo;s attestation chain.
         </p>
       </Card>
     </section>

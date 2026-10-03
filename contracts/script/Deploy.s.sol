@@ -10,6 +10,7 @@ import {GrantManager} from "../src/GrantManager.sol";
 import {ReceiptLedger} from "../src/ReceiptLedger.sol";
 import {RoyaltyRouter} from "../src/RoyaltyRouter.sol";
 import {FirsthandLens} from "../src/FirsthandLens.sol";
+import {HardwareDeviceRegistry} from "../src/HardwareDeviceRegistry.sol";
 import {IERC3009} from "../src/interfaces/IERC3009.sol";
 import {IPassportAnchors} from "../src/interfaces/IPassportAnchors.sol";
 import {EpochLib} from "../src/libraries/EpochLib.sol";
@@ -31,6 +32,7 @@ contract Deploy is Script {
         address receiptLedger;
         address royaltyRouter;
         address firsthandLens;
+        address hardwareDeviceRegistry;
         address usdc;
         uint64 revealWindowBlocks;
         uint64 genesis;
@@ -90,6 +92,34 @@ contract Deploy is Script {
                 GrantManager(d.grantManager)
             )
         );
+        // Last, deliberately: `deploySettlement` predicts the router's CREATE address from the
+        // deployer's nonce, so anything inserted earlier shifts it and the require above fails.
+        d.hardwareDeviceRegistry = address(
+            new HardwareDeviceRegistry(
+                PrincipalRegistry(d.principalRegistry), hardwareMinimumLevel(), hardwareAnchors()
+            )
+        );
+    }
+
+    /// @dev The P-256 certificate the device chain must reach (ADR-0015). Pinned at deploy time
+    ///      and never writable afterwards, which is what §22's ban on admin keys requires; a
+    ///      rotation is a redeployment. On a local chain it defaults to the golden suite's anchor
+    ///      so anvil and the browser tier can exercise a real registration.
+    function hardwareAnchors() internal view returns (bytes32[] memory anchors) {
+        anchors = new bytes32[](1);
+        if (block.chainid == 31_337) {
+            string memory suite = vm.readFile("../packages/test-vectors/vectors/android-attestation.v1.json");
+            anchors[0] = vm.parseJsonBytes32(suite, ".extra.anchorCommitment");
+        } else {
+            anchors[0] = vm.envBytes32("HARDWARE_TRUST_ANCHOR");
+        }
+    }
+
+    /// @dev 1 TrustedEnvironment, 2 StrongBox. Defaults to TEE because most handsets have no
+    ///      StrongBox, and a registry nobody's phone can satisfy protects nothing — the measured
+    ///      level is stored per device either way, and the app renders what the certificate said.
+    function hardwareMinimumLevel() internal view returns (uint8) {
+        return uint8(vm.envOr("HARDWARE_MIN_SECURITY_LEVEL", uint256(1)));
     }
 
     /// @dev Most recent Monday 00:00 UTC before now — aligns epochs with the weekly attestation ritual.
@@ -113,6 +143,7 @@ contract Deploy is Script {
         vm.serializeAddress(root, "ReceiptLedger", d.receiptLedger);
         vm.serializeAddress(root, "RoyaltyRouter", d.royaltyRouter);
         vm.serializeAddress(root, "FirsthandLens", d.firsthandLens);
+        vm.serializeAddress(root, "HardwareDeviceRegistry", d.hardwareDeviceRegistry);
         vm.serializeUint(root, "genesis", d.genesis);
         vm.serializeUint(root, "epochLength", d.epochLength);
         vm.serializeUint(root, "chainId", block.chainid);

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JUDGES_URL } from "../lib/links.js";
-import { enrol, prfSupported } from "../lib/prf.js";
+import { enrol, type PrfCapability, prfCapability, prfSupported } from "../lib/prf.js";
 import { Button, Icon, Notice } from "../ui/index.js";
 
 /**
@@ -27,22 +27,38 @@ const VERBS: readonly { verb: string; where: string; what: string }[] = [
   },
 ];
 
-export function Enroll({ onEnrolled }: { onEnrolled: (credentialId: Uint8Array) => void }) {
+export function Enroll({
+  onEnrolled,
+  problem: reported = null,
+}: {
+  onEnrolled: (credentialId: Uint8Array) => void;
+  /** A failure from the derivation that follows enrolment — the real PRF gate lives there. */
+  problem?: string | null;
+}) {
   const supported = prfSupported();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Asked before the tap, so a browser that cannot derive keys says so before a passkey exists.
+  const [capability, setCapability] = useState<PrfCapability>("unknown");
+  useEffect(() => {
+    let live = true;
+    void prfCapability().then((c) => {
+      if (live) setCapability(c);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const shown = problem ?? reported;
 
   async function handleEnrol() {
     setBusy(true);
     setProblem(null);
     try {
-      const { credentialId, prfEnabled } = await enrol("firsthand-user");
-      if (!prfEnabled) {
-        setProblem(
-          "Passkey created, but this authenticator does not expose the PRF extension, so no locker key can be derived from it. Try a platform passkey (Touch ID, Windows Hello, Android) or a recent security key.",
-        );
-        return;
-      }
+      // `prfEnabled` is only the authenticator's advertisement, and several platforms that do
+      // support PRF never set it on create. The gate is the first real derivation, one tap later
+      // in `unlock()` — this screen no longer refuses a working authenticator on a missing flag.
+      const { credentialId } = await enrol("firsthand-user");
       onEnrolled(credentialId);
     } catch (error) {
       setProblem(`Enrolment failed: ${(error as Error).message}`);
@@ -77,7 +93,14 @@ export function Enroll({ onEnrolled }: { onEnrolled: (credentialId: Uint8Array) 
               : "WebAuthn is not available in this browser."}
           </span>
         </div>
-        {problem && <Notice tone="bad">{problem}</Notice>}
+        {capability === "no" && !shown && (
+          <Notice tone="warn">
+            This browser reports no support for the WebAuthn PRF extension, which is what a locker's
+            keys derive from. Enrolling here will not produce a locker you can open — try a current
+            Chrome, Edge, Safari or Firefox on this device.
+          </Notice>
+        )}
+        {shown && <Notice tone="bad">{shown}</Notice>}
       </div>
       <ol className="hero-verbs" data-testid="verbs">
         {VERBS.map((v, i) => (

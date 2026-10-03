@@ -48,6 +48,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@firsthand/test-vectors": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "tsup": "catalog:",

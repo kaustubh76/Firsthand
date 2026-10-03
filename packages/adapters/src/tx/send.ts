@@ -31,7 +31,7 @@ const FUNDS =
   /insufficient funds|insufficient balance|exceeds transaction sender account balance|signer had insufficient|gas required exceeds allowance/i;
 const REVERT = /execution reverted|revert/i;
 const RPC =
-  /timeout|timed out|rate limit|too many requests|429|502|503|504|fetch failed|econnreset|econnrefused|socket hang up|request limit|limited|network error|http request failed/i;
+  /timeout|timed out|rate limit|too many requests|429|502|503|504|fetch failed|econnreset|econnrefused|socket hang up|request limit|limited|network error|http request failed|-32007/i;
 
 /** Every message on the cause chain, most specific first. */
 export function messagesOf(cause: unknown): string[] {

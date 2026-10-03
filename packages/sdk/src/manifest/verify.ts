@@ -1,11 +1,21 @@
 import type { AnchorWriter } from "@firsthand/adapters";
+// The browser-safe subpath on purpose: `verify` ships in `@firsthand/sdk/browser`, and the
+// adapters' root entry pulls `fs/promises`, which breaks the capture app's bundle.
+import { type Pacer, pacedMap } from "@firsthand/adapters/client";
 import {
+  type Attestation,
+  AttestationClass,
   type Bytes32,
+  deviceKeyCommitment,
+  type HardwareWitness,
+  hardwareCaptureDigest,
   hashAttestation,
   type LineageManifest,
   LineageManifestSchema,
   MERKLE_DEPTH,
   passportId,
+  type SignedPassport,
+  verifyCaptureWitness,
   verifyPassportInBatch,
   verifyPassportSignature,
 } from "@firsthand/core";
@@ -25,6 +35,8 @@ export type AssetFailure =
   | "ROOT_UNKNOWN"
   | "NOT_FINAL"
   | "ATTESTATION_MISMATCH"
+  /** Class 3 without a witness, or a witness that does not verify over this asset (ADR-0015). */
+  | "HARDWARE_PROOF_INVALID"
   /** The anchored root belongs to a different principal or namespace than this manifest claims. */
   | "SCOPE_MISMATCH"
   /** The file's `anchorBlock` is not the block the chain anchored that root in. */
@@ -119,7 +131,56 @@ export interface ManifestVerifyContext {
   readonly headBlock: bigint;
   /** Supply one and receipts are proved against the chain; omit it and the verdict says so. */
   readonly receipts?: ManifestReceiptReader;
+  /**
+   * Bounds the receipt prefetch. A receipt id is unique per served query, so unlike roots they
+   * cannot be deduplicated — a corpus of N paid assets is N reads however it is sliced, and done
+   * one at a time on a live chain that is latency × N (measured ~285 ms a call against Monad, so
+   * about twelve minutes for 2 560 assets). Omit it and the reads stay sequential, exactly as
+   * before; supply one and they run concurrently inside whatever rate the pacer allows.
+   */
+  readonly pacer?: Pacer;
   readonly now?: () => number;
+}
+
+/**
+ * True when an asset's hardware claim holds up. An asset that is neither class 3 nor carrying a
+ * witness passes trivially — most assets are neither.
+ */
+/**
+ * Is the class-3 claim on this asset cryptographically true?
+ *
+ * Structurally typed rather than taking a `ManifestAsset`, because a `PassportSidecar` carries the
+ * same three pieces and the auditor's view in the PWA must reach the same verdict as the manifest
+ * verifier. Two copies of this predicate would be two chances to disagree about what class 3 means.
+ *
+ * Cryptography only: it says the witness names the device the attestation claims and signed this
+ * passport's digest. Whether that device is *registered* is a separate question with a separate
+ * answer source — the chain — and conflating them would let an unregistered key look admissible.
+ */
+export function hardwareProofOk(
+  asset: {
+    readonly signed: SignedPassport;
+    // `| undefined` as well as optional: `ManifestAsset` declares these as present-but-undefined,
+    // and under `exactOptionalPropertyTypes` a merely-optional parameter will not accept one.
+    readonly attestation?: Attestation | undefined;
+    readonly hardware?: HardwareWitness | undefined;
+  },
+  chainId: bigint,
+): boolean {
+  const isHardware = asset.attestation?.class === AttestationClass.HARDWARE;
+  if (!isHardware && !asset.hardware) return true;
+  // A witness with no preimage cannot be checked, and an unverifiable proof is not a proof.
+  if (!asset.attestation || !asset.hardware) return false;
+  if (deviceKeyCommitment(asset.hardware.publicKey) !== asset.attestation.deviceClass) return false;
+  const digest = hardwareCaptureDigest({
+    chainId,
+    origin: asset.signed.passport.origin,
+    contentHash: asset.signed.passport.h,
+    capturedAt: asset.attestation.capturedAt,
+    nonce: asset.signed.passport.nonce,
+    deviceClass: asset.attestation.deviceClass,
+  });
+  return verifyCaptureWitness(digest, asset.hardware.signature, asset.hardware.publicKey);
 }
 
 export async function verifyManifest(
@@ -161,6 +222,27 @@ export async function verifyManifest(
     signatures === "all" ||
     (typeof signatures === "number" && signatures > 0 && index % stride === 0);
 
+  // Receipts, fetched up front so the loop is not N sequential round trips. Only ids the file
+  // actually carries are read; an asset that fails earlier in the loop may therefore have been
+  // read for nothing, which is a bounded cost paid only by manifests that are already failing.
+  const receiptCache = new Map<Bytes32, ChainReceipt | null>();
+  if (ctx.receipts && ctx.pacer) {
+    const reader = ctx.receipts;
+    const ids = [
+      ...new Set(
+        manifest.assets
+          .map((a) => a.receipt?.receiptId)
+          .filter((id): id is Bytes32 => id !== undefined),
+      ),
+    ];
+    const found = await pacedMap(ids, (id) => reader.receipt(id), ctx.pacer);
+    // A block body, not an expression: Map.set returns the map, and a forEach callback that
+    // returns a value reads as a mapping that forgot to collect its results.
+    ids.forEach((id, i) => {
+      receiptCache.set(id, found[i] ?? null);
+    });
+  }
+
   const assets: AssetVerdict[] = [];
   for (let index = 0; index < total; index++) {
     const asset = manifest.assets[index] as (typeof manifest.assets)[number];
@@ -181,14 +263,28 @@ export async function verifyManifest(
       fail("ATTESTATION_MISMATCH");
       continue;
     }
+    // Cryptographic only, deliberately: whether the device is still registered is a question about
+    // *now*, and a file that was true when it was written must not fail its audit because the
+    // seller later revoked a stolen phone. Registration is reported beside the verdict instead.
+    if (!hardwareProofOk(asset, domain.chainId)) {
+      fail("HARDWARE_PROOF_INVALID");
+      continue;
+    }
     // Same order as core's verifyPredicate: signature → root known → Merkle → liveness/finality.
     let root = rootCache.get(asset.batchRoot);
     if (root === undefined) {
-      root = {
-        anchored: await ctx.anchors.isAnchored(asset.batchRoot),
-        block: await ctx.anchors.anchorBlock(asset.batchRoot),
-        owner: ctx.anchors.anchorOf ? await ctx.anchors.anchorOf(asset.batchRoot) : null,
-      };
+      // One round trip per root instead of three. `anchorOf` already carries the block it was
+      // anchored in, so where a reader offers it the separate `anchorBlock` read is redundant —
+      // which matters on a live chain, where this loop is latency, not computation: the S1 corpus
+      // spent 8.5 s of its 9.0 s here waiting on 30 sequential calls.
+      // Called on the receiver, never hoisted: these readers keep state on `this`.
+      const [anchored, owner] = await Promise.all([
+        ctx.anchors.isAnchored(asset.batchRoot),
+        ctx.anchors.anchorOf?.(asset.batchRoot) ?? Promise.resolve(null),
+      ]);
+      const block =
+        owner !== null ? owner.blockNumber : await ctx.anchors.anchorBlock(asset.batchRoot);
+      root = { anchored, block, owner };
       rootCache.set(asset.batchRoot, root);
     }
     if (!root.anchored || root.block === null) {
@@ -222,7 +318,9 @@ export async function verifyManifest(
     if (asset.receipt) {
       carried++;
       if (ctx.receipts) {
-        const onChain = await ctx.receipts.receipt(asset.receipt.receiptId);
+        const onChain = receiptCache.has(asset.receipt.receiptId)
+          ? (receiptCache.get(asset.receipt.receiptId) ?? null)
+          : await ctx.receipts.receipt(asset.receipt.receiptId);
         if (onChain === null) {
           // No receipt means the read was never paid for — README §7.3 calls that "adverse".
           fail("RECEIPT_UNKNOWN");

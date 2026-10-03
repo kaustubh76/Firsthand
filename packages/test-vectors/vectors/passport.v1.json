@@ -310,10 +310,10 @@
     },
     {
       "expected": {
-        "attest": "0x77c7c48398f05985d290104618a408ca339ba8efb589df09cb067fe9afe19d83",
-        "digest": "0xc3d3f6370fd0bf257218074fdb1fa1e0417baff84b9a2f51647872a0a1d05486",
+        "attest": "0xfa97fcf16cd54808c63c179c3956feea1a1abc5cf4d05a2237fb4facf8f232ff",
+        "digest": "0xcb7e7348ee2a5ea14e852f2a93a0784cedf385d0915a262198ff05b92d05abfe",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x13415e98160a75366e43abc14f0d2a207afc9697e59f5e94d05edbc3d4e6e30b",
+        "passportId": "0x5d3b781d93fece167ea0618350b9182d40588b95a63db5152b6d9a983dfe2e05",
         "recovered": "0xa5a411bb6f28bac23e1e8fc50d17b3a5e5d4034a",
         "termsHash": "0xfd3078aedf83d293e58c946910ec78f7ef469d67506a9d70d7d4e5ffdbdef1e6",
         "valid": true
@@ -321,7 +321,7 @@
       "input": {
         "attestation": {
           "capturedAt": "590672122439",
-          "class": 0,
+          "class": 3,
           "deviceClass": "0x65c11a7b8c65cd1839f20ccadf2b2720a43b92ec3f305f0fdda36d017b17068f",
           "metaHash": "0xc5f63ab9d72c648ba146dd9d93dedee3e6790668a47c04127440e852424880d3",
           "sourceTag": "0xc948cca05db2f876f9be13e1a42ffe8b02c5e28feb07ca018a34e13f28f99265"
@@ -331,14 +331,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x77c7c48398f05985d290104618a408ca339ba8efb589df09cb067fe9afe19d83",
+          "attest": "0xfa97fcf16cd54808c63c179c3956feea1a1abc5cf4d05a2237fb4facf8f232ff",
           "epoch": "11222622189893540410",
           "h": "0x86312cbd0bccc31a17cbd82b4298845bf255c612ba694ab8e44d6f9dba0bdf35",
           "nonce": "0xf5c3d516ba38fcf2823412796a6b21c47684539594ddfbcbda9e1664170b11f8",
           "origin": "0xa5a411bb6f28bac23e1e8fc50d17b3a5e5d4034a",
           "termsHash": "0xfd3078aedf83d293e58c946910ec78f7ef469d67506a9d70d7d4e5ffdbdef1e6"
         },
-        "signature": "0x84365b9c10b1c5567f10863eb20703bae165921fa5f3dad74c30ca26ba7360dc359aabf8acdaec8d2bc37478f98a5ac4e5a86695e6aaf9d5834942a252bbe8171c",
+        "signature": "0x24693f1a1df467901326ad9d63e67b065b44ad996f860da4f9bf1352272e90581ed3d80dfab22ad8d5a951cc1d215280f528381c3c2b4a8ede005b9471d90b211b",
         "terms": {
           "licenseId": "0xfbdc3d47395a4019ad1494619ca31928580e048018597b847f366923c9538431",
           "ns": 12,
@@ -359,10 +359,10 @@
     },
     {
       "expected": {
-        "attest": "0xa27b2c9b715dbb9298ad9e5c473eb404aaf7a4906abc192d2b48ae9041afade6",
-        "digest": "0x497d819fa98af2f03a818fa6a97072cdc53eaf47d6f47fbc1bd7a1a7a18a0a55",
+        "attest": "0x62c81c31ec04bcf16b072b05ba7815bf4d9156e3f01e7b2beee0c05a2b68272f",
+        "digest": "0xe5df2c1a46a9de658a6f29da4770f680cffe5a2e16bf993923bf1d1e1de6d0ab",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x1654f022c0a5a6832f23f491fc95508139d69761b81266190d202716c1d4ea76",
+        "passportId": "0xd1f6ec48a0d0033a71bfbc592d12ba973b847ac31f9e7ff85f269dc88f314312",
         "recovered": "0xd8e9e58f519da027216c8e5aa4c26e1c47762aff",
         "termsHash": "0xd7ee72e23f6817272134a68482b0f94389c1075a20da8056cc70f3b05a89346a",
         "valid": true
@@ -370,7 +370,7 @@
       "input": {
         "attestation": {
           "capturedAt": "161732940883",
-          "class": 1,
+          "class": 0,
           "deviceClass": "0x630532be104e68b3b04dff88708b388e736795675ae4c694d10b43c9f320eff6",
           "metaHash": "0x5d144fcb21ecd11b2d4247c20ff2912fe0b9a1924c99fa56136811924161e400",
           "sourceTag": "0x90324fba7e7947bca3c608b341f50380245a8110638527374b3ee496029d06fc"
@@ -380,14 +380,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xa27b2c9b715dbb9298ad9e5c473eb404aaf7a4906abc192d2b48ae9041afade6",
+          "attest": "0x62c81c31ec04bcf16b072b05ba7815bf4d9156e3f01e7b2beee0c05a2b68272f",
           "epoch": "2952886211412963485",
           "h": "0x8f7740eea3943f30b12760a780ebbe5ddbf910b073786b3f1e53be66783ff85a",
           "nonce": "0xfff1cdeaf339756a70a63693f26d41501e54764bd42e10135d22378f850fbf41",
           "origin": "0xd8e9e58f519da027216c8e5aa4c26e1c47762aff",
           "termsHash": "0xd7ee72e23f6817272134a68482b0f94389c1075a20da8056cc70f3b05a89346a"
         },
-        "signature": "0x485d07b682d5530bc808a446e1adadd6437bb31f7a3b185b41a409e14c08b65f527adbfd9b9d20c317578e97860e94cab6ada2e6a8249d25280d7d613f4a41471c",
+        "signature": "0x0f9bcfff0f31b84856460bbb607ad9bc0b95a3032a9b431bc56edcf3a4f153130f379f51f5ab500d6deb887cdba3e5d5133c99c760bb362c489fc39cc70270c41b",
         "terms": {
           "licenseId": "0x000223c6e18c723b0c46b12d7fe1daa200365f49c8f3bc6fe6de542f27ed1559",
           "ns": 4,
@@ -412,10 +412,10 @@
     },
     {
       "expected": {
-        "attest": "0x0962626f5d7b8b0737a0a8880d05d0d758ca6f4aa9ec79db65efbd94d1367d09",
-        "digest": "0x62f2b42883d884f7f1795a465b30d9796d9264eb2a906762f952b56086e4d442",
+        "attest": "0xfed7d1d0a89308a724b46fcbac546f193b3ea4ef0b9c6b88a4bf7e0d843a421f",
+        "digest": "0xc06c1b6527633437aa3223b5292e06355923469571dcb240178261cb29bda2a7",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0xdfccede677bd2b45c68487c806b20ec7959a11c3ad63c9eb533e6f1cf841800b",
+        "passportId": "0x21ea5df8c35e31c0e265d6060e4d41eca226b78980292b43d2423c57ab03a72b",
         "recovered": "0x5b45248a6281a4b39802f6b42297f4782dfe2ff6",
         "termsHash": "0x6a1bc7c7eed73635c748f74fc3056c5cbf5a04c59a8b1476c4ad149822582ac8",
         "valid": true
@@ -423,7 +423,7 @@
       "input": {
         "attestation": {
           "capturedAt": "893828917972",
-          "class": 2,
+          "class": 1,
           "deviceClass": "0xfe58fd27268509d672e1c45755932dc9d7b36fc608883cb4d524d29ad7d04e72",
           "metaHash": "0x35f6c514efa275a31122d1838d16212be3abff0694f67cb78bda55547f689435",
           "sourceTag": "0xd862472082729814c74065df0ed578964ec8cb05027d360eeb3c44adeeddc3d7"
@@ -433,14 +433,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x0962626f5d7b8b0737a0a8880d05d0d758ca6f4aa9ec79db65efbd94d1367d09",
+          "attest": "0xfed7d1d0a89308a724b46fcbac546f193b3ea4ef0b9c6b88a4bf7e0d843a421f",
           "epoch": "936920839402672882",
           "h": "0xbfe0f50139e2bbd285e8ec75f4f5ac7aa054cf89f60b697b7a24bc91a47bfe1b",
           "nonce": "0x97ee95a0de615a4297263c4083ffbb4a34050862e036f1acc0c833ace6bade7c",
           "origin": "0x5b45248a6281a4b39802f6b42297f4782dfe2ff6",
           "termsHash": "0x6a1bc7c7eed73635c748f74fc3056c5cbf5a04c59a8b1476c4ad149822582ac8"
         },
-        "signature": "0x1c4b3f751344e46c94326067bbeb259da412b7c8e01e8c42dd7944e276f09b6f4fd2de3a03da14c358761b0d4c68dcebba0a79377b9f4a2ce3f71cd67b694b811b",
+        "signature": "0xa2818b971582d8bf81b64b6d746f5192053d3a8488808ec33c8136f03eb48622246495e68660d6c6bd3035480dfd6e4df54b9e0ae28c2171b6ed7a79c927dbee1c",
         "terms": {
           "licenseId": "0xbd2e7ab4d052ed6e268d03df2a6efc679cc4bed166b9c33fea2b1f75f388d076",
           "ns": 10,
@@ -465,10 +465,10 @@
     },
     {
       "expected": {
-        "attest": "0xf95455ded6fac577282342dee4469cf3d3a21c024858abb75cd13c5f58146539",
-        "digest": "0x9355bdcf0c0630b9e452921a9510a844a26442574e6ad749902ee5c344980eb1",
+        "attest": "0xba8be9f7c22e8581edfa30d43d252473c21e0c832e0c47532b3798072849ab54",
+        "digest": "0xd0b2f23db490fe0d98bf030af35b28435cfd50921a3e9bc8d83039574ebe9097",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0xf53f6cb2cf2e85d8f4efd2c8d33d5f1b7d73a29290911eca3cde94ceda7f06db",
+        "passportId": "0x7d6b52b1d283e5c0c12255b493cc5d99f8b2bebab832d3707f4c2d6e55378dfa",
         "recovered": "0x2effa98c738e964f073533efff00a1199ef1b5a4",
         "termsHash": "0xb9eace732f3df925b58af48bd3982909b884a65287c6d311224a48c2df69d23c",
         "valid": true
@@ -476,7 +476,7 @@
       "input": {
         "attestation": {
           "capturedAt": "469015943952",
-          "class": 0,
+          "class": 2,
           "deviceClass": "0xa582d0d6003324921a509e80aae9eb909196017c8e8476b25c8e143f42a23434",
           "metaHash": "0x89f0c6dc8f384af9ffd4312631379703c7e0dac786121a327ae74be046ab2051",
           "sourceTag": "0x2d9ea27cb20799432d18dcc37a19b3a327c4428e38a18701e78b2662fffe1fbd"
@@ -486,14 +486,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xf95455ded6fac577282342dee4469cf3d3a21c024858abb75cd13c5f58146539",
+          "attest": "0xba8be9f7c22e8581edfa30d43d252473c21e0c832e0c47532b3798072849ab54",
           "epoch": "2771099079827051131",
           "h": "0x8da68e8bcdd25bed8d12efffe760d40697ad8349dc519db2d157e50e91523ccc",
           "nonce": "0x67ee011e243c624b5010aa6030756600bb7c1e8b4510797ad87a81958f809271",
           "origin": "0x2effa98c738e964f073533efff00a1199ef1b5a4",
           "termsHash": "0xb9eace732f3df925b58af48bd3982909b884a65287c6d311224a48c2df69d23c"
         },
-        "signature": "0x864f79428e13caf50bc0b0cb452d801c19de869347e6bb53f526b1c5e211e7fb27853cc5918ccc7df6f58627a8122b4b11f5705cca5af2e2bfb84b88adf5706f1c",
+        "signature": "0xc59ac4ddc753576a0071d7f2f4f889cc69d3f72631b523763de1b8dd9c3468b64c0f1165f7d8d32b230052a321c16d2755d0309a94112163e2eb90382d4959b31b",
         "terms": {
           "licenseId": "0x241033c1791c0987ddbcc161680550ba2ff015878451b4710aaaebbd4e829be6",
           "ns": 2,
@@ -516,10 +516,10 @@
     },
     {
       "expected": {
-        "attest": "0x873e6514532b39daad82e71cb3ea85ed9c2deed246f6557f100f070fd139e01f",
-        "digest": "0x7214a66524e22454ce5ce67e0a5b34b4389dcaef60bcc4d8b7dfa9a87af38c3d",
+        "attest": "0x5029f968d6888d9afeda639cd0da376f256365d8990e8560aaf996e7c2453c19",
+        "digest": "0x019ef0c3d7aca29544c0476feb014661d2ec6e01456b11f1a497fcfb7b287c46",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x417e0f2e3f5ff1709c3f6a8ec2d206f2c5f12ee9f5a02943b83f942c25fd902a",
+        "passportId": "0x42b488d92cdac43ee7377a133b2ae5de42f58b8ab70f844105b48abee0078c23",
         "recovered": "0x716da8e585e7c7c35eebfbdadbd0974ae822a1e5",
         "termsHash": "0x07ce5fb8a0ab5fc1b098715a704a907133c869c941b7f55f93ce3be3aff4d976",
         "valid": true
@@ -527,7 +527,7 @@
       "input": {
         "attestation": {
           "capturedAt": "288936732242",
-          "class": 1,
+          "class": 3,
           "deviceClass": "0x952c74ac140f0d301ecf0c6eb6eec99f4e0a9f726609b52f2d35a1cb53913c5f",
           "metaHash": "0x78998fbd3358ebc8d47ea81f02eb3f5d60b56fa030eed32aa1baa5dcaa357e17",
           "sourceTag": "0x4cf48c428fb2bf6f078ec77a8956452fe1b01984357a23b0d18a6152209d3503"
@@ -537,14 +537,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x873e6514532b39daad82e71cb3ea85ed9c2deed246f6557f100f070fd139e01f",
+          "attest": "0x5029f968d6888d9afeda639cd0da376f256365d8990e8560aaf996e7c2453c19",
           "epoch": "18206551790886794090",
           "h": "0x74299dd5f66da11bf822d2ba922cb2c5f9aa2d96a090f05f7e57d0226f8c24e6",
           "nonce": "0x4f393166a3e548881c0f9a141ace098297ae41b6aa385d82eac16d26d5474fef",
           "origin": "0x716da8e585e7c7c35eebfbdadbd0974ae822a1e5",
           "termsHash": "0x07ce5fb8a0ab5fc1b098715a704a907133c869c941b7f55f93ce3be3aff4d976"
         },
-        "signature": "0xd71578d473cabf82e526396b49fe08a4c4bf4d0cbbee9cdfdeab1c52d84dfc037f4b14ecb447b58fb7d5e61e04ccec86bb41a87b54a6c74096e5a630667e02661c",
+        "signature": "0xa37b99e0620cc5307aeb4dedb2d73434fc8d9e29190b851bd43193fc73ba010325153cd1fee773395ee6bff9a5b1b88de24a01996cb460c62c9724169390dab21c",
         "terms": {
           "licenseId": "0xeb603228adeba8eae6fd4013f1a168170c37af7ebaf1df5352d3a6912f075511",
           "ns": 8,
@@ -567,10 +567,10 @@
     },
     {
       "expected": {
-        "attest": "0x74795904876962d3c6bcce54512791c3f58782dc8e8fc7715591bf4cf967003f",
-        "digest": "0xfdd7d5d88b5a1bf77f7d5ae14b361c2df49b5195700a96d040e8cee7663c13cd",
+        "attest": "0x632dbc1c5636cf296576ff773fce7d394ee022bd5e486c4f9f794bfb7bfe1822",
+        "digest": "0x71fd2823e87e87b8a1718f349141983b0c5f99a97b38e1035fb6f369ab6fb7b0",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x0b027796fc6019436cd32236f3481d95d210d09c6af7a6fcf8649ded617b108b",
+        "passportId": "0xc6b3c9621286dd7ca2a6b862686050f1bb5cd84882b6be7b0c6cf8d6f7ced70e",
         "recovered": "0x04272b731f98114808fde00c5bc467a692f6410e",
         "termsHash": "0xa95b9be273a224b052448ef53e249ac58443605c9f7861c1948c0b7cb772e188",
         "valid": true
@@ -578,7 +578,7 @@
       "input": {
         "attestation": {
           "capturedAt": "441208885304",
-          "class": 2,
+          "class": 0,
           "deviceClass": "0xb025f2e8999f3a86b465bcaad7e6063ee09faac1bddd7f38e47c9de53d36929a",
           "metaHash": "0x6bc0921b3d41fd333e9d1d7a45bf4626389699c33bb97c5e1cb01a653df34e14",
           "sourceTag": "0x76dc974279dcbce77a3ed571f11d8cfa640132ef1eb9614871c15509c5baa872"
@@ -588,14 +588,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x74795904876962d3c6bcce54512791c3f58782dc8e8fc7715591bf4cf967003f",
+          "attest": "0x632dbc1c5636cf296576ff773fce7d394ee022bd5e486c4f9f794bfb7bfe1822",
           "epoch": "17644565420197709702",
           "h": "0x1cafe91d4fd8fa4f8aac03d36b955ef487438d811414a8fcb687dd8302c8d6c2",
           "nonce": "0x85461636a0c1785025a14d5a8a561430159ef4a99060f83659234be5f4c8a888",
           "origin": "0x04272b731f98114808fde00c5bc467a692f6410e",
           "termsHash": "0xa95b9be273a224b052448ef53e249ac58443605c9f7861c1948c0b7cb772e188"
         },
-        "signature": "0xc797a6178f2c8fe45d0f8ba96826c3e054f4427f7aa816e4ab7201a71f2696110139fd4c757cb84f39fe4b2461033b8f4f11cd3f01e80ea0b5678916a04b147b1b",
+        "signature": "0x5398c29c3c197df452436eb60e65fed9e38d2e74d28b52196d95eb9829cd99227663d2f102417fd37f34686d5fb13a13f6d4aceb62169f42eccf4ff0c227a1761b",
         "terms": {
           "licenseId": "0xce09177c7fd9169b6e4049ba8a30cb33a0783eb0d11b88a60ef7775d0de85ff2",
           "ns": 1,
@@ -620,10 +620,10 @@
     },
     {
       "expected": {
-        "attest": "0xdf9eaf6dc2224e27fec24c946d5980136238d49182c5f30beea6a5ca1781bcc2",
-        "digest": "0xffd737bd2a817f9c784bddd1101075f4071612a797237371d8194a7786b866a0",
+        "attest": "0x834413bdae07e2ebbada4362f4666962e9d121239fe56521e07ec0627fa02cbf",
+        "digest": "0xc8b74055015d4ab00c60516f23e2175480191a1c95cc3f5d62f8b047207deddc",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x24ee5b39e466a8dcd15f225f365115c4195f28e9808034632666510e50eed13e",
+        "passportId": "0x22578ad5aec76d3519cb04f4d6ccd13de8a8d5885f157c31f0936a5678c09223",
         "recovered": "0xa7eb8b79907c7dbdcb98f884488b731ae25f2806",
         "termsHash": "0x458d080d15513624bd1cc90fbf6113fa443ecd5ca9e969d3fdd97253a8c5bb4f",
         "valid": true
@@ -631,7 +631,7 @@
       "input": {
         "attestation": {
           "capturedAt": "37351272782",
-          "class": 0,
+          "class": 1,
           "deviceClass": "0xadbd34336cd66a3bfe0a3f77c7f295580bb3771af6eff7f78a4bfe7e201da646",
           "metaHash": "0xe75bfb6fe56dbf4ebffc0f2f1815e7ec4957328931df8869d19097482a149a9c",
           "sourceTag": "0x7ca42fbd4216074bc4d92a6c36da02539cfefe9c12b997ab9d424eafdc9dea5f"
@@ -641,14 +641,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xdf9eaf6dc2224e27fec24c946d5980136238d49182c5f30beea6a5ca1781bcc2",
+          "attest": "0x834413bdae07e2ebbada4362f4666962e9d121239fe56521e07ec0627fa02cbf",
           "epoch": "11100125646864535086",
           "h": "0xdb0653e04b77ec4789ad1763005e2eebe5770c17b8bc09b113452c27232f6cd4",
           "nonce": "0x1e2cc4d963fd0daabb0e61f4547c83499b9a483944d3dcbf5052a888a185e153",
           "origin": "0xa7eb8b79907c7dbdcb98f884488b731ae25f2806",
           "termsHash": "0x458d080d15513624bd1cc90fbf6113fa443ecd5ca9e969d3fdd97253a8c5bb4f"
         },
-        "signature": "0x038a88990b0f985004599fd5669b408ebb14226b4fa5de32a879f543d4eff7132a6bfd8a0f43ac0d936002ed34b97d352df8be76406969c8f214088368dc609b1c",
+        "signature": "0x98cfb03c9e9e2be607d08f7d32652f1253a6f2b2eb6af3fb7690f280fd4c2dbe7c621b0aebb7df47ed54b5a7bfda5c3e97caf381afce4c2e66fbf922209c16701c",
         "terms": {
           "licenseId": "0x5f8dec2d59290463cb5344ad348e119a6b871c079db11a951fc6b39e8ebe8c57",
           "ns": 0,
@@ -667,10 +667,10 @@
     },
     {
       "expected": {
-        "attest": "0x37651719540c13e5fb63ca833bb42ffb2632d034df75b32a50e96e6561349da0",
-        "digest": "0x11f067be965e7dd532b7538b01efad31ab49fadb825fad4f772f61ce4e2d9e6d",
+        "attest": "0x7a1049aeed067ecf0296171a0d9b77876bb047f693ad3cada30d02c600d7de5d",
+        "digest": "0xdae763914dd01cb16f37f6a4dff305b7b7e22c2c766c041bf66644e6089cacfc",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0xd47c5a43e06cfe55bd1f75040be0618167a86d800a3b0e9e6644d9c0bd48529d",
+        "passportId": "0xe240ec4a6131dc5fe602a5595608c3a05b1707c26d476f4cbfdd2a673ce014a1",
         "recovered": "0xaedc769a60890fd664c40d25354395a9c5036ecc",
         "termsHash": "0xa297e7e3897c7f5d7697928fea0414263a69a371904b511d1699d5fcc1cf1748",
         "valid": true
@@ -678,7 +678,7 @@
       "input": {
         "attestation": {
           "capturedAt": "847208070806",
-          "class": 1,
+          "class": 2,
           "deviceClass": "0x726ad017d99e2c3f3f40ed83498c0dd7982b032a00a5d161b514c88e57fbc04c",
           "metaHash": "0x492d67f7fad6e00f612763fc846a095e7a9a01dae996ea2e088211e416824dd0",
           "sourceTag": "0xab46efd5cef5e693520abb1bffc138945b8e81ca6d31c1697e302abdcacfbfc7"
@@ -688,14 +688,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x37651719540c13e5fb63ca833bb42ffb2632d034df75b32a50e96e6561349da0",
+          "attest": "0x7a1049aeed067ecf0296171a0d9b77876bb047f693ad3cada30d02c600d7de5d",
           "epoch": "17089444582919505370",
           "h": "0x7648500adaead80e3a624c6d03a4193e23d44d487766ca25d3a0c07a0b77b4f8",
           "nonce": "0x4379aaac991e6f1f5ea8aa50bd41a4100430feac9fc9cc0bbb0a23b90b52bac9",
           "origin": "0xaedc769a60890fd664c40d25354395a9c5036ecc",
           "termsHash": "0xa297e7e3897c7f5d7697928fea0414263a69a371904b511d1699d5fcc1cf1748"
         },
-        "signature": "0xa5c4764cbd0a73965ab8cfe48f2d3de521f580dd21c25cf722b9d4f58dbc8101048b0b754bbb05f4aa0e85acc1ddfd2c6b2e9907c1e6b7827d95505c4e6108431b",
+        "signature": "0xdbc92158907c82e57b70c85a6cff4dbaeaab9d113518353d243209e07e85e12c2c48bed11e162893d49fadb51fd74fb153f796d0e77259051bdc876490cde0601c",
         "terms": {
           "licenseId": "0x23d7bb7aa7f5e07dddcc6d6542fb2a4c1aad33d6cb59445d1cd99a73a63197f7",
           "ns": 7,
@@ -716,10 +716,10 @@
     },
     {
       "expected": {
-        "attest": "0x8b5097138d2c6c61bef2cbfce0447c1b045377a380d619ba6609a130991f63bd",
-        "digest": "0x41157c37150e10d5ee09a92d2c8019d41ffdd7660124007b159f6d9ec5b2f4cb",
+        "attest": "0x240715aa3aba448d3c982d03a04142f27d8de59fb8bb59d619e31d463290ca5e",
+        "digest": "0x784f82433cb4a763ed2de437ba6397d88837e569b1736779113d4ce78d887e55",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x25bd5af8f1a6fa41345e13762631ad523c3e7c5d0cc1bafb2cdfb8c92e3e4e1b",
+        "passportId": "0xf5296eae2bc781940a78e65d535ed68c6ac46a4589c3bb4023a27656167dc8ce",
         "recovered": "0x0128c14ec4b795865b0f958ea74700bffae69241",
         "termsHash": "0xda8caf46a96d7a540bd97e37d627dfa4ad6fd6fb684c39bdd1d85f9979a74d78",
         "valid": true
@@ -727,7 +727,7 @@
       "input": {
         "attestation": {
           "capturedAt": "420740021258",
-          "class": 2,
+          "class": 3,
           "deviceClass": "0x279483e1572de4b5d466aca4351600e0814e5db9ffb792591fe1546ca00e5b26",
           "metaHash": "0x80b324a5366ba4a7b1591af5ae659f6462dccb61757c36521272abd110f9b3df",
           "sourceTag": "0xe98d8da0d4d05929f6b70e2c8770d2ed0e038f962972c1b93cae61738f3d9ca2"
@@ -737,14 +737,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x8b5097138d2c6c61bef2cbfce0447c1b045377a380d619ba6609a130991f63bd",
+          "attest": "0x240715aa3aba448d3c982d03a04142f27d8de59fb8bb59d619e31d463290ca5e",
           "epoch": "1700353880448172045",
           "h": "0x5b64db11bfc4c8126a8b02432dddda0644b8c292c463a1e95555b86cd729f59b",
           "nonce": "0x027db34caac69c7561a532cf6a9c25ecaa3ad8a415cbe8a476ea8659075fcc5b",
           "origin": "0x0128c14ec4b795865b0f958ea74700bffae69241",
           "termsHash": "0xda8caf46a96d7a540bd97e37d627dfa4ad6fd6fb684c39bdd1d85f9979a74d78"
         },
-        "signature": "0xdb4ccff79c6a88dbdf015a6fae5de8b8ea32e4d67514912d1276c834681570f3073612abb581d1b28edd6b45c1b733a27c1b1e7abe73efdf03797d3ca1ca6b551b",
+        "signature": "0x51a35986e875ae252d6b4dcf5823da43387fd7b05fd93854772a593f6a2621fb5c7f111866946506dfe10bde2afc1d1bd8f107ce6f76cdfeda4a3023168410751c",
         "terms": {
           "licenseId": "0xf4b013e9ad466956784f0be17c97aef3d4669eda1c8079d7aa17a129075f1637",
           "ns": 10,
@@ -926,10 +926,10 @@
     },
     {
       "expected": {
-        "attest": "0x6a68d22a44fdb0fef374c77c3d5b40875de85430bda984ae42fdf9ad7c06d306",
-        "digest": "0xc2baab863c64b256bacfc83ba29d95dd6c35ee705ff26f22d61ac4c737245be9",
+        "attest": "0x3cc86742e4116737aae1ac270eaf08a51d6b0bc23372360e9fdd2762efaa6001",
+        "digest": "0x1b52eb92a81053f79338f74783c76b47486cc2845a372ace74732a27f24dc85a",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0xb4b6248b773c28db10e923aee7adae794df21f36c6e58adf3cf9220e346a77f5",
+        "passportId": "0x99680b27e7607c79f7b8830f952e48a86f469306864b947f4e0c274102c01823",
         "recovered": "0x1397d4d29eed9403bb826098f979a09f4f07bbc9",
         "termsHash": "0x422f84e0ae938b61b45a165b83589dccd25df07168d32318595f4257823839fe",
         "valid": true
@@ -937,7 +937,7 @@
       "input": {
         "attestation": {
           "capturedAt": "704907411514",
-          "class": 0,
+          "class": 3,
           "deviceClass": "0x8591e0b69368d60a0bcaae5509b8b3a75fa6d3d712a4c070e5fd31037f9f56aa",
           "metaHash": "0x252de0dd973a4d3188344bad53747817b9b58097ce8f2fe62b95ef058aae7486",
           "sourceTag": "0x163c97faafe67d91f16e78ba6cdfb595e2901f9359c87e8386c4b149db9e6c03"
@@ -947,14 +947,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x6a68d22a44fdb0fef374c77c3d5b40875de85430bda984ae42fdf9ad7c06d306",
+          "attest": "0x3cc86742e4116737aae1ac270eaf08a51d6b0bc23372360e9fdd2762efaa6001",
           "epoch": "1638052758939087604",
           "h": "0x826267a62cef2d64b1a09cba00d67e850507cd71df2e75b9e22ee9640b12ddc3",
           "nonce": "0x9742ea9bf850a080ad2d375d66e308014390dd84df3d70d11051efb402025d0e",
           "origin": "0x1397d4d29eed9403bb826098f979a09f4f07bbc9",
           "termsHash": "0x422f84e0ae938b61b45a165b83589dccd25df07168d32318595f4257823839fe"
         },
-        "signature": "0x332dab8921c812e6ab5a6a88f05faee60132f81d820cf04ad7006e9a645ac44259a29339c9b7bb30b41ccbd94203b62fae2c4265e6de80cd7a79a7842058f39b1b",
+        "signature": "0x60ce046e191e9718a3c1711a62c4989d6728ac6293bc76fb7a6c307c58875ad602cc7daaa96833911916f1de7c48c417157da1de0e339dd1d839fb6a8ee5e5941b",
         "terms": {
           "licenseId": "0xa74ddb8fc56cd362f34360359ae268547abad1449c3ba1f7edc3a1503578dca2",
           "ns": 1,
@@ -975,10 +975,10 @@
     },
     {
       "expected": {
-        "attest": "0x0c0cef22b873e96a263bc738d587391be9d7593fd4253dbe5e8655433f677a23",
-        "digest": "0xc5c62d87ff48e23cabacfc05b43dfcbdaecfe88b7210cfd0428856f9071a30a5",
+        "attest": "0x99c7ade6a46ae30be0fe439a153d11094d26726ff5fd5e2fa67aac2c9186c006",
+        "digest": "0x3088886b7ba35c59c99b61eb8cc7256dfdf3532ea381cd190682a5f072e0c858",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x61ef59056aad6c2aabc33de563ce23e8e45a1697529cbb29bb59f03d7174a1f7",
+        "passportId": "0xd4acfd397c3938489482da1dd8b0241afe0ca9572898e0dd984dd4a9492a950e",
         "recovered": "0xb721708318be00f8fce2c29a738a63cbcdfdc304",
         "termsHash": "0x5077d2aa1378961854689ac7d0d57e5701093ae97ce9ea26cbcdb604dd7f16fd",
         "valid": true
@@ -986,7 +986,7 @@
       "input": {
         "attestation": {
           "capturedAt": "988654955935",
-          "class": 1,
+          "class": 0,
           "deviceClass": "0x8830f07a7fd421073b153007f1f7d7c7a59b43cd823c227a3f6abf5e950c70ec",
           "metaHash": "0x23691b347dc640f1a0b209edea6daaa191c1a9f4f2926d1bd03e5a33bca2f70f",
           "sourceTag": "0xcb98090475e563af925cecb2751c7e5aeed9031004d4f22090ed68daa6b23816"
@@ -996,14 +996,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x0c0cef22b873e96a263bc738d587391be9d7593fd4253dbe5e8655433f677a23",
+          "attest": "0x99c7ade6a46ae30be0fe439a153d11094d26726ff5fd5e2fa67aac2c9186c006",
           "epoch": "10103450548298526552",
           "h": "0x19062336d2df3bf08bb4bedbf143fd312b5cbf4f19f92881f3f45f3a806d13b9",
           "nonce": "0x43d3a167ef47d2a63d35269d8f69a53c266f875ff4b86a4e3d9f46f31e235c52",
           "origin": "0xb721708318be00f8fce2c29a738a63cbcdfdc304",
           "termsHash": "0x5077d2aa1378961854689ac7d0d57e5701093ae97ce9ea26cbcdb604dd7f16fd"
         },
-        "signature": "0xe317a3500704e2ed7c94f4c2113152e476ba5468ad3468f2a25376aa41151a1439ad9e3ab54c0efb390be37f113c1f2e8f9425cac67f2c9b1a07a870bd23bace1b",
+        "signature": "0x0a4fce88dd98fe8628b720db8c7a2898c2049a95fa3ea284b5a7119dc5049e1c2a656c95581ebd86d7af11d666f7531e070454e1fc2c68ed17be90a2e9401f631c",
         "terms": {
           "licenseId": "0xc3ad2915199853ca6b7ff5c37c4242d2222cf7155a7a0a7e2400fc23c39b91a0",
           "ns": 9,
@@ -1026,10 +1026,10 @@
     },
     {
       "expected": {
-        "attest": "0xfccac5a83baa45f2b325bbd97e028435907c6a46e477a56b5d5433105da72d9c",
-        "digest": "0x4bfac5ff7e45d852c22a9a8604dc9673abe1f0d3275cc7b75e10569d1d8f62f3",
+        "attest": "0x4626153dafe21e57633e27073393a638a8fe56fbc2791720a51aa22a22ea1fc5",
+        "digest": "0x7e6e5171e5324ae03736591f23d7122cd0f0ee56a28977f0cdfa95819719ea58",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x2631d15bd9bd9590fa4d6860ef42addebb5e5a69c4ace76dc716b4c06271e35f",
+        "passportId": "0xad40cb2a4f570eaf98f78ddae8532c8335b656b9bb3fd26391029b26ef7674a3",
         "recovered": "0x701d07ea19c8735a41f4b7dbc93654f45f48236b",
         "termsHash": "0xd7dbccc7466873571d7abef7398d54e9733c653336b9667845cab12459a2a1cf",
         "valid": true
@@ -1037,7 +1037,7 @@
       "input": {
         "attestation": {
           "capturedAt": "4123924455",
-          "class": 2,
+          "class": 1,
           "deviceClass": "0x8a9ba4bd9e539cfff28f28a087f212771a4bad61a86fa64a685c5fa07c0faf7c",
           "metaHash": "0x223f397fc5ba037f14baad006b611c32a92a6ba6115a2f930387e342a53044f7",
           "sourceTag": "0xa1256d5ae455837787c82aeb48ac66e9097a20173bec4604522adb339fbf22a6"
@@ -1047,14 +1047,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xfccac5a83baa45f2b325bbd97e028435907c6a46e477a56b5d5433105da72d9c",
+          "attest": "0x4626153dafe21e57633e27073393a638a8fe56fbc2791720a51aa22a22ea1fc5",
           "epoch": "11708612549959203753",
           "h": "0xb40fdcf5544692c97641817604a0fcdbccf519d0b7e68cc54391ed8f9fb9684d",
           "nonce": "0xcf6482dfc78822d4e24d6be3aa3801970cbaf5cd8dd34e9376b4f940e897e3f3",
           "origin": "0x701d07ea19c8735a41f4b7dbc93654f45f48236b",
           "termsHash": "0xd7dbccc7466873571d7abef7398d54e9733c653336b9667845cab12459a2a1cf"
         },
-        "signature": "0xc29e2a3890dc960d0be74d55c17f961850f9d415b2f9a5ff7bbf838ff3ce9a8947f0b33b3a2844133de0f828b4c6cdffaaa69891ded2c8d9de404848185193041c",
+        "signature": "0xa5d9a57d6fb5e02bee754a928ce83d734a6a232cbc8e3bb10b4ea01d03d7ee9a449d0d845661e8e86ee00f29c43634685f12c165eda5c10a868a977173a149941c",
         "terms": {
           "licenseId": "0x0bd0f4482c94b42a66b415350a65039f081705aadd612cb4363c7ba96e15e4ab",
           "ns": 1,
@@ -1075,10 +1075,10 @@
     },
     {
       "expected": {
-        "attest": "0x0f9104fbab43909aebd0fc02142c261cab6a488b84911e30a5075b695c0dcb09",
-        "digest": "0xcbe452608c87bc175d52b6133499113dcfa70a6fa90f6c9c78d8bff0daaab888",
+        "attest": "0x5ddd6879b79f2300142aed9e7a9aad22058917cd0f294b9650b927e48ab4463c",
+        "digest": "0x36f0f7afa28d8ec939882fcede7d3e352761a3d7092b3767168338f6cdfa7d91",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x50db39cb3085d534651873889da6d4b53c458f2a5866cf30c1dde22d5bb8d139",
+        "passportId": "0x25e8c1535efb24b9e4cdbc2c8a29f4bad9dd685a7d1fcf5c5ebfb8ce41ee50dc",
         "recovered": "0x5ea638c8886e5b37e0804f723bb9545b619e54c5",
         "termsHash": "0xfb697ac033ce4c70d38acec1532cb81ddc496c7c9f86e4f82ec1f21852ae029b",
         "valid": true
@@ -1086,7 +1086,7 @@
       "input": {
         "attestation": {
           "capturedAt": "175109146938",
-          "class": 0,
+          "class": 2,
           "deviceClass": "0x2fad14ce9dc3b8557a51f3c7b56b9c983cd79766c3be5525b2995299c6129a87",
           "metaHash": "0xfa7a533c0aceb7a3d3f9d5d7fb0c736e26b1adeaa5d4f7c5c67bb7190a01e3bb",
           "sourceTag": "0x0ceaeadaa90ade15cd4659e5f114f2e0d72c5004bd94433d3300e2151d5fa958"
@@ -1096,14 +1096,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x0f9104fbab43909aebd0fc02142c261cab6a488b84911e30a5075b695c0dcb09",
+          "attest": "0x5ddd6879b79f2300142aed9e7a9aad22058917cd0f294b9650b927e48ab4463c",
           "epoch": "6324427031159021480",
           "h": "0x0cd3591ce29ecc0a2e0c54c5596485f4189ec1de6a8e5c871ccf699614b84760",
           "nonce": "0x269f4971c8354b01e82f88afd56c2a0e7fe060d0889f60c0ad8b797dd9e5f6ee",
           "origin": "0x5ea638c8886e5b37e0804f723bb9545b619e54c5",
           "termsHash": "0xfb697ac033ce4c70d38acec1532cb81ddc496c7c9f86e4f82ec1f21852ae029b"
         },
-        "signature": "0x37605a5b70cdeeaff5e8b54e1cccf3ff0787c06ab49df71151ce4effd98ecb407c3fe03efdc428847b5f4b24b8490a065057a533151747fdd06623663be304db1b",
+        "signature": "0xfdd15c97e3c8c2ff19591b494fd82a8ca2d1ae8f06c386542f257790600f02a054a30ff02294fd111a8d86662b67d9c9c5455ead268bdd7b1f781a3d77d28b9d1b",
         "terms": {
           "licenseId": "0x2b9084d5fb624b4d54e05f5865550eb6d778907d79c67b332ff7cc9ab0adbc4e",
           "ns": 1,
@@ -1128,10 +1128,10 @@
     },
     {
       "expected": {
-        "attest": "0x893d8519372c4e5197a6d9cac72fee85258bf397fecec5cba7b4859be5b0e053",
-        "digest": "0x6c462c2417f43decd8e0257c138ffe36b37f71f41c8f34af3a158b3d025d7f28",
+        "attest": "0x547119939f853a1293652c7ce36fc5f570881e618ca3d47bc1db45b74e082c00",
+        "digest": "0x9f8419b9ce8801a17a0cb6388d1b4fc081dca7407c78c88a3ad0f10693b05f46",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x22ec0c514041613d8d4c1168e0b4dab94b769dca08e70a2f41abe8484154621b",
+        "passportId": "0xcaebea56c337bc65154bb380d9a9c6f116f03e3d2eed39d61252e325858e203e",
         "recovered": "0xb941c5ea9504be702073a4475a8d99dd0cdd18e7",
         "termsHash": "0x62c242d30605113e85eb42a11181d9e9cc236e2f562bb936d502e8fcdb750fc6",
         "valid": true
@@ -1139,7 +1139,7 @@
       "input": {
         "attestation": {
           "capturedAt": "788443482379",
-          "class": 1,
+          "class": 3,
           "deviceClass": "0xb853f8f52d0c38a9b6d0fe9107a2ef4111dc8a15c9c65ed8ae0df9bc2db4c773",
           "metaHash": "0xfb8650b6592bf00d66ad55be3d7da533d4a831cb39dc0d90780ce314dbfccb92",
           "sourceTag": "0x6e722751d162420f0fb217aec011bf555ea817a178e4136a35c225817c7c07fe"
@@ -1149,14 +1149,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x893d8519372c4e5197a6d9cac72fee85258bf397fecec5cba7b4859be5b0e053",
+          "attest": "0x547119939f853a1293652c7ce36fc5f570881e618ca3d47bc1db45b74e082c00",
           "epoch": "16628418539338638302",
           "h": "0x6f003e515af66d81e3cb2f07d532a5292ad22e144ab41011c25badfc8cd097e7",
           "nonce": "0xe84848cd74706eb9622f5962ecd1d932c54bcd7a884c3802da3a5ab8d6d2df70",
           "origin": "0xb941c5ea9504be702073a4475a8d99dd0cdd18e7",
           "termsHash": "0x62c242d30605113e85eb42a11181d9e9cc236e2f562bb936d502e8fcdb750fc6"
         },
-        "signature": "0xbabe41e916fd75ab22f5c6118b6d7a44505e9cf1a5dff95eeee8d6698082c42a094c5ffbd6845fa618fd03ed9f5460aa86be273fdc3651d4c7d08a275cfe29181b",
+        "signature": "0x0db5ad5685492bbebaa71d146703290fc772a883a1764e3b3ef25481e08feec51badeeefc6cf2f2c71c461cefeb74a928ff81de83e03d3df343b2482eb3eebd01b",
         "terms": {
           "licenseId": "0x67b487e079453c72c28758c4459216e0da83159cc86ac76e9d56a60d52bf7bd1",
           "ns": 6,
@@ -1181,10 +1181,10 @@
     },
     {
       "expected": {
-        "attest": "0x56053530db2b0eec52eae68d2d4248e8e99cacceaec5405e14e87aac5b0309e0",
-        "digest": "0x97939c84126024a355a5563b05a4dcb46aa50119c47a4e905f6a495eebff754e",
+        "attest": "0x023a71c6fdc6cf24ba9b2565de54a2dd46c0e514bbc2a66b07b84010430fb0f6",
+        "digest": "0x51d68a27f5ec120e0730fba3aa54ba75563b4d526b2162e20e5abaf6b0a114f3",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x7ebee8c9696c2008220991033ed113cd3ecd111972e1de6cde6fbf40f3202155",
+        "passportId": "0xb67bc737e6b6aeadfada0df4814af83bbe42fa04327416e4a9f0f1d212ad7d58",
         "recovered": "0xb3e5de427e99dcf67bfd0f1cf1b80515ae41b044",
         "termsHash": "0x80403e964969fca3906bac5560814a01b376914428c3b7566e0049a4b1db4b69",
         "valid": true
@@ -1192,7 +1192,7 @@
       "input": {
         "attestation": {
           "capturedAt": "922224563645",
-          "class": 2,
+          "class": 0,
           "deviceClass": "0x74c30a0ecfbf28ad4944da05068e7c50dc5c08105d4c44d0232c357a661dd725",
           "metaHash": "0xadaf1e949ecd912e0a52aebad11a2a1f3e19b5811df602cb6ff4aedd06620a6f",
           "sourceTag": "0x990ce552ddbba1181d31955fcdd395ec3424ae0a2a5a265d63bcfaac82aa37de"
@@ -1202,14 +1202,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x56053530db2b0eec52eae68d2d4248e8e99cacceaec5405e14e87aac5b0309e0",
+          "attest": "0x023a71c6fdc6cf24ba9b2565de54a2dd46c0e514bbc2a66b07b84010430fb0f6",
           "epoch": "17355146140687829349",
           "h": "0xe985d0ee94d4dbed029c18e53064042d964586453462e073fedc8537ec634cc6",
           "nonce": "0x7c15a3a2b21086569bc08d53e060e145afd70f6e25d6db25b12da65122f46eca",
           "origin": "0xb3e5de427e99dcf67bfd0f1cf1b80515ae41b044",
           "termsHash": "0x80403e964969fca3906bac5560814a01b376914428c3b7566e0049a4b1db4b69"
         },
-        "signature": "0x3954791d0dc5041b8c33c5b3bd2d26bd4b954359c661387e7297798da60a191e2cc42a2b8d36f12f5450b985669ec7c29580399a468ff245ae058ae10c5659821b",
+        "signature": "0x36bb04c7269e2338699d50adb4df9dd68b04fe06abdd1a41a7d1253eeee3b2f331e5e7e60da871e59e847bc8a378789c5944b42ef9aa1b6c40fd48c98043a4fb1c",
         "terms": {
           "licenseId": "0xfbe71805a7ae8e25206e868d0cc3afada322890ac30007bf630db19eae09880e",
           "ns": 10,
@@ -1234,10 +1234,10 @@
     },
     {
       "expected": {
-        "attest": "0xab6701aadb69a15c098a2bb6f5cdbf8e9658d8e59194a006d821d0efb24fb5a5",
-        "digest": "0x681e8a50af594319d375e903fac29442e4cd7316e383a19dc49813b183cf9436",
+        "attest": "0x9a2756a277cf1e6e33fc12d8b41beecfb0300e434015990f8fa5f9e33d9a23aa",
+        "digest": "0x5bdcc4884c5989b55f81e65b430a907a7971c4e38a694824b9f90b4be0a0fdd5",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x1809b0cac8c4ffb92abdc726e98c5fe58f33242c2f565bcecfa83b1f0bf31882",
+        "passportId": "0x99a0b513039bf66dfc0bff16a05184ba25c5f14a7489f8a2871676ecb1964138",
         "recovered": "0x3008d517c68e6db355f8bfde8caf6b910c6729fd",
         "termsHash": "0xfb719a58ea83578ab5a07618e9fbf2aa1e23d2f2210218c3f6070c481a0e7e16",
         "valid": true
@@ -1245,7 +1245,7 @@
       "input": {
         "attestation": {
           "capturedAt": "1007994421832",
-          "class": 0,
+          "class": 1,
           "deviceClass": "0x534ca2813b2ee93417b8f327c412581deaf43014bd173707a8b9cb48f70095dd",
           "metaHash": "0x8f14627d322c788eaeae9de1472708c734309b97002831356bf7739034bfc386",
           "sourceTag": "0xb82b70e5e594e6a2c456cb1a8b9bee06589c8b91732e2593ef9de9c4a2548f4e"
@@ -1255,14 +1255,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xab6701aadb69a15c098a2bb6f5cdbf8e9658d8e59194a006d821d0efb24fb5a5",
+          "attest": "0x9a2756a277cf1e6e33fc12d8b41beecfb0300e434015990f8fa5f9e33d9a23aa",
           "epoch": "5945990554858820930",
           "h": "0xbfa1f0eda25393041f946fb940ad33a5678604d00d7227555d7901ac455dd722",
           "nonce": "0xd274c49d36aad2f9b239102fd114e2bf131484d71b441ac201a4610a5c43692d",
           "origin": "0x3008d517c68e6db355f8bfde8caf6b910c6729fd",
           "termsHash": "0xfb719a58ea83578ab5a07618e9fbf2aa1e23d2f2210218c3f6070c481a0e7e16"
         },
-        "signature": "0x80f35ac7dff75be5a5b5a4aff99f460866a8dca1e044d4afe744f9306993bb172cfb6eaf78b8e06895bc5c47e9451ba4080716f700e011d893069592e62577531b",
+        "signature": "0x9045e73db38b4da4bc14e0ab447201d4294dc06f887472ece16f88fedbbac3621e8f75a2d4cb0a70e972c2034dc672c3cbdbbfbd3633fda5cdd77ffea5992f7a1b",
         "terms": {
           "licenseId": "0x44da1d637a9a7790b0b577b6c513dd99285f6d058c113c5541430ebf9735e06b",
           "ns": 2,
@@ -1285,10 +1285,10 @@
     },
     {
       "expected": {
-        "attest": "0x37dacea6af452c2bcf22963ce3072f1be77ad14717bca8987c4853afbd849fda",
-        "digest": "0x3fefe86b8f254ce309d635f0696d08d0fc8f0d48edade8cc5470a074b1d01518",
+        "attest": "0x13644d93eb0ba76c69b85a979262becbe057256f07cace932438320c448e7056",
+        "digest": "0xcac0b7b29711e1e70873fa284b47692d9c998f484afbe754165b047fda2ecd13",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0x34b398b97ce78d969727bef6f46da129e518681e9b4b3b6c948943fe8acf8a0a",
+        "passportId": "0x34cbdf72f2f942ee25ee18c394839a0a276ba78c7636ad2f66f70d4e350f2bf7",
         "recovered": "0x2396a84dce239a5995a8e40433ddd5af82ab6eb4",
         "termsHash": "0x7ac41fb782d9d500b0806acea8d96aa1311ac684a9071df219b6a8ce9f837375",
         "valid": true
@@ -1296,7 +1296,7 @@
       "input": {
         "attestation": {
           "capturedAt": "851456400426",
-          "class": 1,
+          "class": 2,
           "deviceClass": "0xc55716d47c6e0ce4657ce530a078687706a6b021acc25db9738f00686d46bc0b",
           "metaHash": "0xf928663a9c43b67798e51acba4adb520f5aef6a183ec8677ad721c9921061af7",
           "sourceTag": "0x5d3bb4c69783dad69afb0663025166fb583872a70900d51d1d951e896cc0f0b7"
@@ -1306,14 +1306,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0x37dacea6af452c2bcf22963ce3072f1be77ad14717bca8987c4853afbd849fda",
+          "attest": "0x13644d93eb0ba76c69b85a979262becbe057256f07cace932438320c448e7056",
           "epoch": "9821389328995710586",
           "h": "0xc85baf126b17721dca9b7fdc6f7972a9be597872c9882fc72de2537acca9063e",
           "nonce": "0xccb689dc8272eb0829a06b7d67b0145ed6aff5b9fd86987a229daa7a7e22244c",
           "origin": "0x2396a84dce239a5995a8e40433ddd5af82ab6eb4",
           "termsHash": "0x7ac41fb782d9d500b0806acea8d96aa1311ac684a9071df219b6a8ce9f837375"
         },
-        "signature": "0x3f6a60fa1749b7c1a5a3b06936dc9c8933d0f9ba4a5425e31447b1fe3b717fdd5a20a69a18a0a404cf8c25986fedfc2b532155c7af5d436b609a3def659c4f6d1c",
+        "signature": "0x03b3976d0d7199cc8f3bec71e627b85c92f0172f523e4d2b7cce9c1dccb999101da032ef297f8be6144fa51b77eb74a8ed1c877001073e35336151d0586e2dad1b",
         "terms": {
           "licenseId": "0xe1cdf476d2cf298b8f31cc2f8aad9cc265fb65e0a574805b17673d6f2822641f",
           "ns": 9,
@@ -1332,10 +1332,10 @@
     },
     {
       "expected": {
-        "attest": "0xcc73a1d181a5482230c77c24896f367a30f149d1cad7f33b9b956fdc57a4de8e",
-        "digest": "0xdfafe4dc19446e2fbba9ed948fedc7bc242d33edbf14c1d0b98a9911e687afd3",
+        "attest": "0x3af14223e110b929f16e5525b36337ded7477a7d7e2d24ce7d669cf012c19d6e",
+        "digest": "0x2ea11270368146667de8aeb41a79876baaa3c693a70db4335e5e74300f8909de",
         "domainSeparator": "0x6fcefa60deb036e8831a962e6620dadf5e171bbbf68c5b3ee045f242bcabecf5",
-        "passportId": "0xdc5a0418189235296d1fe2f35454b6f0a92aff8cb876d4aa821c4df9d2069523",
+        "passportId": "0xffbd8ffd9e0c54a1159fa81e4af1eb45782a7cfb2f26c70e329accb1dff94296",
         "recovered": "0x648c34f0cb1c6d6ac8bbe0b902cebaf286f5ed47",
         "termsHash": "0xff688d56d3a49341602664afd14979cd33c5a2c9a8531c42bd2867a6caed531c",
         "valid": true
@@ -1343,7 +1343,7 @@
       "input": {
         "attestation": {
           "capturedAt": "224728443434",
-          "class": 2,
+          "class": 3,
           "deviceClass": "0x915c27b2c1cabd69166af676e1d93d454fb66511053c7485dfef0ffb6e4e626c",
           "metaHash": "0xfa8fd701ceee722498cb063a8175c195a7b33bd2cf8e1d931142d535bec28e87",
           "sourceTag": "0x38e0bd4ddcc87de1b057bb89ccfec3d2e296a57fe7da66f95826f44077ecd4ed"
@@ -1353,14 +1353,14 @@
           "verifyingContract": "0x000000000000000000000000000000000000dead"
         },
         "passport": {
-          "attest": "0xcc73a1d181a5482230c77c24896f367a30f149d1cad7f33b9b956fdc57a4de8e",
+          "attest": "0x3af14223e110b929f16e5525b36337ded7477a7d7e2d24ce7d669cf012c19d6e",
           "epoch": "11674203397543036623",
           "h": "0x057cf979f428c6de56ac8507b00ba323b84f4feb87a689c9776c8248d84e63c8",
           "nonce": "0x2e3bc8c1f0dd21b4fe494dbb4540daea2c7703368382c5fed42ce1df0ddbd1c3",
           "origin": "0x648c34f0cb1c6d6ac8bbe0b902cebaf286f5ed47",
           "termsHash": "0xff688d56d3a49341602664afd14979cd33c5a2c9a8531c42bd2867a6caed531c"
         },
-        "signature": "0x3d482552a4b766b7f0b93dd6b8084e30a7be721bc10318a35e3846198267ef3c32d1f58a8cf07c3bd707ae2b9ca371691d6d4919bd682333c940c3d59633b5e21c",
+        "signature": "0x423e9145581ee226511d998efffa82a36868689c9b1ce6761ffc8e21b6d006852d995aa77380b1a658eb4c4252d0a9c35738cc612254f9603cc21ab0984523d61b",
         "terms": {
           "licenseId": "0x7741b3d532dfe2afb9c8e961cd770303682d360e02795aebbdcc9947c75ac65b",
           "ns": 12,

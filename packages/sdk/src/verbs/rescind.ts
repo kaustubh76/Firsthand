@@ -52,6 +52,12 @@ export interface RescindAddresses {
 /** Addresses every verb needs; extended per phase. */
 export interface VerbAddresses extends RescindAddresses {
   readonly principalRegistry: Address;
+  /**
+   * Optional because it is an optional deployment key (ADR-0015): a locker pointed at a
+   * deployment made before the registry existed still has to boot, it just cannot register a
+   * device. Degrade, never crash — the same contract the PWA's config already honours.
+   */
+  readonly hardwareDeviceRegistry?: Address;
 }
 
 export interface RescindPlan {

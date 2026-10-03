@@ -50,6 +50,11 @@
       "import": "./dist/schemas/index.js",
       "require": "./dist/schemas/index.cjs"
     },
+    "./attestation": {
+      "types": "./dist/attestation/index.d.ts",
+      "import": "./dist/attestation/index.js",
+      "require": "./dist/attestation/index.cjs"
+    },
     "./authority": {
       "types": "./dist/authority/index.d.ts",
       "import": "./dist/authority/index.js",
@@ -68,7 +73,8 @@
     "test:testnet": "echo 'no testnet tests'",
     "coverage": "vitest run --coverage",
     "gen": "tsx scripts/gen-vectors.ts",
-    "gen:check": "tsx scripts/gen-vectors.ts --check"
+    "gen:check": "tsx scripts/gen-vectors.ts --check",
+    "spike:android": "tsx scripts/android-spike.ts"
   },
   "dependencies": {
     "@noble/curves": "catalog:",

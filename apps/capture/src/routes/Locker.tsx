@@ -19,6 +19,7 @@ import { NS, termsFor } from "../lib/terms.js";
 import { Hash, Notice, Pill } from "../ui/index.js";
 import { ActivityCard } from "./locker/ActivityCard.js";
 import { DepositsCard } from "./locker/DepositsCard.js";
+import { DevicesCard } from "./locker/DevicesCard.js";
 import { EarningsCard } from "./locker/EarningsCard.js";
 import { GrantsCard } from "./locker/GrantsCard.js";
 import { LedgerCard } from "./locker/LedgerCard.js";
@@ -128,9 +129,10 @@ export function LockerView({
   // Grant status from the contract, refining what the journal and the events already say.
   const [statuses, setStatuses] = useState<Map<Bytes32, GrantChainStatus> | null>(null);
   const [expiries, setExpiries] = useState<ReadonlyMap<Bytes32, bigint>>(new Map());
+  const [readsThrottled, setReadsThrottled] = useState(false);
   const refreshStatuses = useCallback(async () => {
     if (!config.live || !client.publicClient) return;
-    if (grantIds.length === 0) {
+    if (journal.grants.length === 0) {
       setStatuses(new Map());
       return;
     }
@@ -140,13 +142,15 @@ export function LockerView({
     const statusOf = client.lens
       ? (id: Bytes32) => (client.lens as OnchainLensReader).grantStatus(id)
       : (id: Bytes32) => reader.effectiveStatus(id);
-    const [next, ends] = await Promise.all([
-      fetchGrantStatuses(statusOf, grantIds),
-      fetchGrantExpiries((id) => reader.grantState(id), grantIds),
-    ]);
+    // These two used to be one unbounded `Promise.all` over every grant at five `eth_call`s
+    // apiece, which put a locker with four grants over Monad's per-second window on every mount.
+    // Now most grants are answered without a read at all, and the reader paces whatever is left.
+    const { statuses: next, rateLimited } = await fetchGrantStatuses(statusOf, journal.grants);
+    const ends = await fetchGrantExpiries((id) => reader.grantState(id), journal.grants);
     setStatuses(next);
     setExpiries(ends);
-  }, [config, client.publicClient, grantKey]);
+    setReadsThrottled(rateLimited);
+  }, [config, client.publicClient, client.lens, journal.grants]);
   useEffect(() => {
     void refreshStatuses();
   }, [refreshStatuses]);
@@ -227,10 +231,12 @@ export function LockerView({
             }}
           />
           <OnChainCard ctx={ctx} liveness={liveness} onActivated={onActivated} />
+          <DevicesCard ctx={ctx} />
           <DepositsCard ctx={ctx} />
           <GrantsCard
             ctx={ctx}
             statuses={statuses}
+            throttled={readsThrottled}
             expiries={expiries}
             reveal={reveal}
             onWithdrawn={() => void refreshStatuses()}

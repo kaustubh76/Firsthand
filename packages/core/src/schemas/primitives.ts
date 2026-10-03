@@ -18,6 +18,12 @@ export const AddressSchema = z
   .regex(/^0x[0-9a-f]{40}$/, "expected lowercase 20-byte hex address")
   .transform((v) => v as Address);
 
+/** P-256 `r ‖ s`, low-s — what `verifyP256` and `P256.sol` both take. */
+export const Signature64Schema = z
+  .string()
+  .regex(/^0x[0-9a-f]{128}$/, "expected 64-byte hex signature")
+  .transform((v) => v as Hex);
+
 export const Signature65Schema = z
   .string()
   .regex(/^0x[0-9a-f]{130}$/, "expected 65-byte hex signature")

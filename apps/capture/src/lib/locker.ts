@@ -9,6 +9,7 @@ import {
   MemoryTransport,
   monadTestnet,
   OnchainAnchorWriter,
+  OnchainDeviceRegistryReader,
   OnchainLensReader,
   OnchainReceiptReader,
 } from "@firsthand/adapters/client";
@@ -36,6 +37,12 @@ export interface CaptureClient {
    * rather than implying the chain agreed.
    */
   readonly lens: OnchainLensReader | null;
+  /**
+   * `HardwareDeviceRegistry` — what the chain records about one secure element (ADR-0015). Null
+   * offline and on a chain with no registry, where the Verify tab says the hardware tier is not
+   * deployed here rather than showing an empty answer.
+   */
+  readonly devices: OnchainDeviceRegistryReader | null;
   /**
    * Waits for a relayed transaction to be mined. Relaying returns as soon as the gateway accepts the
    * transaction, so dependent calls — attest after enroll, anchor after attest — must wait, or they
@@ -86,6 +93,13 @@ export function createClient(config: AppConfig): CaptureClient {
     publicClient && config.firsthandLens !== `0x${"00".repeat(20)}`
       ? new OnchainLensReader({ publicClient, firsthandLens: config.firsthandLens })
       : null;
+  const devices =
+    publicClient && config.hardwareDeviceRegistry !== `0x${"00".repeat(20)}`
+      ? new OnchainDeviceRegistryReader({
+          publicClient,
+          hardwareDeviceRegistry: config.hardwareDeviceRegistry,
+        })
+      : null;
   const client = new FirsthandClient({
     domain: { chainId: config.chainId, verifyingContract: config.passportAnchors },
     epochs: config.epochs,
@@ -98,6 +112,11 @@ export function createClient(config: AppConfig): CaptureClient {
       grantManager: config.grantManager,
       rescissions: config.rescissions,
       principalRegistry: config.principalRegistry,
+      // Optional deployment key: a chain with no registry simply cannot register a device, and
+      // the Devices card says so rather than offering a button that reverts.
+      ...(config.hardwareDeviceRegistry !== `0x${"00".repeat(20)}`
+        ? { hardwareDeviceRegistry: config.hardwareDeviceRegistry }
+        : {}),
     },
     namespaces: [
       { ns: NS.captures, label: "captures" },
@@ -111,6 +130,7 @@ export function createClient(config: AppConfig): CaptureClient {
     anchors,
     receipts,
     lens,
+    devices,
     waitForTx: publicClient
       ? async (hash) => {
           // 90 s, not viem's 180 s: a relayed transaction that has not landed by then was dropped

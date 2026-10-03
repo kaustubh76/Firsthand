@@ -24,7 +24,7 @@ export type {
   ReceiptCoverage,
   SignatureMode,
 } from "./manifest/verify.js";
-export { verifyManifest } from "./manifest/verify.js";
+export { hardwareProofOk, verifyManifest } from "./manifest/verify.js";
 export type {
   ExportLockerInput,
   ImportLockerInput,
@@ -45,12 +45,30 @@ export type { AcceptTermsPlan, CardKeys } from "./verbs/acceptTerms.js";
 export { planAcceptTerms, planRegisterCard, sendTx } from "./verbs/acceptTerms.js";
 export type { AttestPlan } from "./verbs/attest.js";
 export { planAttest, sendAttest } from "./verbs/attest.js";
-export type { DepositInput, DepositResult, PassportSidecar } from "./verbs/deposit.js";
+export type {
+  AttestationClaim,
+  DepositInput,
+  DepositResult,
+  PassportSidecar,
+} from "./verbs/deposit.js";
 export { acceptSigned, deposit, mintPassport, refuseUnlessProvable } from "./verbs/deposit.js";
+export type {
+  DeviceAddresses,
+  RegisterDeviceInput,
+  RegisterDevicePlan,
+  RevokeDevicePlan,
+} from "./verbs/device.js";
+export {
+  planRegisterDevice,
+  planRevokeDevice,
+  sendRegisterDevice,
+  sendRevokeDevice,
+} from "./verbs/device.js";
 export type { EnrollPlan, SentTx } from "./verbs/enroll.js";
 export { planEnroll, sendEnroll } from "./verbs/enroll.js";
 export type { GrantInput, GrantPlan } from "./verbs/grant.js";
 export { planGrant, sendGrant } from "./verbs/grant.js";
+export { deviceClassFor, signCaptureWitness } from "./verbs/hardware.js";
 export type { PublishTarget } from "./verbs/publish.js";
 export {
   publishBlob,

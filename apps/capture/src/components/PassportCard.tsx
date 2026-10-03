@@ -1,13 +1,15 @@
+import { AttestationClass } from "@firsthand/core";
 import type { LandingPhase } from "../lib/deposits.js";
 import { relativeTime } from "../lib/format.js";
 import type { DepositEntry } from "../lib/journal.js";
+import { className } from "../lib/sidecars.js";
 import { Hash, Icon, type IconName, Pill, Tx } from "../ui/index.js";
 
-/** What a deposit's kind says about its attestation class, in the words the Verify tab uses. */
-const KIND: Record<DepositEntry["kind"], { icon: IconName; label: string; klass: string }> = {
-  text: { icon: "file", label: "note", klass: "device capture" },
-  media: { icon: "image", label: "photo / clip", klass: "device capture" },
-  import: { icon: "inbox", label: "conversation", klass: "import" },
+/** Which tab produced a deposit — an icon and a noun, and nothing about its attestation. */
+const KIND: Record<DepositEntry["kind"], { icon: IconName; label: string; legacyClass: number }> = {
+  text: { icon: "file", label: "note", legacyClass: AttestationClass.DEVICE_CAPTURE },
+  media: { icon: "image", label: "photo / clip", legacyClass: AttestationClass.DEVICE_CAPTURE },
+  import: { icon: "inbox", label: "conversation", legacyClass: AttestationClass.IMPORT },
 };
 
 export type Seal = LandingPhase | "anchoring" | "publishing";
@@ -35,6 +37,11 @@ export function PassportCard({
   now?: number | undefined;
 }) {
   const kind = KIND[entry.kind];
+  // `entry.class` is what this deposit was actually minted under. Entries written before the
+  // field existed fall back to the map above — not a guess: that is precisely what this app
+  // minted for each tab at the time.
+  const klass = entry.class ?? kind.legacyClass;
+  const hardware = klass === AttestationClass.HARDWARE;
   const sealPill =
     seal === "published" && gatewayUrl ? (
       <a
@@ -69,7 +76,7 @@ export function PassportCard({
         <span className="passport-title">
           <Icon name={kind.icon} />
           <span>{entry.label}</span>
-          <Pill tone="accent">{kind.klass}</Pill>
+          <Pill tone={hardware ? "ok" : "accent"}>{className(klass)}</Pill>
         </span>
         <span className="passport-seal">{sealPill}</span>
       </div>
@@ -82,6 +89,11 @@ export function PassportCard({
         </span>
         <span>ns {entry.ns}</span>
         <span>{kind.label}</span>
+        {entry.deviceClass && (
+          <span>
+            device <Hash value={entry.deviceClass} n={6} />
+          </span>
+        )}
         <span>{relativeTime(entry.at, now)}</span>
         {entry.anchorTx && <Tx hash={entry.anchorTx} chainId={chainId} label="anchored" />}
       </div>

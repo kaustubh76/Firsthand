@@ -14,6 +14,8 @@ export type ErrorCode =
   | "FH_NOT_IMPLEMENTED"
   | "FH_REFUSED_ORIGIN"
   | "FH_REFUSED_DUPLICATE"
+  | "FH_REFUSED_HARDWARE"
+  | "FH_ATTESTATION_INVALID"
   | "FH_MERKLE_INVALID"
   | "FH_SIG_INVALID"
   | "FH_GRANT_NOT_LIVE"
@@ -101,10 +103,11 @@ export class NotImplementedError extends FirsthandError {
  * Deposit-time refusal — "the locker that turns data away" (README §7.1).
  * `FH_REFUSED_ORIGIN`: signature does not verify against an enrolled lineage.
  * `FH_REFUSED_DUPLICATE`: passportId already present in the batch or anchored.
+ * `FH_REFUSED_HARDWARE`: class 3 without a secure-element witness over this passport (ADR-0015).
  */
 export class RefusalError extends FirsthandError {
   constructor(
-    code: Extract<ErrorCode, "FH_REFUSED_ORIGIN" | "FH_REFUSED_DUPLICATE">,
+    code: Extract<ErrorCode, "FH_REFUSED_ORIGIN" | "FH_REFUSED_DUPLICATE" | "FH_REFUSED_HARDWARE">,
     message: string,
     options: FirsthandErrorOptions = {},
   ) {
@@ -216,6 +219,8 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   FH_NOT_IMPLEMENTED: 501,
   FH_REFUSED_ORIGIN: 422,
   FH_REFUSED_DUPLICATE: 409,
+  FH_REFUSED_HARDWARE: 422,
+  FH_ATTESTATION_INVALID: 422,
   FH_MERKLE_INVALID: 422,
   FH_SIG_INVALID: 422,
   FH_GRANT_NOT_LIVE: 403,

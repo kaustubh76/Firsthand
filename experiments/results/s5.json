@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-03T17:01:48.983Z",
+  "trials": [
+    {
+      "scenario": "s5",
+      "arm": "memory",
+      "hypothesis": "refusal",
+      "startedAt": "2026-10-03T17:01:14.450Z",
+      "durationMs": 34489.926708,
+      "metrics": {
+        "deposits": {
+          "value": 500,
+          "unit": "count"
+        },
+        "genuineAdmitted": {
+          "value": 500,
+          "unit": "count"
+        },
+        "injected": {
+          "value": 2000,
+          "unit": "count"
+        },
+        "refused": {
+          "value": 2000,
+          "unit": "count"
+        },
+        "wronglyAccepted": {
+          "value": 0,
+          "unit": "count"
+        },
+        "wronglyRefused": {
+          "value": 0,
+          "unit": "count"
+        },
+        "refusalRate": {
+          "value": 1,
+          "unit": "ratio"
+        },
+        "witnessGateP50Ms": {
+          "value": 13.31262500000048,
+          "unit": "ms"
+        },
+        "witnessGateP95Ms": {
+          "value": 33.539166999999,
+          "unit": "ms"
+        }
+      },
+      "onChain": false,
+      "notes": [
+        "Target: refusalRate 1.0 and wronglyRefused 0 — every transplanted, mismatched, missing or tampered witness turned away, and every genuine one admitted.",
+        "The transplanted arm replays a *genuine* signature onto a second locker's deposit of the same bytes: different origin and nonce give a different hwDigest, so the signature no longer covers it.",
+        "The device is a software P-256 key. That measures the gate, which is identical whichever side of a secure element the scalar sits on; that the key never left one is proved by the registry verifying a certificate chain, on a chain, in sdk/test/anvil/device.roundtrip.test.ts.",
+        "Not measured here, because no handset is attached: StrongBox signing latency, and a real attestation's security level and chain size."
+      ]
+    }
+  ]
+}

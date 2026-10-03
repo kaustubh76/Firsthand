@@ -1,14 +1,23 @@
 import {
   buildAgentURI,
   encodePaymentHeader,
+  MemoryAnchorWriter,
   MemoryBlobStore,
+  MemoryConsentLedger,
+  MemoryDeviceRegistry,
   MemoryErc8004Registry,
+  MemoryGrantReader,
+  MemoryPassportCatalog,
+  MemorySettlement,
   MemoryTransport,
 } from "@firsthand/adapters";
 import {
+  type Attestation,
   AttestationClass,
+  type Bytes32,
   hashTerms,
   LICENSE_FH_1_0,
+  type PassportSidecar,
   Scope,
   sidecarToWire,
   type Terms,
@@ -22,18 +31,24 @@ import {
   BuyerSession,
   createBuyerKeys,
   deposit,
+  deviceClassFor,
   exportLocker,
   importLocker,
   Locker,
+  mintPassport,
   parseBundle,
   planGrant,
+  publishDeposit,
+  publishWrap,
   serialiseBundle,
   sidecarFor,
+  signCaptureWitness,
 } from "@firsthand/sdk";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "./config.js";
 import { createGateway, LENS_REASONS } from "./server.js";
+import { Serving } from "./services/Serving.js";
 
 /**
  * Full memory-mode flow through the HTTP surface: a principal deposits and publishes, grants to a
@@ -107,7 +122,6 @@ async function scenario(erc8004?: MemoryErc8004Registry) {
     attestation,
   });
   const target = { gateway: "http://gw", fetch: fetchApp };
-  const { publishDeposit } = await import("@firsthand/sdk");
   await publishDeposit({ gatewayUrl: target.gateway, fetch: fetchApp }, locker, batcher, r, terms);
 
   // Buyer: card + terms + grant (seeded into the memory grant reader as the contract would).
@@ -137,7 +151,6 @@ async function scenario(erc8004?: MemoryErc8004Registry) {
     term: 4n,
   });
   expect(grantId).toBe(plan.grantId);
-  const { publishWrap } = await import("@firsthand/sdk");
   await publishWrap({ gatewayUrl: target.gateway, fetch: fetchApp }, grantId, plan.wrap);
 
   return {
@@ -678,5 +691,236 @@ describe("gateway serving path (memory mode)", () => {
     expect(() =>
       createGateway(loadConfig({ SETTLEMENT_MODE: "onchain" }), { logger: noopLogger }),
     ).toThrow(/DEPLOYMENTS_FILE/);
+  });
+});
+
+/**
+ * The class-3 ingest gate (ADR-0015).
+ *
+ * This is the enforcement point that matters. A locker checks its own deposits, but a buyer
+ * trusts the gateway, and the sidecar is the first place the attestation preimage and the witness
+ * are both in hand. Everything here runs against memory doubles — the same code path the anvil
+ * tier runs for real.
+ */
+
+const domain = { chainId: 10143n, verifyingContract: `0x${"a1".repeat(20)}` } as const;
+
+/**
+ * Lockers and a device key, opened once for the whole suite.
+ *
+ * Deriving a key tree is the expensive part of a locker, and under `--coverage` nine of them is
+ * the difference between a five-second test and a timeout. The anchors are shared too, because a
+ * `Serving` can only confirm a root its own anchor writer saw; each test still gets its own
+ * `Serving` and its own device registry, which is what the tests actually vary.
+ */
+const shared = (async () => {
+  const anchors = new MemoryAnchorWriter();
+  const locker = await Locker.open(prfSource(1), {
+    domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
+    epochs,
+    anchors,
+    blobs: new MemoryBlobStore(),
+    clock,
+    namespaces: [{ ns: 0, label: "captures" }],
+  });
+  // A software stand-in for the phone's secure element. It is a real P-256 key, so the witness is
+  // well formed; what it is not is *registered*, which is the whole point of the registry checks.
+  const device = (
+    await Locker.open(prfSource(9), {
+      domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
+      epochs,
+      anchors,
+      blobs: new MemoryBlobStore(),
+      clock,
+    })
+  ).authorityKey();
+  return { anchors, locker, device };
+})();
+
+async function harness(
+  options: { devices?: MemoryDeviceRegistry; requireVerifiedBoot?: boolean } = {},
+) {
+  const { anchors, locker, device } = await shared;
+  const grants = new MemoryGrantReader();
+  const serving = new Serving({
+    anchors,
+    blobs: new MemoryBlobStore(),
+    catalog: new MemoryPassportCatalog(),
+    grants,
+    settlement: new MemorySettlement(grants, new MemoryConsentLedger()),
+    domain: { chainId: domain.chainId, verifyingContract: domain.verifyingContract },
+    logger: noopLogger,
+    ...(options.devices ? { devices: options.devices } : {}),
+    ...(options.requireVerifiedBoot ? { requireVerifiedBoot: true } : {}),
+  });
+  grants.setEpoch(5n);
+  grants.enroll(locker.principalId, 5n);
+
+  const terms: Terms = {
+    price: 1_000n,
+    licenseId: LICENSE_FH_1_0,
+    scope: Scope.TRAIN,
+    ns: 0,
+    rateLimit: 2,
+    payees: [locker.depositKey(0).address],
+    weights: [WAD],
+  };
+
+  const attestation: Attestation = {
+    class: AttestationClass.HARDWARE,
+    capturedAt: 1_700_000_000n,
+    sourceTag: ZERO_HASH,
+    deviceClass: deviceClassFor(device.publicKey),
+    metaHash: ZERO_HASH,
+  };
+
+  /** A published-shaped sidecar for a class-3 deposit, with whatever witness the caller wants. */
+  async function sidecarOf(
+    mutate: (witness: PassportSidecar["hardware"]) => PassportSidecar["hardware"] = (w) => w,
+    att: Attestation = attestation,
+  ): Promise<PassportSidecar> {
+    const batcher = new Batcher(locker, anchors, 1);
+    const bytes = new TextEncoder().encode(`capture ${att.capturedAt}-${Math.random()}`);
+    const signed = mintPassport(locker, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms,
+      attestation: att,
+    });
+    const hardware = signCaptureWitness(device, {
+      chainId: domain.chainId,
+      passport: signed.passport,
+      attestation: att,
+    });
+    const result = await deposit(locker, batcher, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms,
+      attestation: att,
+      hardware,
+    });
+    const sidecar = sidecarFor(locker, batcher, result, terms);
+    const mutated = mutate(sidecar.hardware);
+    const { hardware: _drop, ...rest } = sidecar;
+    return mutated ? { ...rest, hardware: mutated } : rest;
+  }
+
+  return { serving, locker, terms, attestation, device, sidecarOf, anchors };
+}
+
+describe("gateway ingest — a class-3 passport is checked, not believed", () => {
+  it("accepts a witnessed capture from a registered device", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    devices.register({ principalId: h.locker.principalId, publicKey: h.device.publicKey });
+
+    const sidecar = await h.sidecarOf();
+    await expect(h.serving.ingestPassport(sidecar)).resolves.toBeDefined();
+  });
+
+  it("refuses when this gateway cannot reach a device registry at all", async () => {
+    // Absence is a refusal, not a pass: a gateway that cannot ask whether a key is hardware-backed
+    // has no business hosting a passport that says it is.
+    const h = await harness();
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/cannot reach a device registry/),
+    });
+  });
+
+  it("refuses a device that was never registered", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/not registered to this principal, or has been revoked/),
+    });
+  });
+
+  it("refuses a revoked device, so a stolen phone stops depositing", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    const id = devices.register({
+      principalId: h.locker.principalId,
+      publicKey: h.device.publicKey,
+    });
+    devices.revoke(id, 1_700_000_500n);
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+    });
+  });
+
+  it("refuses a device registered to somebody else", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    devices.register({
+      principalId: `0x${"ee".repeat(32)}` as Bytes32,
+      publicKey: h.device.publicKey,
+    });
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+    });
+  });
+
+  it("refuses a class-3 sidecar carrying no witness", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    devices.register({ principalId: h.locker.principalId, publicKey: h.device.publicKey });
+    await expect(
+      h.serving.ingestPassport(await h.sidecarOf(() => undefined)),
+    ).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/no secure-element witness/),
+    });
+  });
+
+  it("refuses a witness whose signature does not verify", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    devices.register({ principalId: h.locker.principalId, publicKey: h.device.publicKey });
+    const tampered = await h.sidecarOf((w) =>
+      w ? { ...w, signature: `0x${"22".repeat(64)}` } : w,
+    );
+    await expect(h.serving.ingestPassport(tampered)).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/does not verify over this passport/),
+    });
+  });
+
+  it("applies verified-boot policy here, because the chain deliberately does not", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices, requireVerifiedBoot: true });
+    // Registered, live, correctly witnessed — and booted unverified. The chain recorded that and
+    // accepted the device; refusing it is this gateway's published choice, not the protocol's.
+    devices.register({
+      principalId: h.locker.principalId,
+      publicKey: h.device.publicKey,
+      verifiedBootState: 2,
+    });
+    await expect(h.serving.ingestPassport(await h.sidecarOf())).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(/verified-boot state is Verified/),
+    });
+
+    // A gateway that has not published that policy takes the same deposit.
+    const lenient = await harness({ devices });
+    devices.register({
+      principalId: lenient.locker.principalId,
+      publicKey: lenient.device.publicKey,
+      verifiedBootState: 2,
+    });
+    await expect(lenient.serving.ingestPassport(await lenient.sidecarOf())).resolves.toBeDefined();
+  });
+
+  it("rejects a witness attached to a passport that never claimed class 3", async () => {
+    const devices = new MemoryDeviceRegistry();
+    const h = await harness({ devices });
+    devices.register({ principalId: h.locker.principalId, publicKey: h.device.publicKey });
+    const classTwo: Attestation = { ...h.attestation, class: AttestationClass.DEVICE_CAPTURE };
+    // Well-formed, verifiable, and meaningless — storing it where a reader might mistake it for a
+    // checked claim is worse than refusing it.
+    await expect(h.serving.ingestPassport(await h.sidecarOf((w) => w, classTwo))).rejects.toThrow(
+      /does not claim class 3/,
+    );
   });
 });

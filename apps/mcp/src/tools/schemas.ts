@@ -16,7 +16,9 @@ export const DepositInputSchema = z.object({
     .default("1")
     .describe("Price per query in USDC base units (6 decimals)"),
   payee: address.describe("Address that receives royalties"),
-  attestationClass: z.enum(["unattested", "import", "device_capture"]).default("unattested"),
+  attestationClass: z
+    .enum(["unattested", "import", "device_capture", "hardware"])
+    .default("unattested"),
   sourceTag: z.string().optional().describe("Import source label, e.g. chatgpt-export-v1"),
   publish: z
     .boolean()
@@ -101,7 +103,7 @@ export const ListPassportsInputSchema = z.object({
   principalId: hex32.describe("The principal whose published passports to list"),
   ns: z.number().int().min(0).max(15).optional(),
   class: z
-    .enum(["unattested", "import", "device_capture"])
+    .enum(["unattested", "import", "device_capture", "hardware"])
     .optional()
     .describe("Only passports of this attestation class (README §13: buyers filter by class)"),
   limit: z.number().int().min(1).max(100).default(50),

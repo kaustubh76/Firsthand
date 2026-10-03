@@ -1,3 +1,5 @@
+export type { Pacer, PacerOptions } from "@firsthand/runtime";
+export { createPacer, immediatePacer, pacedMap } from "@firsthand/runtime";
 export type { OnchainAnchorWriterOptions } from "./anchors/OnchainAnchorWriter.js";
 export { OnchainAnchorWriter } from "./anchors/OnchainAnchorWriter.js";
 export { FsBlobStore } from "./blobs/FsBlobStore.js";
@@ -10,6 +12,8 @@ export type { ObjectPassportCatalogOptions } from "./catalog/ObjectPassportCatal
 export { ObjectPassportCatalog } from "./catalog/ObjectPassportCatalog.js";
 export type { ChainClients, ChainClientsOptions } from "./chain.js";
 export { anvil, createChainClients, monadTestnet } from "./chain.js";
+export type { OnchainDeviceRegistryReaderOptions } from "./devices/OnchainDeviceRegistryReader.js";
+export { OnchainDeviceRegistryReader } from "./devices/OnchainDeviceRegistryReader.js";
 export {
   CARD_METADATA_KEY,
   FEEDBACK_TAG1,
@@ -54,6 +58,8 @@ export type {
   LedgerScanReport,
   ReceiptView,
 } from "./ports/ConsentLedger.js";
+export type { DevicePolicy, DeviceRegistryReader, DeviceView } from "./ports/DeviceRegistry.js";
+export { deviceIsLive } from "./ports/DeviceRegistry.js";
 export type {
   AgentView,
   Erc8004Registry,

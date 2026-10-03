@@ -28,12 +28,15 @@ import type { LockerCtx } from "./types.js";
 export function GrantsCard({
   ctx,
   statuses,
+  throttled = false,
   expiries,
   reveal,
   onWithdrawn,
 }: {
   ctx: LockerCtx;
   statuses: ReadonlyMap<Bytes32, GrantChainStatus> | null;
+  /** True when the chain refused some reads over its per-second window — not a grant state. */
+  throttled?: boolean | undefined;
   /** Epoch each grant lapses at on its own (`epochStart + term`), derived from the chain. */
   expiries: ReadonlyMap<Bytes32, bigint>;
   /** The deployment's reveal window and the chain's head — what a pending commit's deadline is read from. */
@@ -85,6 +88,13 @@ export function GrantsCard({
         )
       }
     >
+      {throttled && (
+        <Notice tone="warn">
+          The chain refused some reads over its per-second limit, so a status below may be this
+          browser's own record rather than the chain's answer. Refreshing in a moment will settle
+          it.
+        </Notice>
+      )}
       {journal.grants.length === 0 ? (
         <EmptyState
           icon="key"

@@ -22,6 +22,12 @@ export interface Deployment {
   /** USDC (EIP-3009) used by RoyaltyRouter; MockUSDC on local chains. */
   readonly USDC: `0x${string}`;
   readonly revealWindowBlocks: number;
+  /**
+   * ADR-0015. Optional because a deployment document written before hardware attestation shipped
+   * is still a valid one, and a gateway booting against it should degrade rather than refuse to
+   * start — the same reason the capture app reads addresses as `(c["X"] ?? ZERO)`.
+   */
+  readonly HardwareDeviceRegistry?: `0x${string}`;
 }
 
 const ADDRESS_KEYS = [
@@ -37,6 +43,9 @@ const ADDRESS_KEYS = [
   "USDC",
 ] as const;
 
+/** Validated when present, never required: see `Deployment.HardwareDeviceRegistry`. */
+const OPTIONAL_ADDRESS_KEYS = ["HardwareDeviceRegistry"] as const;
+
 const NUMBER_KEYS = ["chainId", "genesis", "epochLength", "revealWindowBlocks"] as const;
 
 /**
@@ -51,6 +60,12 @@ export function parseDeployment(raw: unknown, source: string): Deployment {
       throw new Error(`${source}: missing or malformed address for ${key}`);
     }
   }
+  for (const key of OPTIONAL_ADDRESS_KEYS) {
+    const value = d[key];
+    if (value !== undefined && (typeof value !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value))) {
+      throw new Error(`${source}: malformed address for ${key}`);
+    }
+  }
   for (const key of NUMBER_KEYS) {
     if (typeof d[key] !== "number" || !Number.isFinite(d[key] as number)) {
       throw new Error(`${source}: missing or malformed number for ${key}`);
@@ -62,7 +77,10 @@ export function parseDeployment(raw: unknown, source: string): Deployment {
   const lower = Object.fromEntries(
     Object.entries(d).map(([k, v]) => [
       k,
-      (ADDRESS_KEYS as readonly string[]).includes(k) ? (v as string).toLowerCase() : v,
+      (ADDRESS_KEYS as readonly string[]).includes(k) ||
+      (OPTIONAL_ADDRESS_KEYS as readonly string[]).includes(k)
+        ? (v as string).toLowerCase()
+        : v,
     ]),
   );
   return lower as unknown as Deployment;

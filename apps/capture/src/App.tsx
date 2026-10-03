@@ -9,7 +9,13 @@ import { EPOCH_REASONS, type Failure, onFailure } from "./lib/failures.js";
 import { fetchHealth, type GatewayHealth } from "./lib/health.js";
 import { fetchLiveness, type Liveness } from "./lib/liveness.js";
 import { type CaptureClient, createClient, openSession } from "./lib/locker.js";
-import { prfSourceFor, savedCredentialId } from "./lib/prf.js";
+import {
+  forgetCredentialId,
+  isPrfAbsent,
+  prfSourceFor,
+  saveCredentialId,
+  savedCredentialId,
+} from "./lib/prf.js";
 import { absorbRequestFromUrl, type GrantRequest, parsePrincipalLink } from "./lib/requests.js";
 import { Capture } from "./routes/Capture.js";
 import { Enroll } from "./routes/Enroll.js";
@@ -186,16 +192,31 @@ export function App() {
     [refreshHealth, refreshLiveness],
   );
 
-  async function unlock(id: Uint8Array) {
+  /**
+   * One passkey tap derives the key tree. This is also the PRF gate: the authenticator's
+   * create-time flag is only a hint, so a fresh credential is remembered only once it has actually
+   * derived, and an authenticator that cannot derive is named here rather than at enrolment.
+   */
+  async function unlock(id: Uint8Array, justEnrolled = false) {
     if (!client) return;
     setUnlocking(true);
     setUnlockError(null);
     try {
       const s = await openSession(client.client, prfSourceFor(id));
+      if (justEnrolled) saveCredentialId(id);
       setSession(s);
       void refreshLiveness(s);
     } catch (e) {
-      setUnlockError((e as Error).message);
+      if (isPrfAbsent(e)) {
+        // A passkey that cannot derive must not be remembered, or every load retries it.
+        forgetCredentialId();
+        setCredentialId(null);
+        setUnlockError(
+          "This passkey cannot derive a locker key: its authenticator does not return a PRF output. Enrol with a passkey held by the device you are using — Touch ID on this Mac, Windows Hello on this PC, the screen lock on this phone — rather than one on another device over a QR code.",
+        );
+      } else {
+        setUnlockError((e as Error).message);
+      }
     } finally {
       setUnlocking(false);
     }
@@ -264,9 +285,10 @@ export function App() {
       <main>
         <JourneyRail steps={journey} />
         <Enroll
+          problem={unlockError}
           onEnrolled={(id) => {
             setCredentialId(id);
-            void unlock(id);
+            void unlock(id, true);
           }}
         />
         {publicLinks}

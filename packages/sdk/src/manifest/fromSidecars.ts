@@ -71,6 +71,7 @@ export async function manifestFromSidecars(input: SidecarManifestInput): Promise
             },
           }
         : {}),
+      ...(sidecar.hardware ? { hardware: sidecar.hardware } : {}),
       ...(receipt
         ? {
             receipt: {

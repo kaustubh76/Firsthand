@@ -9,6 +9,7 @@ Harness for README §15. Arms are adapter selections (ADR-0006); results are raw
 | S2 buyer loop | H1 (settlement gas), H3 (manifest with receipts) | yes (memory, `anchors-baseline`) | `… s2 -- --n 100` · `… s2 -- --arm anchors-baseline --n 100` |
 | S3 rescission race | H2 | anvil only — see the Monad note below | `… s3 -- --arm B2-public-mempool --n 50` · `… --arm commit-reveal` · `… --arm btx-blind` |
 | S4 refusal | refusal precision | yes | `… s4 -- --n 1000` |
+| S5 transplantation resistance | refusal precision (ADR-0015) | yes | `… s5 -- --n 500` |
 
 ## Findings so far (memory arm, this machine)
 
@@ -35,15 +36,59 @@ charges *more* in absolute terms for the same anchor (+19 % baseline, +12 % page
 choice matters more there, not less. Measured 2026-09-16 against the live deployment in
 `deployments/10143.json`; ADR-0010 carries the verdict.
 
+**Why 4.2 % and not the ~98 % headline — the MIP-8 spec answers it, and the answer is that the
+measurement is right.** [MIP-8](https://mips.monad.xyz/MIPs/MIP-8) (testnet 2026-08-12, mainnet
+2026-09-02, so the run above is post-activation) prices a **page of 128 consecutive 32-byte slots**
+(`page_index(slot) = slot >> 7`) with `BASE_COST` 100, `LOAD_COST` 8 000, `WRITE_COST` 2 800 and
+`STATE_GROWTH_COST` 17 000. The famous ratio is **8 100 → 100**: the first access to a page in a
+transaction pays cold, every other slot *of that page, in that same transaction* is warm. The
+discount is therefore an **intra-transaction amortisation**, and `PassportAnchors.anchor()` writes
+**one batch root per transaction** — there is no second access to amortise. What the clustered
+layout can still save is one page's worth of I/O, and that is what it saves: the paged arm is
+8 408 gas cheaper on Monad and 3 249 gas *dearer* on a vanilla EVM (it pays for an extra scattered
+`_pointer` slot), an 11 657-gas swing against one page's `LOAD + BASE + WRITE` = **10 900**. The
+17 000 state-growth charge that dominates a new anchor is charged on new slot occupancy and
+clustering does not avoid it. So the layout is capturing the whole discount available to this
+workload; the headline describes a different access pattern — one that reads or rewrites many
+clustered slots in a single transaction. The place that pattern *does* occur here is **verification**
+(`isAnchored` / `anchorBlock` over many roots, and access lists, which MIP-8 explicitly dedupes by
+page); measuring an `anchorMany` arm would show the same effect on the write path. Neither is
+measured yet, and neither is claimed.
+
 Caveat on the same run: `verifyMerkleMs` for on-chain arms (9.0 s / 7.3 s for 2 560 assets) is
-**not** comparable to the H3 figure below — on a live chain the verifier makes one `isAnchored` RPC
-round-trip per batch root, so that number is dominated by network latency, not hashing.
+**not** comparable to the H3 figure below — on a live chain that number is dominated by network
+latency, not hashing. The arithmetic: 10 distinct roots × 3 reads × ~285 ms per round trip against
+Monad's public RPC ≈ 8.5 s of the 9.0 s, with ~0.5 s of actual hashing. Anchor reads were already
+deduplicated per root (not per asset), so this was never an N+1 — it was round trips.
+
+**Those two figures predate 2026-10-02 and are no longer what the code does.** The verifier now
+reads `isAnchored` and `anchorOf` together, and skips the separate `anchorBlock` entirely where a
+reader offers `anchorOf` (it already carries the anchored block) — 3 sequential round trips per root
+become 1, so the same corpus should spend roughly a third of that time. The numbers above are left
+as measured rather than re-estimated; re-running S1 on chain would re-anchor 2 560 passports, which
+is not worth the gas to refresh a caveat.
 
 **S4 on-chain half (`anchors-baseline`), 20 forged anchors signed by a foreign deposit key against
 an enrolled principal:** 20 refused by the contract (`InvalidDepositSignature`), 0 accepted; a
 never-enrolled principal is refused with `EpochNotAttested`. **Re-run on Monad testnet 2026-09-16:
 identical — 200/200 client-side refusals (precision 1.0, recall 1.0) and 20/20 forged anchors
 refused on chain.**
+
+**S5 transplantation resistance (memory arm), 500 class-3 deposits and 2 000 injected
+witnesses:** 500/500 genuine deposits admitted, **2 000/2 000 refused** (refusal rate 1.0), nothing
+wrongly refused. Four attacks per deposit: a *genuine* secure-element signature replayed onto a
+second locker's deposit of the same bytes — different origin and nonce, so a different `hwDigest`
+— plus a witness from the wrong device, a class-3 passport carrying none at all, and one with a
+byte of the signature changed. The gate costs 13.3 ms p50 / 33.5 ms p95, which is the whole
+class-3 admission path and not just the P-256 verify.
+
+The device is a software P-256 key, deliberately: this scenario measures the **gate**, which is
+identical whichever side of a secure element the scalar sits on. That the key provably never left
+one is a different claim, and it is measured on a chain by
+`packages/sdk/test/anvil/device.roundtrip.test.ts`, where `HardwareDeviceRegistry` verifies the
+certificate chain through RIP-7212 and then refuses the same witness after revocation. Not
+reported here, because no handset is attached: StrongBox signing latency and a real attestation's
+security level and chain size.
 
 **S2 on Monad testnet, 1 grant → 25 paid queries:** **348,087 gas per `RoyaltyRouter.settle`**
 (vs 241,741 on a vanilla EVM, +44 %), query latency p50 **3.47 s** / p95 3.57 s end to end — real
@@ -99,7 +144,12 @@ leaders — so `txpool_content` is unsupported and an RPC-level watcher has noth
 harness refuses the arm with that reason rather than reporting 50 blind trials as a result. So on
 Monad the public-mempool baseline cannot even be *staged* from a public endpoint: the realistic
 adversary is a leader or builder with privileged visibility, not a bot on an RPC. That narrows H2's
-threat model considerably and should be stated that way rather than as a win.
+threat model considerably and should be stated that way rather than as a win. This is Monad's own
+documented design, not an inference from a failed probe — [the differences
+page](https://docs.monad.xyz/developer-essentials/differences) states it plainly: *"There is no
+global mempool. For efficiency, transactions are forwarded to the next few leaders."* So the
+question BTX answers here is **leader visibility**, and an encrypted mempool's claim should be read
+against that adversary.
 
 **S4, 60 injected attacks × 3 classes (foreign lineage, forged content, replayed epoch) + 60
 genuine:** precision 1.0, recall 1.0 — the locker refused every unprovable deposit and no genuine one.

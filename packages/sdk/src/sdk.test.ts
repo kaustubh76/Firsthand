@@ -7,29 +7,43 @@ import {
   MemoryReceiptReader,
   MemoryTransport,
 } from "@firsthand/adapters";
-import { GrantManagerAbi, PrincipalRegistryAbi } from "@firsthand/contracts/abi";
+import {
+  GrantManagerAbi,
+  HardwareDeviceRegistryAbi,
+  PrincipalRegistryAbi,
+} from "@firsthand/contracts/abi";
 import {
   type Address,
   type Attestation,
   AttestationClass,
+  AttestationError,
   attestStructHash,
   authorityDigest,
   type Bytes32,
   bytesToHex,
   contentHash,
   depositKeysRoot,
+  deviceKeyCommitment,
   enrollStructHash,
   GrantStatus,
   grantIdOf,
+  type HardwareWitness,
+  hardwareCaptureDigest,
   hashTerms,
+  hexToBytes,
   LICENSE_FH_1_0,
   MONAD_TESTNET_CHAIN_ID,
+  type P256PublicKey,
   type PassportSidecar,
+  p256Commitment,
+  parseSidecar,
   passportDigest,
   passportId,
   RefusalError,
+  registerDeviceStructHash,
   rescindStructHash,
   rescissionCommitment,
+  revokeDeviceStructHash,
   Scope,
   type SignedPassport,
   sidecarToWire,
@@ -40,18 +54,23 @@ import {
   ZERO_HASH,
 } from "@firsthand/core";
 import {
+  type AuthorityKey,
   generateGranteeKeypair,
+  type KeyProvider,
   KeyTree,
   openBlob,
   SecretBytes,
   StaticPrfSource,
+  signAuthorityDigest,
   signPassportDigest,
   unwrapDek,
   unwrapVaultKey,
 } from "@firsthand/crypto";
+import { loadVectors } from "@firsthand/test-vectors";
 import { decodeFunctionData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { type AnchoredBatch, Batcher } from "./batch/Batcher.js";
 import { BuyerSession, createBuyerKeys } from "./client/BuyerSession.js";
 import { FirsthandClient } from "./client/FirsthandClient.js";
@@ -60,6 +79,7 @@ import { exportManifest, serialiseManifest } from "./manifest/export.js";
 import { manifestFromQueries, manifestFromSidecars } from "./manifest/fromSidecars.js";
 import { verifyManifest } from "./manifest/verify.js";
 import { planAttest } from "./verbs/attest.js";
+import type { AttestationClaim } from "./verbs/deposit.js";
 import {
   acceptSigned,
   type DepositResult,
@@ -67,6 +87,7 @@ import {
   mintPassport,
   refuseUnlessProvable,
 } from "./verbs/deposit.js";
+import { planRegisterDevice, planRevokeDevice } from "./verbs/device.js";
 import { planEnroll, sendEnroll } from "./verbs/enroll.js";
 import { planGrant } from "./verbs/grant.js";
 import { publishDeposit, sidecarFor, sidecarsForBatch } from "./verbs/publish.js";
@@ -288,6 +309,220 @@ describe("deposit — the locker that turns data away (S4 in miniature)", () => 
       }),
     ).toThrow(/terms.ns/);
     expect(() => new Batcher(locker, locker.anchors, 0)).toThrow(ValidationError);
+  });
+});
+
+describe("deposit — class 3 is a fact or it is refused (ADR-0015)", () => {
+  // A locker's own authority key stands in for a secure element: a P-256 keypair the test can sign
+  // with, which is all a witness is. The real one lives in a phone and its certificate chain is
+  // what `HardwareDeviceRegistry` checks — none of which this gate's job.
+  const deviceA = makeLocker(7).authorityKey();
+  const deviceB = makeLocker(8).authorityKey();
+
+  const hardwareAttestation = (device = deviceA): Attestation => ({
+    class: AttestationClass.HARDWARE,
+    capturedAt: 1_700_000_000n,
+    sourceTag: `0x${"0a".repeat(32)}`,
+    deviceClass: deviceKeyCommitment(device.publicKey),
+    metaHash: ZERO_HASH,
+  });
+
+  /**
+   * What the phone would compute. It needs the origin and nonce the locker is *about* to use,
+   * which is the point: a witness is bound to one locker's deposit of one datum.
+   */
+  function witness(
+    locker: Locker,
+    signer: typeof deviceA,
+    ns: number,
+    bytes: Uint8Array,
+    attestation: Attestation,
+  ): HardwareWitness {
+    const h = contentHash({ kind: "bytes", bytes });
+    const digest = hardwareCaptureDigest({
+      chainId: locker.domain.chainId,
+      origin: locker.depositKey(ns).address,
+      contentHash: h,
+      capturedAt: attestation.capturedAt,
+      nonce: locker.keys.passportNonce(ns, locker.currentEpoch(), h),
+      deviceClass: attestation.deviceClass,
+    });
+    return { publicKey: signer.publicKey, signature: signAuthorityDigest(signer.scalar, digest) };
+  }
+
+  it("accepts a capture the named device actually signed, and carries the witness to the sidecar", async () => {
+    const anchors = new MemoryAnchorWriter();
+    const locker = makeLocker(1, anchors);
+    const batcher = new Batcher(locker, anchors, 1);
+    const bytes = new TextEncoder().encode("a photo taken on the phone");
+    const att = hardwareAttestation();
+    const t = terms(0, locker.depositKey(0).address);
+
+    const result = await deposit(locker, batcher, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: t,
+      attestation: att,
+      hardware: witness(locker, deviceA, 0, bytes, att),
+    });
+
+    expect(result.hardware?.publicKey).toEqual(deviceA.publicKey);
+    const sidecar = sidecarFor(locker, batcher, result, t);
+    expect(sidecar.hardware?.signature).toBe(result.hardware?.signature);
+    // And it survives the wire round trip the gateway sees.
+    expect(parseSidecar(sidecarToWire(sidecar)).hardware).toEqual(result.hardware);
+  });
+
+  it.each([
+    ["no witness at all", () => undefined, /no secure-element witness/],
+    [
+      "a witness from a different device",
+      (w: HardwareWitness) => ({ ...w, publicKey: deviceB.publicKey }),
+      /not the device this attestation names/,
+    ],
+    [
+      "a witness over something else",
+      (w: HardwareWitness) => ({ ...w, signature: `0x${"11".repeat(64)}` as const }),
+      /does not verify over this passport/,
+    ],
+  ])("refuses %s", async (_label, mangle, message) => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("a photo taken on the phone");
+    const att = hardwareAttestation();
+    const good = witness(locker, deviceA, 0, bytes, att);
+    const mangled = mangle(good);
+
+    await expect(
+      deposit(locker, batcher, {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, locker.depositKey(0).address),
+        attestation: att,
+        ...(mangled ? { hardware: mangled } : {}),
+      }),
+    ).rejects.toMatchObject({
+      code: "FH_REFUSED_HARDWARE",
+      message: expect.stringMatching(message),
+    });
+  });
+
+  it("refuses a witness lifted from another locker — this is the transplantation claim", async () => {
+    const bytes = new TextEncoder().encode("the very same bytes");
+    const att = hardwareAttestation();
+    const alice = makeLocker(1);
+    const mallory = makeLocker(2);
+
+    // Alice's phone signs Alice's deposit. The datum is identical, the device is identical, the
+    // attestation is identical — only the origin key and the deterministic nonce differ, and
+    // `hwDigest` binds both.
+    const forAlice = witness(alice, deviceA, 0, bytes, att);
+    await expect(
+      deposit(mallory, new Batcher(mallory), {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, mallory.depositKey(0).address),
+        attestation: att,
+        hardware: forAlice,
+      }),
+    ).rejects.toBeInstanceOf(RefusalError);
+
+    // The same witness is fine where it belongs.
+    await expect(
+      deposit(alice, new Batcher(alice), {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, alice.depositKey(0).address),
+        attestation: att,
+        hardware: forAlice,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a claim that is not the preimage the passport commits to", async () => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("a photo");
+    const att = hardwareAttestation();
+    const signed = mintPassport(locker, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: terms(0, locker.depositKey(0).address),
+      attestation: att,
+    });
+    // Class 2 claimed over a passport that committed to class 3: without this check the gate could
+    // be stepped around by simply describing the deposit differently.
+    const lie: AttestationClaim = {
+      attestation: { ...att, class: AttestationClass.DEVICE_CAPTURE },
+    };
+    await expect(acceptSigned(locker, batcher, signed, 0, bytes, lie)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it("carries the class into a seller-built manifest, and rejects a tampered witness", async () => {
+    const anchors = new MemoryAnchorWriter();
+    const locker = makeLocker(1, anchors);
+    const batcher = new Batcher(locker, anchors, 1);
+    const bytes = new TextEncoder().encode("the photo in the compliance file");
+    const att = hardwareAttestation();
+    const t = terms(0, locker.depositKey(0).address);
+    const result = await deposit(locker, batcher, {
+      ns: 0,
+      datum: { kind: "bytes", bytes },
+      terms: t,
+      attestation: att,
+      hardware: witness(locker, deviceA, 0, bytes, att),
+    });
+
+    // Before this, `exportManifest` emitted no attestation at all: a buyer could filter on class 3
+    // and then audit a file that never mentioned a class. `manifestFromSidecars` always carried it,
+    // so the two paths disagreed about the same corpus.
+    const manifest = exportManifest({
+      domain,
+      principalId: locker.principalId,
+      ns: 0,
+      batches: batcher.flushed(),
+      attestations: new Map([
+        [result.passportId, { attestation: att, hardware: result.hardware as HardwareWitness }],
+      ]),
+      headBlock: anchors.head,
+    });
+    expect(manifest.assets[0]?.attestation?.class).toBe(AttestationClass.HARDWARE);
+    expect(manifest.assets[0]?.hardware?.publicKey).toEqual(deviceA.publicKey);
+
+    const verdict = await verifyManifest(JSON.parse(serialiseManifest(manifest)), {
+      anchors,
+      headBlock: anchors.head,
+    });
+    expect(verdict.ok).toBe(true);
+
+    // One byte of the witness, and the asset stops verifying — with its own reason, not a vague one.
+    const tampered = JSON.parse(serialiseManifest(manifest));
+    tampered.assets[0].hardware.signature = `0x${"33".repeat(64)}`;
+    const broken = await verifyManifest(tampered, { anchors, headBlock: anchors.head });
+    expect(broken.ok).toBe(false);
+    expect(broken.assets[0]?.reason).toBe("HARDWARE_PROOF_INVALID");
+
+    // And a class-3 asset that simply drops its witness is not quietly downgraded to "fine".
+    const stripped = JSON.parse(serialiseManifest(manifest));
+    stripped.assets[0].hardware = undefined;
+    const naked = await verifyManifest(stripped, { anchors, headBlock: anchors.head });
+    expect(naked.assets[0]?.reason).toBe("HARDWARE_PROOF_INVALID");
+  });
+
+  it("leaves classes 0-2 exactly as they were", async () => {
+    const locker = makeLocker(1);
+    const batcher = new Batcher(locker);
+    const bytes = new TextEncoder().encode("an import");
+    await expect(
+      deposit(locker, batcher, {
+        ns: 0,
+        datum: { kind: "bytes", bytes },
+        terms: terms(0, locker.depositKey(0).address),
+        attestation,
+      }),
+    ).resolves.toBeDefined();
   });
 });
 
@@ -1241,5 +1476,170 @@ describe("query and publish error paths", () => {
         new Uint8Array([1]),
       ),
     ).rejects.toThrow(/gateway rejected/);
+  });
+});
+
+// ── device registration (ADR-0015) ────────────────────────────────────────────────────────────
+// The chain here is the same golden suite the Solidity reader is tested against, so a plan this
+// builds is one `HardwareDeviceRegistry` would accept — the local verification runs the identical
+// policy, which is the point of running it at all.
+
+describe("registerDevice / revokeDevice", () => {
+  const vectors = loadVectors("android-attestation", {
+    input: z.object({ certificate: z.string() }),
+    expected: z.record(z.string(), z.unknown()),
+    extra: z.object({
+      anchorCommitment: z.string(),
+      authorityScalar: z.string(),
+      authorityX: z.string(),
+      authorityY: z.string(),
+      chain: z.array(z.string()),
+      deviceCommitment: z.string(),
+      nonce: z.string(),
+      principalId: z.string(),
+    }),
+  });
+
+  const registry = `0x${"de".repeat(20)}` as Address;
+  const anchors = [vectors.extra.anchorCommitment as Bytes32];
+  const nonce = vectors.extra.nonce as Bytes32;
+  const chain = vectors.extra.chain.map((hex) => hexToBytes(hex as `0x${string}`));
+
+  /**
+   * A real key tree with one substitution: the authority key the fixture's challenge names. The
+   * challenge is baked into a signed certificate that cannot be re-issued, so the locker has to
+   * come to the chain rather than the other way round.
+   */
+  class VectorKeys implements KeyProvider {
+    readonly #inner = KeyTree.fromPrf(new Uint8Array(32).fill(5));
+    readonly #authority: AuthorityKey;
+    constructor() {
+      const publicKey: P256PublicKey = {
+        x: vectors.extra.authorityX as Bytes32,
+        y: vectors.extra.authorityY as Bytes32,
+      };
+      this.#authority = {
+        scalar: new SecretBytes(hexToBytes(vectors.extra.authorityScalar as `0x${string}`), "k_id"),
+        publicKey,
+        commitment: p256Commitment(publicKey),
+      };
+    }
+    authorityKey() {
+      return this.#authority;
+    }
+    vaultKey(ns: number, epoch: bigint) {
+      return this.#inner.vaultKey(ns, epoch);
+    }
+    depositKey(ns: number, epoch: bigint) {
+      return this.#inner.depositKey(ns, epoch);
+    }
+    nonceKey(ns: number, epoch: bigint) {
+      return this.#inner.nonceKey(ns, epoch);
+    }
+    passportNonce(ns: number, epoch: bigint, h: Bytes32) {
+      return this.#inner.passportNonce(ns, epoch, h);
+    }
+    dispose() {
+      this.#inner.dispose();
+    }
+  }
+
+  const deviceLocker = () =>
+    new Locker({
+      keys: new VectorKeys(),
+      domain,
+      epochs,
+      anchors: new MemoryAnchorWriter(),
+      blobs: new MemoryBlobStore(),
+      clock,
+    });
+
+  it("derives the commitment from the certificate rather than taking it on trust", () => {
+    const locker = deviceLocker();
+    const plan = planRegisterDevice(locker, registry, { chain, nonce, anchors });
+
+    expect(locker.principalId).toBe(vectors.extra.principalId);
+    expect(plan.keyCommitment).toBe(vectors.extra.deviceCommitment);
+    // The measurement, read out of the signed certificate and not chosen anywhere.
+    expect(plan.securityLevel).toBe(2);
+
+    const { functionName, args } = decodeFunctionData({
+      abi: HardwareDeviceRegistryAbi,
+      data: plan.tx.data,
+    });
+    expect(plan.tx.to).toBe(registry);
+    expect(functionName).toBe("registerDevice");
+    // The calldata carries the chain; the signature is over the commitment the chain produced.
+    expect(args?.[0]).toBe(locker.principalId);
+    expect(args?.[1]).toEqual(vectors.extra.chain);
+    expect(args?.[2]).toBe(nonce);
+  });
+
+  it("signs the digest the registry will recompute, under the registry's own domain", () => {
+    const locker = deviceLocker();
+    const plan = planRegisterDevice(locker, registry, { chain, nonce, anchors });
+    const digest = authorityDigest(
+      registerDeviceStructHash(locker.principalId, plan.keyCommitment, nonce),
+      // ADR-0009: the verifying contract is the one being called, never PassportAnchors.
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(digest, plan.authoritySig, locker.authorityKey().publicKey)).toBe(true);
+  });
+
+  it("refuses a nonce the certificate did not commit to, before any gas is spent", () => {
+    // The registry checks keccak256(principalId ‖ nonce) against the baked-in challenge, so a
+    // fresh nonce here would buy a revert. Catching it locally turns ChainRejected into a sentence.
+    expect(() =>
+      planRegisterDevice(deviceLocker(), registry, {
+        chain,
+        nonce: `0x${"99".repeat(32)}`,
+        anchors,
+      }),
+    ).toThrow(AttestationError);
+  });
+
+  it("refuses a chain that reaches no pinned anchor", () => {
+    expect(() =>
+      planRegisterDevice(deviceLocker(), registry, {
+        chain,
+        nonce,
+        anchors: [`0x${"11".repeat(32)}`],
+      }),
+    ).toThrow(AttestationError);
+  });
+
+  it("refuses a chain whose challenge names a different principal", () => {
+    // makeLocker's authority key is not the fixture's, so the same chain must not register here —
+    // otherwise one person's attestation could enrol a device under somebody else's principal.
+    expect(() => planRegisterDevice(makeLocker(1), registry, { chain, nonce, anchors })).toThrow(
+      AttestationError,
+    );
+  });
+
+  it("revokes without a chain, and cannot be replayed as a registration", () => {
+    const locker = deviceLocker();
+    const commitment = vectors.extra.deviceCommitment as Bytes32;
+    const revokeNonce = `0x${"77".repeat(32)}` as Bytes32;
+    const plan = planRevokeDevice(locker, registry, commitment, revokeNonce);
+
+    const digest = authorityDigest(
+      revokeDeviceStructHash(locker.principalId, commitment, revokeNonce),
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(digest, plan.authoritySig, locker.authorityKey().publicKey)).toBe(true);
+
+    // Same three fields, different typehash: a revocation signature must not authorise a
+    // registration of the device it just ended.
+    const asRegister = authorityDigest(
+      registerDeviceStructHash(locker.principalId, commitment, revokeNonce),
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(asRegister, plan.authoritySig, locker.authorityKey().publicKey)).toBe(false);
+
+    const { functionName } = decodeFunctionData({
+      abi: HardwareDeviceRegistryAbi,
+      data: plan.tx.data,
+    });
+    expect(functionName).toBe("revokeDevice");
   });
 });

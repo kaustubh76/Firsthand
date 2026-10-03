@@ -20,6 +20,10 @@ library AuthorityDigests {
         keccak256("AcceptTerms(bytes32 granteeCard,bytes32 principalId,uint32 ns,bytes32 termsHash,bytes32 nonce)");
     bytes32 internal constant RESCIND_TYPEHASH = keccak256("Rescind(bytes32 grantId,uint64 epoch,bytes32 nonce)");
     bytes32 internal constant RESCIND_COMMIT_TYPEHASH = keccak256("RescindCommit(bytes32 commitment,bytes32 nonce)");
+    bytes32 internal constant REGISTER_DEVICE_TYPEHASH =
+        keccak256("RegisterDevice(bytes32 principalId,bytes32 keyCommitment,bytes32 nonce)");
+    bytes32 internal constant REVOKE_DEVICE_TYPEHASH =
+        keccak256("RevokeDevice(bytes32 principalId,bytes32 keyCommitment,bytes32 nonce)");
     bytes32 internal constant ANCHOR_TYPEHASH = keccak256(
         "Anchor(bytes32 principalId,uint32 ns,uint64 epoch,bytes32 batchRoot,bytes32 termsHash,bytes32 nonce)"
     );
@@ -68,6 +72,22 @@ library AuthorityDigests {
 
     function rescindCommit(bytes32 commitment, bytes32 nonce) internal pure returns (bytes32) {
         return keccak256(abi.encode(RESCIND_COMMIT_TYPEHASH, commitment, nonce));
+    }
+
+    /// @notice Binds one secure element to one principal (ADR-0015). The key commitment comes
+    ///         from the attestation chain, so the human is signing over a device the certificate
+    ///         named, not one the caller asserted.
+    function registerDevice(
+        bytes32 principalId,
+        bytes32 keyCommitment,
+        bytes32 nonce
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(REGISTER_DEVICE_TYPEHASH, principalId, keyCommitment, nonce));
+    }
+
+    /// @notice Ends a device's ability to witness captures — what a stolen phone needs.
+    function revokeDevice(bytes32 principalId, bytes32 keyCommitment, bytes32 nonce) internal pure returns (bytes32) {
+        return keccak256(abi.encode(REVOKE_DEVICE_TYPEHASH, principalId, keyCommitment, nonce));
     }
 
     /// @dev Signed by the secp256k1 deposit key; relayable by anyone (decision #11).

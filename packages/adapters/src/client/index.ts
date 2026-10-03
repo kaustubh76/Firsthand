@@ -1,3 +1,8 @@
+// The pacer is re-exported here, not imported from `@firsthand/runtime` directly, because the
+// browser bundles only reach `@firsthand/adapters` (the runtime's barrel pulls node built-ins and
+// is not on the capture app's dependency allow-list). The pacer itself is pure timers.
+export type { Pacer, PacerOptions } from "@firsthand/runtime";
+export { createPacer, immediatePacer, pacedMap } from "@firsthand/runtime";
 /**
  * Browser-safe surface: everything a client app needs to talk to a live deployment without holding a
  * key, and nothing that touches node built-ins. `FsBlobStore` and `FsPassportCatalog` are the only
@@ -10,6 +15,8 @@ export type { OnchainAnchorWriterOptions } from "../anchors/OnchainAnchorWriter.
 export { OnchainAnchorWriter, prepareAnchorTx } from "../anchors/OnchainAnchorWriter.js";
 export type { ChainClients, ChainClientsOptions } from "../chain.js";
 export { anvil, createChainClients, monadTestnet } from "../chain.js";
+export type { OnchainDeviceRegistryReaderOptions } from "../devices/OnchainDeviceRegistryReader.js";
+export { OnchainDeviceRegistryReader } from "../devices/OnchainDeviceRegistryReader.js";
 export { CARD_METADATA_KEY, FEEDBACK_TAG1, FEEDBACK_TAG2_PAID } from "../erc8004/abi.js";
 export type { Erc8004Addresses } from "../erc8004/addresses.js";
 export { erc8004Addresses } from "../erc8004/addresses.js";
@@ -39,6 +46,8 @@ export type {
   ConsentEventKind,
   ReceiptView,
 } from "../ports/ConsentLedger.js";
+export type { DevicePolicy, DeviceRegistryReader, DeviceView } from "../ports/DeviceRegistry.js";
+export { deviceIsLive } from "../ports/DeviceRegistry.js";
 export type {
   AgentView,
   Erc8004Registry,

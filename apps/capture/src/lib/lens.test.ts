@@ -1,4 +1,4 @@
-import type { OnchainLensReader } from "@firsthand/adapters/client";
+import { immediatePacer, type OnchainLensReader } from "@firsthand/adapters/client";
 import type { LineageManifest } from "@firsthand/core";
 import { describe, expect, it } from "vitest";
 import { askLens, describeLens } from "./lens.js";
@@ -36,6 +36,7 @@ describe("askLens", () => {
     const report = await askLens(
       fakeLens(() => ({ ok: true, reason: "NONE" })),
       manifest([asset(1, 0x99), asset(2)]),
+      immediatePacer,
     );
     expect(report.rows).toHaveLength(1);
     expect(report.unasked).toBe(1);
@@ -46,6 +47,7 @@ describe("askLens", () => {
     const report = await askLens(
       fakeLens(() => ({ ok: false, reason: "GRANT_RESCINDED" })),
       manifest([asset(1, 0x99)]),
+      immediatePacer,
     );
     expect(report.rows[0]).toMatchObject({ ok: false, reason: "GRANT_RESCINDED" });
     expect(report.standing).toBe(0);
@@ -59,6 +61,7 @@ describe("askLens", () => {
         verify: () => Promise.reject(new Error("rpc down")),
       } as unknown as OnchainLensReader,
       manifest([asset(1, 0x99)]),
+      immediatePacer,
     );
     expect(report.rows[0]?.ok).toBe(false);
     expect(report.rows[0]?.reason).toMatch(/^unreadable: rpc down/);
@@ -69,6 +72,7 @@ describe("askLens", () => {
     const empty = await askLens(
       fakeLens(() => ({ ok: true, reason: "NONE" })),
       manifest([]),
+      immediatePacer,
     );
     expect(describeLens(empty)).toBeNull();
   });

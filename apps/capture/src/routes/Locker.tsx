@@ -19,6 +19,7 @@ import { NS, termsFor } from "../lib/terms.js";
 import { Hash, Notice, Pill } from "../ui/index.js";
 import { ActivityCard } from "./locker/ActivityCard.js";
 import { DepositsCard } from "./locker/DepositsCard.js";
+import { DevicesCard } from "./locker/DevicesCard.js";
 import { EarningsCard } from "./locker/EarningsCard.js";
 import { GrantsCard } from "./locker/GrantsCard.js";
 import { LedgerCard } from "./locker/LedgerCard.js";
@@ -230,6 +231,7 @@ export function LockerView({
             }}
           />
           <OnChainCard ctx={ctx} liveness={liveness} onActivated={onActivated} />
+          <DevicesCard ctx={ctx} />
           <DepositsCard ctx={ctx} />
           <GrantsCard
             ctx={ctx}

@@ -74,6 +74,9 @@ cannot rescind).
 |---|---|
 | Grantee front-runs rescission | `TxTransport` (btx vs public, path/transport consistency enforced), `Rescissions` commit store, S3 harness on chain (`experiments/src/scenarios/s3-rescission-race.ts`, findings in `experiments/README.md`) |
 | Synthetic laundering through a real passkey | `AttestationClass` + `sourceTag` committed in every passport (`attest = hashAttestation(…)`) and carried in the open in the sidecar, verified at ingest; buyers filter (`?class=` on the listing, `firsthand_list_passports({ class })`) and the compliance file carries the class per asset (`ATTESTATION_MISMATCH` if relabelled); not prevented — see §6 |
+| Witness transplanted between devices or lockers | class 3 (ADR-0015): `HardwareDeviceRegistry` verifies the attestation chain on chain through RIP-7212 and records the measured security level; the witness is signed over `origin ‖ h ‖ capturedAt ‖ nonce ‖ deviceClass`, so the same bytes under a second locker have a different digest and are refused (`FH_REFUSED_HARDWARE`). **Does not** establish that a sensor saw anything — see §6.3 |
+| Class 3 not yet live on 10143 | **Status, stated rather than implied:** `HardwareDeviceRegistry` is written, at 100% line and branch coverage, and cross-checked against the TypeScript reader through a shared golden suite — but it is **not deployed to Monad testnet yet**, and the certificates it has been tested against are generated, not pulled off a handset. A gateway whose deployment names no registry refuses every class-3 deposit, which is the correct behaviour and the behaviour in production today |
+| Attestation root above the pinned certificate | **Not verified on chain.** No commercial attestation root is P-256 (Google's is RSA or P-384) and RIP-7212 verifies P-256 only, so what `HardwareDeviceRegistry` pins is the highest P-256 certificate in the chain; the link above it is checked once, off chain, and the pin records that result. Anchors are constructor arguments with no setter (README §22 forbids an upgradable anchor) |
 | Passport replay / re-mint | deterministic nonce (ADR-0005) → structural dedup; `Batcher`, `PassportAnchors.DuplicateRoot`; S4 (`s4-refusal.ts`) |
 | Stolen passkey | epoch rotation (§4) |
 | Bulk scraping within a live grant | `rateLimit` middleware pre-filter; `ReceiptLedger` counters (chain is truth) |
@@ -92,7 +95,11 @@ cannot rescind).
 2. A buyer can cache and re-use delivered data; FIRSTHAND provides accountability (provable license
    breach via receipts), not prevention.
 3. A passport proves origin key, attestation class, consent and integrity — **not** truth, quality,
-   or one-human-one-passkey. Commodity capture attestation is heuristic; hardware attestation is roadmap.
+   or one-human-one-passkey. Commodity capture attestation (class 2) is heuristic: nothing checks
+   it. Hardware attestation (class 3, ADR-0015) is checked — a secure element's certificate chain
+   is verified on chain — but it buys **transplantation resistance**, not sensor provenance:
+   `setAttestationChallenge` attests the *key*, and the element signs a digest handed to it by app
+   code. A camera pointed at a screen still produces a class-3 capture.
 4. No injection/poisoning screening ships in core. The literature is real and not denied: Carlini
    et al., *Poisoning Web-Scale Training Datasets is Practical* (2023); Greshake et al., *Not what
    you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt

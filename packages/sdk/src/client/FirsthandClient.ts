@@ -1,5 +1,12 @@
 import type { AnchorWriter, BlobStore, TxTransport, X402Facilitator } from "@firsthand/adapters";
-import type { Bytes32, Eip712Domain, EpochParams, Terms } from "@firsthand/core";
+import {
+  type Address,
+  type Bytes32,
+  type Eip712Domain,
+  type EpochParams,
+  type Terms,
+  ValidationError,
+} from "@firsthand/core";
 import type { PrfSource } from "@firsthand/crypto";
 import { type Logger, noopLogger } from "@firsthand/runtime";
 import { Batcher } from "../batch/Batcher.js";
@@ -12,6 +19,15 @@ import {
   type DepositResult,
   deposit,
 } from "../verbs/deposit.js";
+import {
+  planRegisterDevice,
+  planRevokeDevice,
+  type RegisterDeviceInput,
+  type RegisterDevicePlan,
+  type RevokeDevicePlan,
+  sendRegisterDevice,
+  sendRevokeDevice,
+} from "../verbs/device.js";
 import { type EnrollPlan, planEnroll, type SentTx, sendEnroll } from "../verbs/enroll.js";
 import { type GrantInput, type GrantPlan, planGrant, sendGrant } from "../verbs/grant.js";
 import { type PublishTarget, publishDeposit, publishWrap } from "../verbs/publish.js";
@@ -179,6 +195,50 @@ export class LockerSession {
 
   sendRescind(plan: RescindPlan) {
     return sendRescind(this.locker, this.#client.options.transport, plan);
+  }
+
+  /**
+   * `HardwareDeviceRegistry`, or a refusal (ADR-0015). It is an optional deployment key, so a
+   * locker on a chain without one has to be told that in words rather than handed a zero address
+   * and a revert.
+   */
+  #deviceRegistry(): Address {
+    const address = this.#client.options.addresses.hardwareDeviceRegistry;
+    if (address === undefined) {
+      throw new ValidationError(
+        "this deployment has no HardwareDeviceRegistry — class 3 is unavailable here",
+      );
+    }
+    return address;
+  }
+
+  /** The nonce is the one the certificate committed to, not a fresh one — see `planRegisterDevice`. */
+  planRegisterDevice(input: RegisterDeviceInput): RegisterDevicePlan {
+    return planRegisterDevice(this.locker, this.#deviceRegistry(), input);
+  }
+
+  async registerDevice(input: RegisterDeviceInput): Promise<{
+    plan: RegisterDevicePlan;
+    sent: SentTx;
+  }> {
+    const plan = this.planRegisterDevice(input);
+    const sent = await sendRegisterDevice(this.locker, this.#client.options.transport, plan);
+    return { plan, sent };
+  }
+
+  planRevokeDevice(keyCommitment: Bytes32, nonce?: Bytes32): RevokeDevicePlan {
+    return nonce === undefined
+      ? planRevokeDevice(this.locker, this.#deviceRegistry(), keyCommitment)
+      : planRevokeDevice(this.locker, this.#deviceRegistry(), keyCommitment, nonce);
+  }
+
+  async revokeDevice(
+    keyCommitment: Bytes32,
+    nonce?: Bytes32,
+  ): Promise<{ plan: RevokeDevicePlan; sent: SentTx }> {
+    const plan = this.planRevokeDevice(keyCommitment, nonce);
+    const sent = await sendRevokeDevice(this.locker, this.#client.options.transport, plan);
+    return { plan, sent };
   }
 
   close(): void {

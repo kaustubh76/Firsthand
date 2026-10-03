@@ -7,11 +7,16 @@ import {
   MemoryReceiptReader,
   MemoryTransport,
 } from "@firsthand/adapters";
-import { GrantManagerAbi, PrincipalRegistryAbi } from "@firsthand/contracts/abi";
+import {
+  GrantManagerAbi,
+  HardwareDeviceRegistryAbi,
+  PrincipalRegistryAbi,
+} from "@firsthand/contracts/abi";
 import {
   type Address,
   type Attestation,
   AttestationClass,
+  AttestationError,
   attestStructHash,
   authorityDigest,
   type Bytes32,
@@ -25,15 +30,20 @@ import {
   type HardwareWitness,
   hardwareCaptureDigest,
   hashTerms,
+  hexToBytes,
   LICENSE_FH_1_0,
   MONAD_TESTNET_CHAIN_ID,
+  type P256PublicKey,
   type PassportSidecar,
+  p256Commitment,
   parseSidecar,
   passportDigest,
   passportId,
   RefusalError,
+  registerDeviceStructHash,
   rescindStructHash,
   rescissionCommitment,
+  revokeDeviceStructHash,
   Scope,
   type SignedPassport,
   sidecarToWire,
@@ -44,7 +54,9 @@ import {
   ZERO_HASH,
 } from "@firsthand/core";
 import {
+  type AuthorityKey,
   generateGranteeKeypair,
+  type KeyProvider,
   KeyTree,
   openBlob,
   SecretBytes,
@@ -54,9 +66,11 @@ import {
   unwrapDek,
   unwrapVaultKey,
 } from "@firsthand/crypto";
+import { loadVectors } from "@firsthand/test-vectors";
 import { decodeFunctionData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { type AnchoredBatch, Batcher } from "./batch/Batcher.js";
 import { BuyerSession, createBuyerKeys } from "./client/BuyerSession.js";
 import { FirsthandClient } from "./client/FirsthandClient.js";
@@ -73,6 +87,7 @@ import {
   mintPassport,
   refuseUnlessProvable,
 } from "./verbs/deposit.js";
+import { planRegisterDevice, planRevokeDevice } from "./verbs/device.js";
 import { planEnroll, sendEnroll } from "./verbs/enroll.js";
 import { planGrant } from "./verbs/grant.js";
 import { publishDeposit, sidecarFor, sidecarsForBatch } from "./verbs/publish.js";
@@ -1461,5 +1476,170 @@ describe("query and publish error paths", () => {
         new Uint8Array([1]),
       ),
     ).rejects.toThrow(/gateway rejected/);
+  });
+});
+
+// ── device registration (ADR-0015) ────────────────────────────────────────────────────────────
+// The chain here is the same golden suite the Solidity reader is tested against, so a plan this
+// builds is one `HardwareDeviceRegistry` would accept — the local verification runs the identical
+// policy, which is the point of running it at all.
+
+describe("registerDevice / revokeDevice", () => {
+  const vectors = loadVectors("android-attestation", {
+    input: z.object({ certificate: z.string() }),
+    expected: z.record(z.string(), z.unknown()),
+    extra: z.object({
+      anchorCommitment: z.string(),
+      authorityScalar: z.string(),
+      authorityX: z.string(),
+      authorityY: z.string(),
+      chain: z.array(z.string()),
+      deviceCommitment: z.string(),
+      nonce: z.string(),
+      principalId: z.string(),
+    }),
+  });
+
+  const registry = `0x${"de".repeat(20)}` as Address;
+  const anchors = [vectors.extra.anchorCommitment as Bytes32];
+  const nonce = vectors.extra.nonce as Bytes32;
+  const chain = vectors.extra.chain.map((hex) => hexToBytes(hex as `0x${string}`));
+
+  /**
+   * A real key tree with one substitution: the authority key the fixture's challenge names. The
+   * challenge is baked into a signed certificate that cannot be re-issued, so the locker has to
+   * come to the chain rather than the other way round.
+   */
+  class VectorKeys implements KeyProvider {
+    readonly #inner = KeyTree.fromPrf(new Uint8Array(32).fill(5));
+    readonly #authority: AuthorityKey;
+    constructor() {
+      const publicKey: P256PublicKey = {
+        x: vectors.extra.authorityX as Bytes32,
+        y: vectors.extra.authorityY as Bytes32,
+      };
+      this.#authority = {
+        scalar: new SecretBytes(hexToBytes(vectors.extra.authorityScalar as `0x${string}`), "k_id"),
+        publicKey,
+        commitment: p256Commitment(publicKey),
+      };
+    }
+    authorityKey() {
+      return this.#authority;
+    }
+    vaultKey(ns: number, epoch: bigint) {
+      return this.#inner.vaultKey(ns, epoch);
+    }
+    depositKey(ns: number, epoch: bigint) {
+      return this.#inner.depositKey(ns, epoch);
+    }
+    nonceKey(ns: number, epoch: bigint) {
+      return this.#inner.nonceKey(ns, epoch);
+    }
+    passportNonce(ns: number, epoch: bigint, h: Bytes32) {
+      return this.#inner.passportNonce(ns, epoch, h);
+    }
+    dispose() {
+      this.#inner.dispose();
+    }
+  }
+
+  const deviceLocker = () =>
+    new Locker({
+      keys: new VectorKeys(),
+      domain,
+      epochs,
+      anchors: new MemoryAnchorWriter(),
+      blobs: new MemoryBlobStore(),
+      clock,
+    });
+
+  it("derives the commitment from the certificate rather than taking it on trust", () => {
+    const locker = deviceLocker();
+    const plan = planRegisterDevice(locker, registry, { chain, nonce, anchors });
+
+    expect(locker.principalId).toBe(vectors.extra.principalId);
+    expect(plan.keyCommitment).toBe(vectors.extra.deviceCommitment);
+    // The measurement, read out of the signed certificate and not chosen anywhere.
+    expect(plan.securityLevel).toBe(2);
+
+    const { functionName, args } = decodeFunctionData({
+      abi: HardwareDeviceRegistryAbi,
+      data: plan.tx.data,
+    });
+    expect(plan.tx.to).toBe(registry);
+    expect(functionName).toBe("registerDevice");
+    // The calldata carries the chain; the signature is over the commitment the chain produced.
+    expect(args?.[0]).toBe(locker.principalId);
+    expect(args?.[1]).toEqual(vectors.extra.chain);
+    expect(args?.[2]).toBe(nonce);
+  });
+
+  it("signs the digest the registry will recompute, under the registry's own domain", () => {
+    const locker = deviceLocker();
+    const plan = planRegisterDevice(locker, registry, { chain, nonce, anchors });
+    const digest = authorityDigest(
+      registerDeviceStructHash(locker.principalId, plan.keyCommitment, nonce),
+      // ADR-0009: the verifying contract is the one being called, never PassportAnchors.
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(digest, plan.authoritySig, locker.authorityKey().publicKey)).toBe(true);
+  });
+
+  it("refuses a nonce the certificate did not commit to, before any gas is spent", () => {
+    // The registry checks keccak256(principalId ‖ nonce) against the baked-in challenge, so a
+    // fresh nonce here would buy a revert. Catching it locally turns ChainRejected into a sentence.
+    expect(() =>
+      planRegisterDevice(deviceLocker(), registry, {
+        chain,
+        nonce: `0x${"99".repeat(32)}`,
+        anchors,
+      }),
+    ).toThrow(AttestationError);
+  });
+
+  it("refuses a chain that reaches no pinned anchor", () => {
+    expect(() =>
+      planRegisterDevice(deviceLocker(), registry, {
+        chain,
+        nonce,
+        anchors: [`0x${"11".repeat(32)}`],
+      }),
+    ).toThrow(AttestationError);
+  });
+
+  it("refuses a chain whose challenge names a different principal", () => {
+    // makeLocker's authority key is not the fixture's, so the same chain must not register here —
+    // otherwise one person's attestation could enrol a device under somebody else's principal.
+    expect(() => planRegisterDevice(makeLocker(1), registry, { chain, nonce, anchors })).toThrow(
+      AttestationError,
+    );
+  });
+
+  it("revokes without a chain, and cannot be replayed as a registration", () => {
+    const locker = deviceLocker();
+    const commitment = vectors.extra.deviceCommitment as Bytes32;
+    const revokeNonce = `0x${"77".repeat(32)}` as Bytes32;
+    const plan = planRevokeDevice(locker, registry, commitment, revokeNonce);
+
+    const digest = authorityDigest(
+      revokeDeviceStructHash(locker.principalId, commitment, revokeNonce),
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(digest, plan.authoritySig, locker.authorityKey().publicKey)).toBe(true);
+
+    // Same three fields, different typehash: a revocation signature must not authorise a
+    // registration of the device it just ended.
+    const asRegister = authorityDigest(
+      registerDeviceStructHash(locker.principalId, commitment, revokeNonce),
+      locker.authorityDomain(registry),
+    );
+    expect(verifyP256(asRegister, plan.authoritySig, locker.authorityKey().publicKey)).toBe(false);
+
+    const { functionName } = decodeFunctionData({
+      abi: HardwareDeviceRegistryAbi,
+      data: plan.tx.data,
+    });
+    expect(functionName).toBe("revokeDevice");
   });
 });

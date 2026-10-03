@@ -256,7 +256,7 @@ Regimes: `ACTIVE / FROZEN` per principal; grant states per §7.5. All gating (`v
 
 1. Rescission governs **future** access and timestamps the end of consent; it **cannot un-read delivered plaintext or un-train a model.**
 2. A buyer can cache and re-use delivered data; FIRSTHAND provides **accountability (provable license breach via receipts), not prevention.** The per-query market prices *continuing access to an evolving stream*, and we say exactly that.
-3. A passport proves **origin key, attestation class, consent, and integrity — not truth, quality, or strict one-human-one-passkey.** Commodity-phone capture attestation is heuristic; hardware attestation is roadmap.
+3. A passport proves **origin key, attestation class, consent, and integrity — not truth, quality, or strict one-human-one-passkey.** Commodity-phone capture attestation (class 2) is heuristic — nothing checks it. Hardware attestation (class 3, ADR-0015) *is* checked on chain, but it proves the **key** was born in a certified secure element, not that a sensor saw anything: a camera pointed at a screen still produces a class-3 capture.
 4. No injection/poisoning screening ships in core; provenance tags are the shipped defense layer (screening literature cited in SECURITY.md, not denied).
 5. BTX advantage holds only where BTX is live; fallback narrows but does not eliminate the race — measured, not asserted.
 
@@ -314,7 +314,7 @@ Default: **solo** (explicitly welcomed by rules; "a team of one is a team"). Own
 ## 20. Likely Judge Questions (with honest answers)
 
 - *"A buyer caches everything after one query — why is query #2 paid?"* → It isn't, for static data; the market sells continuing access to an evolving stream plus provable license accountability via receipts — stated in our docs, priced by freshness.
-- *"Can't AI-generated junk be laundered through a real passkey?"* → Yes, and we never claim otherwise: passports certify origin key + attestation class + consent; buyers filter by attestation class; hardware capture attestation is the roadmap answer, and the limitation is printed in SECURITY.md.
+- *"Can't AI-generated junk be laundered through a real passkey?"* → Yes, and we never claim otherwise: passports certify origin key + attestation class + consent; buyers filter by attestation class. Class 3 (ADR-0015) narrows it — a secure element co-signs, and Monad's RIP-7212 precompile verifies the device's attestation chain on chain — but it buys **transplantation resistance**, not sensor provenance, and the gap is printed in SECURITY.md §6.3 rather than rounded off.
 - *"Rescission can't un-train a model — so what does it buy?"* → A cryptographically timestamped end of consent that no counterparty can pre-empt — exactly the artifact the litigation-and-compliance era prices.
 - *"Why won't Troveo/Human Native crush you?"* → They're customers, not competitors: contract-based clearance can't reach individual scale; a neutral per-asset standard makes their catalogs deeper.
 - *"What if BTX isn't live on testnet?"* → Commit-reveal fallback ships either way; the race-window experiment reports both arms honestly.
@@ -331,9 +331,11 @@ Related work acknowledged in-repo: licensed marketplaces (Troveo, Human Native A
 
 **Must NOT contain (explicit non-goals):** marketplace UI/discovery · quality scoring or autorater · injection screening · ZK selective disclosure · TEE attestation · cross-chain anything · token · admin keys/upgradability · mainnet.
 
+> **One deviation, recorded:** class 3 (ADR-0015) reads a device's key-attestation certificate. *"TEE attestation"* above means **running the protocol inside a trusted enclave** — holding keys or executing the locker there — and nothing here does that. The anchor it pins is a constructor argument with no setter, so the *"no upgradability"* non-goal holds literally too.
+
 ## 23. Post-Hackathon Extensions
 
-- Hardware capture attestation (StrongBox/Secure Enclave co-signing) — closes the laundering gap; medium complexity, device-fragmented.
+- ~~Hardware capture attestation (StrongBox/Secure Enclave co-signing)~~ — **built early, as ADR-0015.** It does *not* close the laundering gap, which is why the line above was wrong: it makes a witness non-transplantable, and that is a different claim. Still roadmap: Secure Enclave (iOS), and verifying the RSA/P-384 root above the pinned certificate on chain.
 - ZK manifest membership ("licensed from *some* verified human corpus ≥ N") — high complexity, clear spec written.
 - Quality/consistency scoring as a separate, opt-in layer (the autorater doctrine: calibrated judge, frozen anchors, canaries) — the ACR lineage, kept out of the trust core.
 - Marketplace partnerships (Troveo-class pilots) + basis-points royalty routing as the business model; DeltaV/residency continuation.

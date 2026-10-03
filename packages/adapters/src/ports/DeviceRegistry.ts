@@ -33,9 +33,27 @@ export interface DeviceView {
   readonly revokedAt: bigint;
 }
 
+/**
+ * What the registry will enforce on a chain submitted to it. Both values are constructor
+ * arguments with no setter (§22 forbids an upgradable anchor), so a client may read them once and
+ * keep them — which matters on a chain that caps reads at 15 a second.
+ */
+export interface DevicePolicy {
+  /** `deviceKeyCommitment` of each certificate trusted as a chain anchor. */
+  readonly anchors: readonly Bytes32[];
+  /** 1 TrustedEnvironment, 2 StrongBox. A chain below this is refused. */
+  readonly minimumSecurityLevel: number;
+}
+
 export interface DeviceRegistryReader {
   /** Null when this key commitment was never registered. */
   device(keyCommitment: Bytes32): Promise<DeviceView | null>;
+  /**
+   * The policy to verify a chain against *before* submitting it. Read from the registry rather
+   * than configured, so a client cannot verify against a looser rule than the chain enforces and
+   * conclude a device is registrable when it is not.
+   */
+  policy(): Promise<DevicePolicy>;
 }
 
 /** True when a device is registered to this principal and has not been revoked. */

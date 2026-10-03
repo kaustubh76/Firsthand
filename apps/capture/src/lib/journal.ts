@@ -16,6 +16,16 @@ export interface DepositEntry {
   readonly at: number;
   anchorTx?: Bytes32;
   published?: boolean;
+  /**
+   * `AttestationClass` as this deposit was actually minted — not inferred from `kind`, which only
+   * says which tab produced it. A row that showed "device capture" because the file came from the
+   * camera input would be narrating the one thing a buyer filters on. Optional because entries
+   * written before this field existed cannot be re-derived; the UI shows nothing rather than
+   * guessing.
+   */
+  readonly class?: number;
+  /** For class 3, the secure element that witnessed it — `Attestation.deviceClass`. */
+  readonly deviceClass?: Bytes32;
 }
 
 export interface GrantEntry {
@@ -69,6 +79,26 @@ export interface PendingRescission {
   readonly at: number;
 }
 
+/**
+ * A secure element this browser registered (ADR-0015).
+ *
+ * Kept locally because the registry is keyed by commitment and has no index from principal to
+ * devices — enumerating them on chain would mean scanning `DeviceRegistered` logs through the
+ * same bounded window the receipt ledger already fights. Everything here is public on chain; the
+ * record is a shortcut, and every field is re-checkable against `device(keyCommitment)`.
+ */
+export interface DeviceEntry {
+  readonly keyCommitment: Bytes32;
+  /** The level the certificate carried: 1 TEE, 2 StrongBox. A measurement, stored as measured. */
+  readonly securityLevel: number;
+  /** Null when the attestation carried no `rootOfTrust`. */
+  readonly verifiedBootState: number | null;
+  readonly registerTx: Bytes32;
+  readonly at: number;
+  revokeTx?: Bytes32;
+  revokeAt?: number;
+}
+
 /** A deposit delegation issued from this browser — scope only, never the code itself. */
 export interface DelegationEntry {
   readonly ns: number;
@@ -86,6 +116,8 @@ export interface Journal {
   /** Commit-reveal withdrawals committed but not yet revealed. */
   pendingRescissions?: PendingRescission[];
   delegations?: DelegationEntry[];
+  /** Secure elements registered from this browser; see `DeviceEntry`. */
+  devices?: DeviceEntry[];
   /** Beats of the three-minute script this browser has been through (the journey rail reads them). */
   refusalAt?: number;
   manifestAt?: number;

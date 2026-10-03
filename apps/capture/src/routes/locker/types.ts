@@ -13,7 +13,9 @@ export type LockerAction =
   | `approve:${string}`
   | `rescind:${string}`
   | `commit:${string}`
-  | `reveal:${string}`;
+  | `reveal:${string}`
+  | "device:register"
+  | `device:revoke:${string}`;
 
 /** What every card on the Locker shares. */
 export interface LockerCtx {

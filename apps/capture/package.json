@@ -2,7 +2,7 @@
   "name": "firsthand-capture",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture → passport, locker view, rescind",
+  "description": "Minimal capture PWA: passkey enrolment (WebAuthn PRF), phone capture \u2192 passport, locker view, rescind",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -29,6 +29,7 @@
     "viem": "catalog:"
   },
   "devDependencies": {
+    "@firsthand/test-vectors": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
@@ -38,6 +39,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   }
 }

@@ -1,5 +1,11 @@
-import { type Bytes32, LineageManifestSchema, type PassportSidecar } from "@firsthand/core";
-import { type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
+import {
+  AttestationClass,
+  type Bytes32,
+  LineageManifestSchema,
+  type PassportSidecar,
+  ZERO_HASH,
+} from "@firsthand/core";
+import { hardwareProofOk, type ManifestVerdict, verifyManifest } from "@firsthand/sdk/browser";
 import { useEffect, useState } from "react";
 import { ConsentTimeline } from "../components/ConsentTimeline.js";
 import { useAsyncActions } from "../hooks/useAsyncActions.js";
@@ -23,6 +29,32 @@ import {
 import { Button, Card, EmptyState, Field, Hash, Icon, Notice, Pill } from "../ui/index.js";
 
 type Action = "verify" | "list" | "agent" | "lookup" | "device";
+
+/**
+ * What the sidecar's class-3 claim is worth, checked here rather than described.
+ *
+ * `hardwareProofOk` is the manifest verifier's own predicate, so this card cannot reach a kinder
+ * verdict than a buyer's verification would. It is cryptography only: a witness that verifies
+ * still says nothing about whether the device is *registered*, which is why the card points at
+ * the device lookup above instead of implying it answered that too.
+ */
+function hardwareLine(sidecar: PassportSidecar, chainId: bigint) {
+  const claimsHardware = sidecar.attestation?.class === AttestationClass.HARDWARE;
+  if (!claimsHardware && !sidecar.hardware) {
+    return "none — this passport does not claim hardware, and nothing here pretends otherwise";
+  }
+  const ok = hardwareProofOk(sidecar, chainId);
+  return (
+    <>
+      <Pill tone={ok ? "ok" : "bad"} dot>
+        {ok ? "witness verifies" : "witness does NOT verify"}
+      </Pill>{" "}
+      {ok
+        ? "a secure element signed this exact passport — same origin, same nonce, same bytes. Look the device up above to see whether the chain still records it as live."
+        : "the signature does not match this passport, so the class-3 claim is empty."}
+    </>
+  );
+}
 
 /**
  * The buyer's one call, for anyone: no passkey, no locker. Paste a Lineage Manifest and it is
@@ -592,6 +624,37 @@ export function Verify({
                 <Pill tone="bad">NOT anchored</Pill>
               )}
             </dd>
+            <dt>attestation</dt>
+            <dd>
+              {sidecar.sidecar.attestation ? (
+                <>
+                  <Pill
+                    tone={
+                      sidecar.sidecar.attestation.class === AttestationClass.HARDWARE
+                        ? "ok"
+                        : "accent"
+                    }
+                  >
+                    class {sidecar.sidecar.attestation.class} ·{" "}
+                    {className(sidecar.sidecar.attestation.class)}
+                  </Pill>{" "}
+                  captured {blockTime(sidecar.sidecar.attestation.capturedAt)} · source{" "}
+                  <Hash value={sidecar.sidecar.attestation.sourceTag} n={4} />
+                  {sidecar.sidecar.attestation.deviceClass !== ZERO_HASH && (
+                    <>
+                      {" "}
+                      · device <Hash value={sidecar.sidecar.attestation.deviceClass} n={6} copy />
+                    </>
+                  )}
+                </>
+              ) : (
+                // Older sidecars did not carry the preimage. The class is then genuinely unknown
+                // here, and saying so beats defaulting to the most flattering answer.
+                "not published — this sidecar predates the attestation preimage"
+              )}
+            </dd>
+            <dt>hardware witness</dt>
+            <dd data-testid="passport-hardware">{hardwareLine(sidecar.sidecar, config.chainId)}</dd>
             <dt>ciphertext</dt>
             <dd>
               <Hash value={sidecar.sidecar.blobRef} n={6} /> (served only to a live grant, paid per

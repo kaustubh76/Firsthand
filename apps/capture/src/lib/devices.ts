@@ -1,5 +1,12 @@
 import type { DeviceView, OnchainDeviceRegistryReader } from "@firsthand/adapters/client";
-import { type Bytes32, SecurityLevel, VerifiedBootState } from "@firsthand/core";
+import {
+  type Bytes32,
+  bytesToHex,
+  keyDescriptionOf,
+  parseCertificate,
+  SecurityLevel,
+  VerifiedBootState,
+} from "@firsthand/core";
 
 /**
  * What the chain records about one secure element (ADR-0015), read straight from
@@ -60,4 +67,67 @@ export async function askDeviceRegistry(
 ): Promise<DeviceReport | null> {
   const device = await reader.device(keyCommitment);
   return device === null ? null : reportFor(keyCommitment, device);
+}
+
+/**
+ * Certificates out of whatever the phone put on the clipboard: PEM blocks, or `0x…` hex one per
+ * line. Leaf first, as `KeyStore.getCertificateChain` returns them and as `registerDevice` takes
+ * them.
+ *
+ * Lenient about the wrapper and strict about the contents — a stray header line is a transport
+ * artefact, whereas a certificate that does not parse is the thing the user needs told.
+ */
+export function parseChainText(text: string): Uint8Array[] {
+  const pem = [...text.matchAll(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g)];
+  const chain = pem.length
+    ? pem.map((m) => base64ToBytes((m[1] as string).replace(/\s+/g, "")))
+    : text
+        .split(/\s+/)
+        .filter((t) => /^0x[0-9a-fA-F]+$/.test(t))
+        .map((t) => hexToBytes(t));
+  if (chain.length === 0) throw new Error("no certificates found — paste the PEM the app wrote");
+  if (chain.length < 2) {
+    throw new Error("a chain needs a leaf and at least one issuer; this has only the leaf");
+  }
+  return chain;
+}
+
+/**
+ * The `principalId ‖ nonce` the key was generated under, read back out of the leaf.
+ *
+ * The nonce is not something the browser may choose: it is baked into a signed certificate that
+ * cannot be re-issued, so recovering it here is the only way the paste needs one field instead
+ * of two — and the principal comes with it, which is what lets the card refuse a chain that
+ * names somebody else before any gas is spent.
+ */
+export function challengeOf(leaf: Uint8Array): { principalId: Bytes32; nonce: Bytes32 } {
+  const description = keyDescriptionOf(parseCertificate(leaf));
+  if (description === null) {
+    throw new Error("no key attestation in this certificate — it is not an attested key");
+  }
+  const challenge = description.attestationChallenge;
+  if (challenge.length !== 64) {
+    throw new Error(
+      `this key was generated under a ${challenge.length}-byte challenge; FIRSTHAND uses 64 (principalId ‖ nonce)`,
+    );
+  }
+  return {
+    principalId: bytesToHex(challenge.subarray(0, 32)),
+    nonce: bytesToHex(challenge.subarray(32)),
+  };
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const body = hex.slice(2);
+  if (body.length % 2 !== 0) throw new Error("odd-length hex in the pasted chain");
+  const out = new Uint8Array(body.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(body.substr(i * 2, 2), 16);
+  return out;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < out.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
 }

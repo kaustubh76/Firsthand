@@ -1,7 +1,9 @@
 import type { DeviceView } from "@firsthand/adapters/client";
-import type { Bytes32 } from "@firsthand/core";
+import { type Bytes32, bytesToHex } from "@firsthand/core";
+import { loadVectors } from "@firsthand/test-vectors";
 import { describe, expect, it } from "vitest";
-import { describeBoot, describeLevel, reportFor } from "./devices.js";
+import { z } from "zod";
+import { challengeOf, describeBoot, describeLevel, parseChainText, reportFor } from "./devices.js";
 
 const COMMITMENT = `0x${"ab".repeat(32)}` as Bytes32;
 const PRINCIPAL = `0x${"cd".repeat(32)}` as Bytes32;
@@ -53,5 +55,63 @@ describe("a device, as the chain records it", () => {
     expect(report.revokedAt).toBe(1_700_000_500n);
     // A buyer auditing an older manifest needs the principal, not a blank.
     expect(report.principalId).toBe(PRINCIPAL);
+  });
+});
+
+// The same golden chain the Solidity reader and the SDK verb are tested against, so the paste box
+// and the contract cannot disagree about what a chain is.
+const vectors = loadVectors("android-attestation", {
+  input: z.object({ certificate: z.string() }),
+  expected: z.record(z.string(), z.unknown()),
+  extra: z.object({
+    chain: z.array(z.string()),
+    nonce: z.string(),
+    principalId: z.string(),
+  }),
+});
+
+const hexChain = vectors.extra.chain as `0x${string}`[];
+const bytes = (hex: `0x${string}`): Uint8Array =>
+  Uint8Array.from((hex.slice(2).match(/../g) ?? []).map((b) => Number.parseInt(b, 16)));
+const pem = (hex: `0x${string}`): string =>
+  `-----BEGIN CERTIFICATE-----\n${btoa(String.fromCharCode(...bytes(hex)))
+    .replace(/(.{64})/g, "$1\n")
+    .trim()}\n-----END CERTIFICATE-----`;
+
+describe("a chain, as it arrives from the phone", () => {
+  it("reads PEM, which is what the companion app writes", () => {
+    const chain = parseChainText(hexChain.map(pem).join("\n"));
+    expect(chain.map(bytesToHex)).toEqual(hexChain);
+  });
+
+  it("reads 0x hex too, because that is what a terminal paste looks like", () => {
+    expect(parseChainText(hexChain.join("\n")).map(bytesToHex)).toEqual(hexChain);
+  });
+
+  it("ignores the provenance header the app writes above the certificates", () => {
+    const withHeader = `# device Pixel 9\n# strongBox granted\n${hexChain.map(pem).join("\n")}`;
+    expect(parseChainText(withHeader)).toHaveLength(2);
+  });
+
+  it("refuses a leaf on its own — a chain with nothing to verify against is not a chain", () => {
+    expect(() => parseChainText(pem(hexChain[0] as `0x${string}`))).toThrow(/only the leaf/);
+  });
+
+  it("says so when the paste contains no certificate at all", () => {
+    expect(() => parseChainText("I copied the wrong thing")).toThrow(/no certificates/);
+  });
+});
+
+describe("the challenge, read back out of the leaf", () => {
+  it("recovers the principal and the nonce the key committed to", () => {
+    const { principalId, nonce } = challengeOf(bytes(hexChain[0] as `0x${string}`));
+    expect(principalId).toBe(vectors.extra.principalId);
+    // The nonce is not the browser's to choose: the certificate fixed it at generation time.
+    expect(nonce).toBe(vectors.extra.nonce);
+  });
+
+  it("refuses a certificate carrying no key attestation", () => {
+    // The intermediate is a real certificate with no KeyDescription extension.
+    expect(() => challengeOf(bytes(hexChain[1] as `0x${string}`))).toThrow(/no key attestation/);
   });
 });

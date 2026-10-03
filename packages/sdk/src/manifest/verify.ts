@@ -3,16 +3,18 @@ import type { AnchorWriter } from "@firsthand/adapters";
 // adapters' root entry pulls `fs/promises`, which breaks the capture app's bundle.
 import { type Pacer, pacedMap } from "@firsthand/adapters/client";
 import {
+  type Attestation,
   AttestationClass,
   type Bytes32,
   deviceKeyCommitment,
+  type HardwareWitness,
   hardwareCaptureDigest,
   hashAttestation,
   type LineageManifest,
   LineageManifestSchema,
-  type ManifestAsset,
   MERKLE_DEPTH,
   passportId,
+  type SignedPassport,
   verifyCaptureWitness,
   verifyPassportInBatch,
   verifyPassportSignature,
@@ -144,7 +146,27 @@ export interface ManifestVerifyContext {
  * True when an asset's hardware claim holds up. An asset that is neither class 3 nor carrying a
  * witness passes trivially — most assets are neither.
  */
-function hardwareProofOk(asset: ManifestAsset, chainId: bigint): boolean {
+/**
+ * Is the class-3 claim on this asset cryptographically true?
+ *
+ * Structurally typed rather than taking a `ManifestAsset`, because a `PassportSidecar` carries the
+ * same three pieces and the auditor's view in the PWA must reach the same verdict as the manifest
+ * verifier. Two copies of this predicate would be two chances to disagree about what class 3 means.
+ *
+ * Cryptography only: it says the witness names the device the attestation claims and signed this
+ * passport's digest. Whether that device is *registered* is a separate question with a separate
+ * answer source — the chain — and conflating them would let an unregistered key look admissible.
+ */
+export function hardwareProofOk(
+  asset: {
+    readonly signed: SignedPassport;
+    // `| undefined` as well as optional: `ManifestAsset` declares these as present-but-undefined,
+    // and under `exactOptionalPropertyTypes` a merely-optional parameter will not accept one.
+    readonly attestation?: Attestation | undefined;
+    readonly hardware?: HardwareWitness | undefined;
+  },
+  chainId: bigint,
+): boolean {
   const isHardware = asset.attestation?.class === AttestationClass.HARDWARE;
   if (!isHardware && !asset.hardware) return true;
   // A witness with no preimage cannot be checked, and an unverifiable proof is not a proof.

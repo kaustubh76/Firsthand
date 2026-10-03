@@ -24,7 +24,7 @@ export type {
   ReceiptCoverage,
   SignatureMode,
 } from "./manifest/verify.js";
-export { verifyManifest } from "./manifest/verify.js";
+export { hardwareProofOk, verifyManifest } from "./manifest/verify.js";
 export type {
   ExportLockerInput,
   ImportLockerInput,
@@ -52,6 +52,18 @@ export type {
   PassportSidecar,
 } from "./verbs/deposit.js";
 export { acceptSigned, deposit, mintPassport, refuseUnlessProvable } from "./verbs/deposit.js";
+export type {
+  DeviceAddresses,
+  RegisterDeviceInput,
+  RegisterDevicePlan,
+  RevokeDevicePlan,
+} from "./verbs/device.js";
+export {
+  planRegisterDevice,
+  planRevokeDevice,
+  sendRegisterDevice,
+  sendRevokeDevice,
+} from "./verbs/device.js";
 export type { EnrollPlan, SentTx } from "./verbs/enroll.js";
 export { planEnroll, sendEnroll } from "./verbs/enroll.js";
 export type { GrantInput, GrantPlan } from "./verbs/grant.js";

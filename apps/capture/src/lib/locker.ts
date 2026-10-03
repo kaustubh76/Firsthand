@@ -112,6 +112,11 @@ export function createClient(config: AppConfig): CaptureClient {
       grantManager: config.grantManager,
       rescissions: config.rescissions,
       principalRegistry: config.principalRegistry,
+      // Optional deployment key: a chain with no registry simply cannot register a device, and
+      // the Devices card says so rather than offering a button that reverts.
+      ...(config.hardwareDeviceRegistry !== `0x${"00".repeat(20)}`
+        ? { hardwareDeviceRegistry: config.hardwareDeviceRegistry }
+        : {}),
     },
     namespaces: [
       { ns: NS.captures, label: "captures" },

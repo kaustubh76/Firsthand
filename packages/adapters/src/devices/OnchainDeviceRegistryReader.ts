@@ -1,7 +1,7 @@
 import { HardwareDeviceRegistryAbi } from "@firsthand/contracts/abi";
 import { type Address, type Bytes32, bytesToHex, u256be } from "@firsthand/core";
 import type { Chain, PublicClient, Transport } from "viem";
-import type { DeviceRegistryReader, DeviceView } from "../ports/DeviceRegistry.js";
+import type { DevicePolicy, DeviceRegistryReader, DeviceView } from "../ports/DeviceRegistry.js";
 
 export interface OnchainDeviceRegistryReaderOptions {
   readonly publicClient: PublicClient<Transport, Chain>;
@@ -12,6 +12,8 @@ export interface OnchainDeviceRegistryReaderOptions {
 export class OnchainDeviceRegistryReader implements DeviceRegistryReader {
   readonly #c: PublicClient<Transport, Chain>;
   readonly #o: OnchainDeviceRegistryReaderOptions;
+  /** Immutable on chain — constructor arguments with no setter — so one read lasts the session. */
+  #policy: DevicePolicy | null = null;
 
   constructor(options: OnchainDeviceRegistryReaderOptions) {
     this.#c = options.publicClient;
@@ -38,5 +40,23 @@ export class OnchainDeviceRegistryReader implements DeviceRegistryReader {
       registeredAt: d.registeredAt,
       revokedAt: d.revokedAt,
     };
+  }
+
+  async policy(): Promise<DevicePolicy> {
+    if (this.#policy !== null) return this.#policy;
+    const [anchors, minimumSecurityLevel] = await Promise.all([
+      this.#c.readContract({
+        address: this.#o.hardwareDeviceRegistry,
+        abi: HardwareDeviceRegistryAbi,
+        functionName: "anchors",
+      }),
+      this.#c.readContract({
+        address: this.#o.hardwareDeviceRegistry,
+        abi: HardwareDeviceRegistryAbi,
+        functionName: "minimumSecurityLevel",
+      }),
+    ]);
+    this.#policy = { anchors: [...anchors], minimumSecurityLevel };
+    return this.#policy;
   }
 }

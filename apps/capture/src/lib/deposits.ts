@@ -1,4 +1,4 @@
-import type { Bytes32 } from "@firsthand/core";
+import { type Bytes32, ZERO_HASH } from "@firsthand/core";
 import type { DepositResult, LockerSession } from "@firsthand/sdk/browser";
 import type { AppConfig } from "./config.js";
 import { type DepositEntry, updateJournal } from "./journal.js";
@@ -38,6 +38,17 @@ export async function land(
       ns,
       blobId: result.blob.id as Bytes32,
       at: Date.now(),
+      // The class the passport was actually minted under, taken from the attestation the deposit
+      // returned — not inferred from `kind`, which only says which tab produced it. This is the
+      // one field a buyer filters on, so a row that guessed it would be narrating the claim.
+      ...(result.attestation
+        ? {
+            class: result.attestation.class,
+            ...(result.attestation.deviceClass !== ZERO_HASH
+              ? { deviceClass: result.attestation.deviceClass }
+              : {}),
+          }
+        : {}),
     },
   }));
   updateJournal(principalId, (j) => {

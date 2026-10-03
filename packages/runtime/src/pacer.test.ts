@@ -24,6 +24,17 @@ async function drive(
   return { peak, starts };
 }
 
+/**
+ * Slack on every wall-clock *lower* bound below.
+ *
+ * `setTimeout(n)` promises "at least n" against libuv's cached loop clock, not against
+ * `Date.now()`, and on a loaded runner the two disagree: a 60 ms sleep measured 59 ms and
+ * reddened CI. These assertions are about pacing being present at roughly the right scale, not
+ * about the timer being a stopwatch, so each carries a couple of milliseconds of tolerance. The
+ * upper bounds already avoid wall-clock ceilings for the same reason.
+ */
+const TIMER_SKEW_MS = 5;
+
 describe("createPacer", () => {
   it("never runs more than maxInFlight at once", async () => {
     const { peak } = await drive(createPacer({ maxInFlight: 3, minRequestIntervalMs: 1 }), 20);
@@ -35,7 +46,7 @@ describe("createPacer", () => {
     // ceilings flake under a loaded coverage run, and the in-flight cap is the deterministic half.
     const began = Date.now();
     await drive(createPacer({ maxInFlight: 4, minRequestIntervalMs: 5 }), 10, 0);
-    expect(Date.now() - began).toBeGreaterThanOrEqual(45);
+    expect(Date.now() - began).toBeGreaterThanOrEqual(45 - TIMER_SKEW_MS);
   });
 
   it("paces starts rather than completions, so a slow call does not stall the queue", async () => {
@@ -47,7 +58,7 @@ describe("createPacer", () => {
       ...Array.from({ length: 9 }, () => pacer.run(async () => {})),
     ]);
     const elapsed = Date.now() - began;
-    expect(elapsed).toBeGreaterThanOrEqual(60);
+    expect(elapsed).toBeGreaterThanOrEqual(60 - TIMER_SKEW_MS);
     expect(elapsed).toBeLessThan(300);
   });
 
@@ -61,7 +72,7 @@ describe("createPacer", () => {
     // Five starts at the 80 ms default is 320 ms of spacing — 12.5/s, under the cap with headroom.
     const began = Date.now();
     await drive(createPacer(), 5, 0);
-    expect(Date.now() - began).toBeGreaterThanOrEqual(300);
+    expect(Date.now() - began).toBeGreaterThanOrEqual(300 - TIMER_SKEW_MS);
   });
 });
 

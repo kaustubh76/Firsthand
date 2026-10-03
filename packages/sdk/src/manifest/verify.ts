@@ -214,7 +214,11 @@ export async function verifyManifest(
       ),
     ];
     const found = await pacedMap(ids, (id) => reader.receipt(id), ctx.pacer);
-    ids.forEach((id, i) => receiptCache.set(id, found[i] ?? null));
+    // A block body, not an expression: Map.set returns the map, and a forEach callback that
+    // returns a value reads as a mapping that forgot to collect its results.
+    ids.forEach((id, i) => {
+      receiptCache.set(id, found[i] ?? null);
+    });
   }
 
   const assets: AssetVerdict[] = [];
